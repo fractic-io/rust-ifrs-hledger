@@ -4,65 +4,163 @@ use ron::de::from_str;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::error::Error;
+use std::fmt;
+use strum::IntoEnumIterator;
 
 // ---------------------------------------------------------------------
 // Account interface traits (client must implement these)
 // ---------------------------------------------------------------------
 
-pub trait ExpenseAccounts: Clone {
-    fn account_name(&self) -> String;
-    fn prepaid_account_name() -> String;
-    fn payable_account_name() -> String;
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct Asset(String);
+impl Asset {
+    pub fn new(name: impl Into<String>) -> Self {
+        Asset(name.into())
+    }
 }
 
-pub trait AssetAccounts: Clone {
-    fn account_name(&self) -> String;
-    fn payable_account_name() -> String;
-    fn prepaid_account_name() -> String;
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct Liability(String);
+impl Liability {
+    pub fn new(name: impl Into<String>) -> Self {
+        Liability(name.into())
+    }
 }
 
-pub trait IncomeAccounts: Clone {
-    fn account_name(&self) -> String;
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct Income(String);
+impl Income {
+    pub fn new(name: impl Into<String>) -> Self {
+        Income(name.into())
+    }
 }
 
-pub trait ReimbursableEntities: Clone {
-    fn liability_account_name(&self) -> String;
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct Expense(String);
+impl Expense {
+    pub fn new(name: impl Into<String>) -> Self {
+        Expense(name.into())
+    }
 }
 
-pub trait CashAccounts: Clone {
-    fn account_name(&self) -> String;
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub enum Account {
+    Asset(Asset),
+    Liability(Liability),
+    Income(Income),
+    Expense(Expense),
+}
+
+impl fmt::Display for Account {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Account::Asset(s) => write!(f, "Assets:{}", s.0),
+            Account::Liability(s) => write!(f, "Liabilities:{}", s.0),
+            Account::Income(s) => write!(f, "Income:{}", s.0),
+            Account::Expense(s) => write!(f, "Expenses:{}", s.0),
+        }
+    }
+}
+impl Into<Account> for Asset {
+    fn into(self) -> Account {
+        Account::Asset(self)
+    }
+}
+impl Into<Account> for Liability {
+    fn into(self) -> Account {
+        Account::Liability(self)
+    }
+}
+impl Into<Account> for Income {
+    fn into(self) -> Account {
+        Account::Income(self)
+    }
+}
+impl Into<Account> for Expense {
+    fn into(self) -> Account {
+        Account::Expense(self)
+    }
+}
+
+pub trait AssetHandler: Clone + IntoEnumIterator {
+    fn account(&self) -> Asset;
+    fn while_prepaid(&self) -> Asset;
+    fn while_payable(&self) -> Liability;
+    fn upon_accrual(&self) -> Option<Expense>;
+}
+
+pub trait IncomeHandler: Clone + IntoEnumIterator {
+    fn account(&self) -> Income;
+    fn while_prepaid(&self) -> Liability;
+    fn while_receivable(&self) -> Asset;
+}
+
+pub trait ExpenseHandler: Clone + IntoEnumIterator {
+    fn account(&self) -> Expense;
+    fn while_prepaid(&self) -> Asset;
+    fn while_payable(&self) -> Liability;
+}
+
+pub trait ReimbursableEntityHandler: Clone + IntoEnumIterator {
+    fn account(&self) -> Liability;
+}
+
+pub trait CashHandler: Clone + IntoEnumIterator {
+    fn account(&self) -> Asset;
 }
 
 // ---------------------------------------------------------------------
 // RON-parsable enums for Accounting Logic and Decorators.
 // ---------------------------------------------------------------------
 
+#[derive(Debug)]
+pub struct ISODate(NaiveDate);
+
+impl<'de> Deserialize<'de> for ISODate {
+    fn deserialize<D>(deserializer: D) -> Result<ISODate, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let d = NaiveDate::parse_from_str(&s, "%Y-%m-%d").map_err(serde::de::Error::custom)?;
+        Ok(ISODate(d))
+    }
+}
+
+type Currency = String;
+
 #[derive(Debug, serde_derive::Deserialize)]
 pub enum AccountingLogic<E, A, I, R> {
     SimpleExpense(E),
     Capitalize(A),
-    Amortize(A, E),
+    Amortize(A),
     FixedExpense(E),
     VariableExpense(E),
-    VariableExpenseInit(E, i64),
+    VariableExpenseInit { account: E, estimate: i64 },
     ImmaterialIncome(I),
     ImmaterialExpense(E),
     Reimburse(R),
-    ClearVat(String, String), // (start_date, end_date)
+    ClearVat { from: ISODate, to: ISODate },
 }
 
 #[derive(Debug, serde_derive::Deserialize)]
 pub enum Decorator {
-    VatRecoverable(String), // invoice date as ISO string
+    VatAwaitingInvoice,
+    VatRecoverable {
+        invoice: ISODate,
+    },
     VatUnrecoverable,
     VatReverseChargeExempt,
-    CardFx(String, String, f64), // (target currency, settle date, at value)
+    CardFx {
+        to: Currency,
+        settle: ISODate,
+        at: f64,
+    },
 }
 
 #[derive(Debug, serde_derive::Deserialize)]
-#[serde(tag = "type", content = "value")]
 pub enum BackingAccount<R, B> {
-    PersonalCard(R),
+    Reimburse(R),
     Cash(B),
 }
 
@@ -88,7 +186,7 @@ pub struct CsvRecord {
 // ---------------------------------------------------------------------
 
 pub struct Posting {
-    pub account: String,
+    pub account: Account,
     pub amount: f64,
     pub commodity: String,
 }
@@ -142,9 +240,9 @@ pub fn process_simple_expense<E, R, B>(
     amount: f64,
 ) -> Result<Vec<LedgerTransaction>, Box<dyn Error>>
 where
-    E: ExpenseAccounts,
-    R: ReimbursableEntities,
-    B: CashAccounts,
+    E: ExpenseHandler,
+    R: ReimbursableEntityHandler,
+    B: CashHandler,
 {
     let mut transactions = Vec::new();
     if payment_date == accrual_date {
@@ -153,14 +251,14 @@ where
             description: description.to_string(),
             postings: vec![
                 Posting {
-                    account: expense.account_name(),
+                    account: expense.account().into(),
                     amount,
                     commodity: commodity.to_string(),
                 },
                 Posting {
                     account: match backing_account {
-                        BackingAccount::Cash(b) => b.account_name(),
-                        BackingAccount::PersonalCard(r) => r.liability_account_name(),
+                        BackingAccount::Cash(b) => b.account().into(),
+                        BackingAccount::Reimburse(r) => r.account().into(),
                     },
                     amount: -amount,
                     commodity: commodity.to_string(),
@@ -176,14 +274,14 @@ where
             description: format!("Prepaid: {}", description),
             postings: vec![
                 Posting {
-                    account: E::prepaid_account_name(),
+                    account: expense.while_prepaid().into(),
                     amount,
                     commodity: commodity.to_string(),
                 },
                 Posting {
                     account: match backing_account {
-                        BackingAccount::Cash(b) => b.account_name(),
-                        BackingAccount::PersonalCard(r) => r.liability_account_name(),
+                        BackingAccount::Cash(b) => b.account().into(),
+                        BackingAccount::Reimburse(r) => r.account().into(),
                     },
                     amount: -amount,
                     commodity: commodity.to_string(),
@@ -196,12 +294,12 @@ where
             description: format!("Clear Prepaid: {}", description),
             postings: vec![
                 Posting {
-                    account: expense.account_name(),
+                    account: expense.account().into(),
                     amount,
                     commodity: commodity.to_string(),
                 },
                 Posting {
-                    account: E::prepaid_account_name(),
+                    account: expense.while_prepaid().into(),
                     amount: -amount,
                     commodity: commodity.to_string(),
                 },
@@ -217,12 +315,12 @@ where
             description: format!("Accrued Expense: {}", description),
             postings: vec![
                 Posting {
-                    account: expense.account_name(),
+                    account: expense.account().into(),
                     amount,
                     commodity: commodity.to_string(),
                 },
                 Posting {
-                    account: E::payable_account_name(),
+                    account: expense.while_payable().into(),
                     amount: -amount,
                     commodity: commodity.to_string(),
                 },
@@ -234,14 +332,14 @@ where
             description: format!("Clear Accrued Expense: {}", description),
             postings: vec![
                 Posting {
-                    account: E::payable_account_name(),
+                    account: expense.while_payable().into(),
                     amount,
                     commodity: commodity.to_string(),
                 },
                 Posting {
                     account: match backing_account {
-                        BackingAccount::Cash(b) => b.account_name(),
-                        BackingAccount::PersonalCard(r) => r.liability_account_name(),
+                        BackingAccount::Cash(b) => b.account().into(),
+                        BackingAccount::Reimburse(r) => r.account().into(),
                     },
                     amount: -amount,
                     commodity: commodity.to_string(),
@@ -267,9 +365,9 @@ pub fn process_capitalize<A, R, B>(
     amount: f64,
 ) -> Result<Vec<LedgerTransaction>, Box<dyn Error>>
 where
-    A: AssetAccounts,
-    R: ReimbursableEntities,
-    B: CashAccounts,
+    A: AssetHandler,
+    R: ReimbursableEntityHandler,
+    B: CashHandler,
 {
     let mut transactions = Vec::new();
     if payment_date == accrual_date {
@@ -278,14 +376,14 @@ where
             description: description.to_string(),
             postings: vec![
                 Posting {
-                    account: asset.account_name(),
+                    account: asset.account().into(),
                     amount,
                     commodity: commodity.to_string(),
                 },
                 Posting {
                     account: match backing_account {
-                        BackingAccount::Cash(b) => b.account_name(),
-                        BackingAccount::PersonalCard(r) => r.liability_account_name(),
+                        BackingAccount::Cash(b) => b.account().into(),
+                        BackingAccount::Reimburse(r) => r.account().into(),
                     },
                     amount: -amount,
                     commodity: commodity.to_string(),
@@ -301,14 +399,14 @@ where
             description: format!("Prepaid Asset: {}", description),
             postings: vec![
                 Posting {
-                    account: A::prepaid_account_name(),
+                    account: asset.while_prepaid().into(),
                     amount,
                     commodity: commodity.to_string(),
                 },
                 Posting {
                     account: match backing_account {
-                        BackingAccount::Cash(b) => b.account_name(),
-                        BackingAccount::PersonalCard(r) => r.liability_account_name(),
+                        BackingAccount::Cash(b) => b.account().into(),
+                        BackingAccount::Reimburse(r) => r.account().into(),
                     },
                     amount: -amount,
                     commodity: commodity.to_string(),
@@ -321,12 +419,12 @@ where
             description: format!("Clear Prepaid Asset: {}", description),
             postings: vec![
                 Posting {
-                    account: asset.account_name(),
+                    account: asset.account().into(),
                     amount,
                     commodity: commodity.to_string(),
                 },
                 Posting {
-                    account: A::prepaid_account_name(),
+                    account: asset.while_prepaid().into(),
                     amount: -amount,
                     commodity: commodity.to_string(),
                 },
@@ -342,12 +440,12 @@ where
             description: format!("Accrued Asset Purchase: {}", description),
             postings: vec![
                 Posting {
-                    account: asset.account_name(),
+                    account: asset.account().into(),
                     amount,
                     commodity: commodity.to_string(),
                 },
                 Posting {
-                    account: A::payable_account_name(),
+                    account: asset.while_payable().into(),
                     amount: -amount,
                     commodity: commodity.to_string(),
                 },
@@ -359,14 +457,14 @@ where
             description: format!("Clear Asset Payable: {}", description),
             postings: vec![
                 Posting {
-                    account: A::payable_account_name(),
+                    account: asset.while_payable().into(),
                     amount,
                     commodity: commodity.to_string(),
                 },
                 Posting {
                     account: match backing_account {
-                        BackingAccount::Cash(b) => b.account_name(),
-                        BackingAccount::PersonalCard(r) => r.liability_account_name(),
+                        BackingAccount::Cash(b) => b.account().into(),
+                        BackingAccount::Reimburse(r) => r.account().into(),
                     },
                     amount: -amount,
                     commodity: commodity.to_string(),
@@ -381,23 +479,21 @@ where
 }
 
 // -- Amortize --
-pub fn process_amortize<A, R, B, E>(
+pub fn process_amortize<A, R, B>(
     record: &CsvRecord,
     accrual_date: NaiveDate,
     payment_date: NaiveDate,
     until_date: NaiveDate,
     asset: A,
-    expense: E,
     backing_account: &BackingAccount<R, B>,
     commodity: &str,
     description: &str,
     amount: f64,
 ) -> Result<Vec<LedgerTransaction>, Box<dyn Error>>
 where
-    A: AssetAccounts,
-    E: ExpenseAccounts, // for amortization expense
-    R: ReimbursableEntities,
-    B: CashAccounts,
+    A: AssetHandler,
+    R: ReimbursableEntityHandler,
+    B: CashHandler,
 {
     let mut transactions = Vec::new();
     // Record asset purchase (like Capitalize)
@@ -435,12 +531,12 @@ where
             ),
             postings: vec![
                 Posting {
-                    account: asset.account_name(),
+                    account: asset.account().into(),
                     amount: -monthly_amort,
                     commodity: commodity.to_string(),
                 },
                 Posting {
-                    account: expense.account_name(),
+                    account: asset.upon_accrual().unwrap().into(),
                     amount: monthly_amort,
                     commodity: commodity.to_string(),
                 },
@@ -465,9 +561,9 @@ pub fn process_fixed_expense<E, R, B>(
     amount: f64,
 ) -> Result<Vec<LedgerTransaction>, Box<dyn Error>>
 where
-    E: ExpenseAccounts,
-    R: ReimbursableEntities,
-    B: CashAccounts,
+    E: ExpenseHandler,
+    R: ReimbursableEntityHandler,
+    B: CashHandler,
 {
     let mut transactions = Vec::new();
     let total_days = (until_date - accrual_date).num_days() + 1;
@@ -496,12 +592,12 @@ where
                 ),
                 postings: vec![
                     Posting {
-                        account: expense.account_name(),
+                        account: expense.account().into(),
                         amount: monthly_expense,
                         commodity: commodity.to_string(),
                     },
                     Posting {
-                        account: E::payable_account_name(),
+                        account: expense.while_payable().into(),
                         amount: -monthly_expense,
                         commodity: commodity.to_string(),
                     },
@@ -519,12 +615,12 @@ where
                 ),
                 postings: vec![
                     Posting {
-                        account: E::prepaid_account_name(),
+                        account: expense.while_payable().into(),
                         amount: monthly_expense,
                         commodity: commodity.to_string(),
                     },
                     Posting {
-                        account: expense.account_name(),
+                        account: expense.account().into(),
                         amount: -monthly_expense,
                         commodity: commodity.to_string(),
                     },
@@ -541,19 +637,19 @@ where
         description: format!("Clear FixedExpense adjustments: {}", description),
         postings: vec![
             Posting {
-                account: E::payable_account_name(),
+                account: expense.while_payable().into(),
                 amount: before_sum,
                 commodity: commodity.to_string(),
             },
             Posting {
-                account: E::prepaid_account_name(),
+                account: expense.while_prepaid().into(),
                 amount: -after_sum,
                 commodity: commodity.to_string(),
             },
             Posting {
                 account: match backing_account {
-                    BackingAccount::Cash(b) => b.account_name(),
-                    BackingAccount::PersonalCard(r) => r.liability_account_name(),
+                    BackingAccount::Cash(b) => b.account().into(),
+                    BackingAccount::Reimburse(r) => r.account().into(),
                 },
                 amount: -(before_sum - after_sum),
                 commodity: commodity.to_string(),
@@ -576,12 +672,12 @@ pub fn process_variable_expense<E, R, B>(
     commodity: &str,
     description: &str,
     amount: f64,
-    var_history: &mut HashMap<String, Vec<(NaiveDate, f64)>>,
+    var_history: &mut HashMap<Expense, Vec<(NaiveDate, f64)>>,
 ) -> Result<Vec<LedgerTransaction>, Box<dyn Error>>
 where
-    E: ExpenseAccounts,
-    R: ReimbursableEntities,
-    B: CashAccounts,
+    E: ExpenseHandler,
+    R: ReimbursableEntityHandler,
+    B: CashHandler,
 {
     if payment_date <= until_date {
         return Err("VariableExpense payment date must be after accrual period".into());
@@ -589,7 +685,7 @@ where
     let mut transactions = Vec::new();
     let total_days = (until_date - accrual_date).num_days() + 1;
     // Use expense account name as key.
-    let key = expense.account_name();
+    let key = expense.account();
     let historical = var_history.get(&key).cloned().unwrap_or_default();
     let cutoff = accrual_date - Duration::days(90);
     let relevant: Vec<f64> = historical
@@ -623,12 +719,12 @@ where
             ),
             postings: vec![
                 Posting {
-                    account: expense.account_name(),
+                    account: expense.account().into(),
                     amount: monthly_estimate,
                     commodity: commodity.to_string(),
                 },
                 Posting {
-                    account: E::payable_account_name(),
+                    account: expense.while_payable().into(),
                     amount: -monthly_estimate,
                     commodity: commodity.to_string(),
                 },
@@ -640,23 +736,22 @@ where
     let discrepancy = amount - estimated_total;
     let mut postings = vec![
         Posting {
-            account: E::payable_account_name(),
+            account: expense.while_payable().into(),
             amount: estimated_total,
             commodity: commodity.to_string(),
         },
         Posting {
             account: match backing_account {
-                BackingAccount::Cash(b) => b.account_name(),
-                BackingAccount::PersonalCard(r) => r.liability_account_name(),
+                BackingAccount::Cash(b) => b.account().into(),
+                BackingAccount::Reimburse(r) => r.account().into(),
             },
             amount: -estimated_total,
             commodity: commodity.to_string(),
         },
     ];
     if discrepancy.abs() > 0.01 {
-        let disc_account = format!("{}:Discrepancy", expense.account_name());
         postings.push(Posting {
-            account: disc_account,
+            account: expense.account().into(),
             amount: discrepancy,
             commodity: commodity.to_string(),
         });
@@ -687,12 +782,12 @@ pub fn process_variable_expense_init<E, R, B>(
     commodity: &str,
     description: &str,
     _amount: f64,
-    var_history: &mut HashMap<String, Vec<(NaiveDate, f64)>>,
+    var_history: &mut HashMap<Expense, Vec<(NaiveDate, f64)>>,
 ) -> Result<Vec<LedgerTransaction>, Box<dyn Error>>
 where
-    E: ExpenseAccounts,
-    R: ReimbursableEntities,
-    B: CashAccounts,
+    E: ExpenseHandler,
+    R: ReimbursableEntityHandler,
+    B: CashHandler,
 {
     let mut transactions = Vec::new();
     let total_days = (until_date - accrual_date).num_days() + 1;
@@ -720,12 +815,12 @@ where
             ),
             postings: vec![
                 Posting {
-                    account: expense.account_name(),
+                    account: expense.account().into(),
                     amount: monthly_estimate,
                     commodity: commodity.to_string(),
                 },
                 Posting {
-                    account: E::payable_account_name(),
+                    account: expense.while_payable().into(),
                     amount: -monthly_estimate,
                     commodity: commodity.to_string(),
                 },
@@ -739,14 +834,14 @@ where
         description: format!("Clear VariableExpenseInit adjustments: {}", description),
         postings: vec![
             Posting {
-                account: E::payable_account_name(),
+                account: expense.while_payable().into(),
                 amount: estimated_sum,
                 commodity: commodity.to_string(),
             },
             Posting {
                 account: match backing_account {
-                    BackingAccount::Cash(b) => b.account_name(),
-                    BackingAccount::PersonalCard(r) => r.liability_account_name(),
+                    BackingAccount::Cash(b) => b.account().into(),
+                    BackingAccount::Reimburse(r) => r.account().into(),
                 },
                 amount: -estimated_sum,
                 commodity: commodity.to_string(),
@@ -756,7 +851,7 @@ where
     };
     transactions.push(tx_clear);
     var_history
-        .entry(expense.account_name())
+        .entry(expense.account())
         .or_insert(Vec::new())
         .push((accrual_date, init_daily));
     Ok(transactions)
@@ -773,23 +868,23 @@ pub fn process_immaterial_income<I, R, B>(
     amount: f64,
 ) -> Result<Vec<LedgerTransaction>, Box<dyn Error>>
 where
-    I: IncomeAccounts,
-    R: ReimbursableEntities,
-    B: CashAccounts,
+    I: IncomeHandler,
+    R: ReimbursableEntityHandler,
+    B: CashHandler,
 {
     let tx = LedgerTransaction {
         date: payment_date,
         description: format!("ImmaterialIncome: {}", description),
         postings: vec![
             Posting {
-                account: income.account_name(),
+                account: income.account().into(),
                 amount,
                 commodity: commodity.to_string(),
             },
             Posting {
                 account: match backing_account {
-                    BackingAccount::Cash(b) => b.account_name(),
-                    BackingAccount::PersonalCard(r) => r.liability_account_name(),
+                    BackingAccount::Cash(b) => b.account().into(),
+                    BackingAccount::Reimburse(r) => r.account().into(),
                 },
                 amount: -amount,
                 commodity: commodity.to_string(),
@@ -811,23 +906,23 @@ pub fn process_immaterial_expense<E, R, B>(
     amount: f64,
 ) -> Result<Vec<LedgerTransaction>, Box<dyn Error>>
 where
-    E: ExpenseAccounts,
-    R: ReimbursableEntities,
-    B: CashAccounts,
+    E: ExpenseHandler,
+    R: ReimbursableEntityHandler,
+    B: CashHandler,
 {
     let tx = LedgerTransaction {
         date: payment_date,
         description: format!("ImmaterialExpense: {}", description),
         postings: vec![
             Posting {
-                account: expense.account_name(),
+                account: expense.account().into(),
                 amount,
                 commodity: commodity.to_string(),
             },
             Posting {
                 account: match backing_account {
-                    BackingAccount::Cash(b) => b.account_name(),
-                    BackingAccount::PersonalCard(r) => r.liability_account_name(),
+                    BackingAccount::Cash(b) => b.account().into(),
+                    BackingAccount::Reimburse(r) => r.account().into(),
                 },
                 amount: -amount,
                 commodity: commodity.to_string(),
@@ -849,22 +944,22 @@ pub fn process_reimburse<R, B>(
     amount: f64,
 ) -> Result<Vec<LedgerTransaction>, Box<dyn Error>>
 where
-    R: ReimbursableEntities,
-    B: CashAccounts,
+    R: ReimbursableEntityHandler,
+    B: CashHandler,
 {
     let tx = LedgerTransaction {
         date: payment_date,
         description: format!("Reimburse: {}", description),
         postings: vec![
             Posting {
-                account: reimbursable.liability_account_name(),
+                account: reimbursable.account().into(),
                 amount: -amount,
                 commodity: commodity.to_string(),
             },
             Posting {
                 account: match backing_account {
-                    BackingAccount::Cash(b) => b.account_name(),
-                    BackingAccount::PersonalCard(r) => r.liability_account_name(),
+                    BackingAccount::Cash(b) => b.account().into(),
+                    BackingAccount::Reimburse(r) => r.account().into(),
                 },
                 amount,
                 commodity: commodity.to_string(),
@@ -879,23 +974,24 @@ where
 pub fn process_clear_vat(
     _record: &CsvRecord,
     accrual_date: NaiveDate,
+    backing_account: Asset,
     commodity: &str,
     description: &str,
     amount: f64,
-    start: &str,
-    end: &str,
+    start: NaiveDate,
+    end: NaiveDate,
 ) -> Result<Vec<LedgerTransaction>, Box<dyn Error>> {
     let tx = LedgerTransaction {
         date: accrual_date,
         description: format!("Clear VAT from {} to {}: {}", start, end, description),
         postings: vec![
             Posting {
-                account: String::from("VatReceivable"),
+                account: Asset("VatReceivable".into()).into(),
                 amount: -amount,
                 commodity: commodity.to_string(),
             },
             Posting {
-                account: String::from("Vat Receipt Pending"),
+                account: backing_account.into(),
                 amount,
                 commodity: commodity.to_string(),
             },
@@ -925,8 +1021,14 @@ pub fn apply_decorators(
     let core_tx = &mut txs[0];
     for dec in decorators {
         match dec {
-            Decorator::VatRecoverable(invoice_date_str) => {
-                let invoice_date = NaiveDate::parse_from_str(invoice_date_str, "%Y-%m-%d")?;
+            Decorator::VatAwaitingInvoice {} => {
+                core_tx
+                    .notes
+                    .push(String::from("VAT charged but awaiting invoice"));
+            }
+            Decorator::VatRecoverable {
+                invoice: ISODate(invoice_date),
+            } => {
                 // Assume first posting is the main one.
                 let orig_amount = core_tx.postings[0].amount;
                 let core_amount = orig_amount * 100.0 / 110.0;
@@ -943,12 +1045,12 @@ pub fn apply_decorators(
                     ),
                     postings: vec![
                         Posting {
-                            account: String::from("Vat Receipt Pending"),
+                            account: Liability("VatReceiptPending".into()).into(),
                             amount: vat_amount,
                             commodity: commodity.to_string(),
                         },
                         Posting {
-                            account: String::from("Vat Recoverable Clearing"),
+                            account: Expense("VatSubtraction".into()).into(),
                             amount: -vat_amount,
                             commodity: commodity.to_string(),
                         },
@@ -956,19 +1058,19 @@ pub fn apply_decorators(
                     notes: vec![],
                 };
                 let side_tx2 = LedgerTransaction {
-                    date: invoice_date,
+                    date: invoice_date.clone(),
                     description: format!(
                         "VAT Recoverable: Clear Vat Receipt Pending into Vat Receivable for {}",
                         description
                     ),
                     postings: vec![
                         Posting {
-                            account: String::from("Vat Receivable"),
+                            account: Asset("VatReceivable".into()).into(),
                             amount: vat_amount,
                             commodity: commodity.to_string(),
                         },
                         Posting {
-                            account: String::from("Vat Receipt Pending"),
+                            account: Liability("VatReceiptPending".into()).into(),
                             amount: -vat_amount,
                             commodity: commodity.to_string(),
                         },
@@ -993,12 +1095,12 @@ pub fn apply_decorators(
                     ),
                     postings: vec![
                         Posting {
-                            account: String::from("Expenses:VatUnrecoverable"),
+                            account: Expense("VatUnrecoverable".into()).into(),
                             amount: vat_amount,
                             commodity: commodity.to_string(),
                         },
                         Posting {
-                            account: String::from("Vat Unrecoverable Clearing"),
+                            account: Expense("VatSubtraction".into()).into(),
                             amount: -vat_amount,
                             commodity: commodity.to_string(),
                         },
@@ -1012,8 +1114,11 @@ pub fn apply_decorators(
                     .notes
                     .push(String::from("VAT charged on a reverse-charge basis"));
             }
-            Decorator::CardFx(target_currency, settle_date_str, at_value) => {
-                let settle_date = NaiveDate::parse_from_str(settle_date_str, "%Y-%m-%d")?;
+            Decorator::CardFx {
+                to: target_currency,
+                settle: ISODate(settle_date),
+                at,
+            } => {
                 // Simulate a mid-market spot rate.
                 let spot_rate = 1.05;
                 for posting in &mut core_tx.postings {
@@ -1021,19 +1126,23 @@ pub fn apply_decorators(
                     posting.commodity = target_currency.clone();
                 }
                 let spot_conversion = core_tx.postings[0].amount;
-                let diff = at_value - spot_conversion;
-                let fx_account = if diff >= 0.0 { "FxGain" } else { "FxLoss" };
+                let diff = at - spot_conversion;
+                let fx_account: Account = if diff >= 0.0 {
+                    Income("FxGain".into()).into()
+                } else {
+                    Expense("FxLoss".into()).into()
+                };
                 let side_tx = LedgerTransaction {
-                    date: settle_date,
+                    date: settle_date.clone(),
                     description: format!("FX adjustment for {} via CardFx", description),
                     postings: vec![
                         Posting {
-                            account: fx_account.to_string(),
+                            account: fx_account,
                             amount: diff,
                             commodity: target_currency.clone(),
                         },
                         Posting {
-                            account: String::from("Fx Adjustment Clearing"),
+                            account: Expense("FxSubtraction".into()).into(),
                             amount: -diff,
                             commodity: target_currency.clone(),
                         },
@@ -1055,16 +1164,16 @@ pub fn process_csv<E, A, I, R, B>(
     csv_content: &str,
 ) -> Result<(String, Vec<String>), Box<dyn Error>>
 where
-    E: ExpenseAccounts + for<'de> Deserialize<'de> + std::fmt::Debug,
-    A: AssetAccounts + for<'de> Deserialize<'de> + std::fmt::Debug,
-    I: IncomeAccounts + for<'de> Deserialize<'de> + std::fmt::Debug,
-    R: ReimbursableEntities + for<'de> Deserialize<'de> + std::fmt::Debug,
-    B: CashAccounts + for<'de> Deserialize<'de> + std::fmt::Debug,
+    E: ExpenseHandler + for<'de> Deserialize<'de> + std::fmt::Debug,
+    A: AssetHandler + for<'de> Deserialize<'de> + std::fmt::Debug,
+    I: IncomeHandler + for<'de> Deserialize<'de> + std::fmt::Debug,
+    R: ReimbursableEntityHandler + for<'de> Deserialize<'de> + std::fmt::Debug,
+    B: CashHandler + for<'de> Deserialize<'de> + std::fmt::Debug,
 {
     let mut ledger_transactions: Vec<LedgerTransaction> = Vec::new();
     let mut global_notes: Vec<String> = Vec::new();
     // For VariableExpense historical data.
-    let mut var_exp_history: HashMap<String, Vec<(NaiveDate, f64)>> = HashMap::new();
+    let mut var_exp_history: HashMap<Expense, Vec<(NaiveDate, f64)>> = HashMap::new();
 
     let mut rdr = csv::Reader::from_reader(csv_content.as_bytes());
     for result in rdr.records() {
@@ -1129,7 +1238,7 @@ where
                 )?;
                 txs.extend(transactions);
             }
-            AccountingLogic::Amortize(asset, expense) => {
+            AccountingLogic::Amortize(asset) => {
                 let until_str = csv_record
                     .until
                     .as_ref()
@@ -1141,7 +1250,6 @@ where
                     payment_date,
                     until_date,
                     asset,
-                    expense,
                     &backing_account,
                     &csv_record.commodity,
                     &csv_record.description,
@@ -1188,7 +1296,7 @@ where
                 )?;
                 txs.extend(transactions);
             }
-            AccountingLogic::VariableExpenseInit(expense, estimate) => {
+            AccountingLogic::VariableExpenseInit { account, estimate } => {
                 let until_str = csv_record
                     .until
                     .as_ref()
@@ -1199,7 +1307,7 @@ where
                     accrual_date,
                     payment_date,
                     until_date,
-                    expense,
+                    account,
                     estimate,
                     &backing_account,
                     &csv_record.commodity,
@@ -1253,15 +1361,19 @@ where
                 )?;
                 txs.extend(transactions);
             }
-            AccountingLogic::ClearVat(start, end) => {
+            AccountingLogic::ClearVat { from, to } => {
                 let transactions = process_clear_vat(
                     &csv_record,
                     accrual_date,
+                    match backing_account {
+                        BackingAccount::Cash(b) => Ok(b.account()),
+                        BackingAccount::Reimburse(_) => Err("Backing account must be Cash"),
+                    }?,
                     &csv_record.commodity,
                     &csv_record.description,
                     csv_record.amount,
-                    &start,
-                    &end,
+                    from.0,
+                    to.0,
                 )?;
                 txs.extend(transactions);
             }
