@@ -1,11 +1,51 @@
 use chrono::{Datelike, Duration, NaiveDate};
 use csv;
+use fractic_server_error::{define_client_error, CriticalError, ServerError};
 use ron::de::from_str;
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::error::Error;
 use std::fmt;
+use std::str::FromStr;
 use strum::IntoEnumIterator;
+
+define_client_error!(
+    NonAmortizableAsset,
+    "Asset '{name}' does not have any value defined for 'upon_accrual()'. Provide a non-None value to support amortization.",
+    { name: &str }
+);
+define_client_error!(
+    VariableExpenseInvalidPaymentDate,
+    "Invalid VariableExpense: '{description}'. Payment date ({payment_date}) must be after accrual period (accrual end: {until_date}), otherwise it would indicate we're prepaying for an unknown expense.",
+    { description: &str, payment_date: &NaiveDate, until_date: &NaiveDate }
+);
+define_client_error!(
+    VariableExpenseNoHistoricalData,
+    "No historical data for VariableExpense: '{description}'. Must initiate with a VariableExpenseInit entry.",
+    { description: &str }
+);
+define_client_error!(
+    ClearVatInvalidBackingAccount,
+    "ClearVat entry '{description}' requires a Cash backing account.",
+    { description: &str }
+);
+define_client_error!(
+    AccrualRangeRequired,
+    "{account_logic} requires an accrual range, but entry '{description}' does not have accrual until-date.",
+    { account_logic: &str, description: &str }
+);
+define_client_error!(
+    AccrualRangeNotSupported,
+    "{account_logic} requires an accrual range, but entry '{description}' has an accrual until-date.",
+    { account_logic: &str, description: &str }
+);
+define_client_error!(InvalidCsv, "Invalid CSV format.");
+define_client_error!(InvalidRon, "Invalid {ron_type} (invalid RON format).", { ron_type: &str });
+define_client_error!(InvalidIsoDate, "Invalid ISO date: {date}.", { date: &str });
+define_client_error!(
+    InvalidAccountingAmount,
+    "Invalid accounting amount: '{value}'.",
+    { value: &str }
+);
 
 // ---------------------------------------------------------------------
 // Account interface traits (client must implement these)
@@ -115,15 +155,21 @@ pub trait CashHandler: Clone + IntoEnumIterator {
 
 #[derive(Debug)]
 pub struct ISODate(NaiveDate);
-
+impl FromStr for ISODate {
+    type Err = ServerError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let d = NaiveDate::parse_from_str(s, "%Y-%m-%d")
+            .map_err(|e| InvalidIsoDate::with_debug(s, &e))?;
+        Ok(ISODate(d))
+    }
+}
 impl<'de> Deserialize<'de> for ISODate {
     fn deserialize<D>(deserializer: D) -> Result<ISODate, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        let d = NaiveDate::parse_from_str(&s, "%Y-%m-%d").map_err(serde::de::Error::custom)?;
-        Ok(ISODate(d))
+        ISODate::from_str(&s).map_err(serde::de::Error::custom)
     }
 }
 
@@ -156,29 +202,13 @@ pub enum Decorator {
         settle: ISODate,
         at: f64,
     },
+    PaymentFee(f64),
 }
 
 #[derive(Debug, serde_derive::Deserialize)]
 pub enum BackingAccount<R, B> {
     Reimburse(R),
     Cash(B),
-}
-
-// ---------------------------------------------------------------------
-// CSV record structure (maps the 10 CSV columns)
-// ---------------------------------------------------------------------
-
-pub struct CsvRecord {
-    pub accrual_date: String,
-    pub until: Option<String>,
-    pub payment_date: String,
-    pub accounting_logic: String,
-    pub decorators: String,
-    pub entity: String,
-    pub description: String,
-    pub amount: String,
-    pub commodity: String,
-    pub backing_account: String,
 }
 
 // ---------------------------------------------------------------------
@@ -202,25 +232,29 @@ pub struct LedgerTransaction {
 // Helper: calculate all month-end dates between two dates (inclusive)
 // ---------------------------------------------------------------------
 
-fn month_end_dates(start: NaiveDate, end: NaiveDate) -> Vec<NaiveDate> {
+fn month_end_dates(start: NaiveDate, end: NaiveDate) -> Result<Vec<NaiveDate>, ServerError> {
     let mut dates = Vec::new();
     let mut current = start;
     while current <= end {
-        // Compute first day of next month:
+        // Compute first day of next month.
         let (year, month) = if current.month() == 12 {
             (current.year() + 1, 1)
         } else {
             (current.year(), current.month() + 1)
         };
-        let next_month =
-            NaiveDate::from_ymd_opt(year, month, 1).expect("unexpectedly encountered invalid date");
+        let next_month = NaiveDate::from_ymd_opt(year, month, 1).ok_or_else(|| {
+            CriticalError::with_debug(
+                "last-date-of-month calculation unexpectedly resulted in invalid date",
+                &format!("year: {}, month: {}", year, month),
+            )
+        })?;
         let last_day = next_month - Duration::days(1);
         if last_day >= start && last_day <= end {
             dates.push(last_day);
         }
         current = next_month;
     }
-    dates
+    Ok(dates)
 }
 
 // ---------------------------------------------------------------------
@@ -230,7 +264,6 @@ fn month_end_dates(start: NaiveDate, end: NaiveDate) -> Vec<NaiveDate> {
 
 // -- SimpleExpense --
 pub fn process_simple_expense<E, R, B>(
-    _record: &CsvRecord,
     accrual_date: NaiveDate,
     payment_date: NaiveDate,
     expense: E,
@@ -238,7 +271,7 @@ pub fn process_simple_expense<E, R, B>(
     commodity: &str,
     description: &str,
     amount: f64,
-) -> Result<Vec<LedgerTransaction>, Box<dyn Error>>
+) -> Result<Vec<LedgerTransaction>, ServerError>
 where
     E: ExpenseHandler,
     R: ReimbursableEntityHandler,
@@ -355,7 +388,6 @@ where
 
 // -- Capitalize --
 pub fn process_capitalize<A, R, B>(
-    _record: &CsvRecord,
     accrual_date: NaiveDate,
     payment_date: NaiveDate,
     asset: A,
@@ -363,7 +395,7 @@ pub fn process_capitalize<A, R, B>(
     commodity: &str,
     description: &str,
     amount: f64,
-) -> Result<Vec<LedgerTransaction>, Box<dyn Error>>
+) -> Result<Vec<LedgerTransaction>, ServerError>
 where
     A: AssetHandler,
     R: ReimbursableEntityHandler,
@@ -480,7 +512,6 @@ where
 
 // -- Amortize --
 pub fn process_amortize<A, R, B>(
-    record: &CsvRecord,
     accrual_date: NaiveDate,
     payment_date: NaiveDate,
     until_date: NaiveDate,
@@ -489,7 +520,7 @@ pub fn process_amortize<A, R, B>(
     commodity: &str,
     description: &str,
     amount: f64,
-) -> Result<Vec<LedgerTransaction>, Box<dyn Error>>
+) -> Result<Vec<LedgerTransaction>, ServerError>
 where
     A: AssetHandler,
     R: ReimbursableEntityHandler,
@@ -498,7 +529,6 @@ where
     let mut transactions = Vec::new();
     // Record asset purchase (like Capitalize)
     let mut purchase_txns = process_capitalize(
-        record,
         accrual_date,
         payment_date,
         asset.clone(),
@@ -511,7 +541,7 @@ where
     // Amortize evenly over accrual period.
     let total_days = (until_date - accrual_date).num_days() + 1;
     let daily_amort = amount / (total_days as f64);
-    let month_ends = month_end_dates(accrual_date, until_date);
+    let month_ends = month_end_dates(accrual_date, until_date)?;
     for m in month_ends {
         let month_start = NaiveDate::from_ymd_opt(m.year(), m.month(), 1)
             .expect("unexpectedly encountered invalid date");
@@ -536,7 +566,10 @@ where
                     commodity: commodity.to_string(),
                 },
                 Posting {
-                    account: asset.upon_accrual().unwrap().into(),
+                    account: asset
+                        .upon_accrual()
+                        .ok_or_else(|| NonAmortizableAsset::new(&description))?
+                        .into(),
                     amount: monthly_amort,
                     commodity: commodity.to_string(),
                 },
@@ -550,7 +583,6 @@ where
 
 // -- FixedExpense --
 pub fn process_fixed_expense<E, R, B>(
-    _record: &CsvRecord,
     accrual_date: NaiveDate,
     payment_date: NaiveDate,
     until_date: NaiveDate,
@@ -559,7 +591,7 @@ pub fn process_fixed_expense<E, R, B>(
     commodity: &str,
     description: &str,
     amount: f64,
-) -> Result<Vec<LedgerTransaction>, Box<dyn Error>>
+) -> Result<Vec<LedgerTransaction>, ServerError>
 where
     E: ExpenseHandler,
     R: ReimbursableEntityHandler,
@@ -568,7 +600,7 @@ where
     let mut transactions = Vec::new();
     let total_days = (until_date - accrual_date).num_days() + 1;
     let daily_expense = amount / (total_days as f64);
-    let month_ends = month_end_dates(accrual_date, until_date);
+    let month_ends = month_end_dates(accrual_date, until_date)?;
     let mut before_sum = 0.0;
     let mut after_sum = 0.0;
     for m in month_ends {
@@ -663,7 +695,6 @@ where
 
 // -- VariableExpense --
 pub fn process_variable_expense<E, R, B>(
-    _record: &CsvRecord,
     accrual_date: NaiveDate,
     payment_date: NaiveDate,
     until_date: NaiveDate,
@@ -673,14 +704,18 @@ pub fn process_variable_expense<E, R, B>(
     description: &str,
     amount: f64,
     var_history: &mut HashMap<Expense, Vec<(NaiveDate, f64)>>,
-) -> Result<Vec<LedgerTransaction>, Box<dyn Error>>
+) -> Result<Vec<LedgerTransaction>, ServerError>
 where
     E: ExpenseHandler,
     R: ReimbursableEntityHandler,
     B: CashHandler,
 {
     if payment_date <= until_date {
-        return Err("VariableExpense payment date must be after accrual period".into());
+        return Err(VariableExpenseInvalidPaymentDate::new(
+            description,
+            &payment_date,
+            &until_date,
+        ));
     }
     let mut transactions = Vec::new();
     let total_days = (until_date - accrual_date).num_days() + 1;
@@ -694,11 +729,11 @@ where
         .map(|(_, v)| *v)
         .collect();
     if relevant.is_empty() {
-        return Err(format!("No historical data for VariableExpense: {}", description).into());
+        return Err(VariableExpenseNoHistoricalData::new(description));
     }
     let avg_daily: f64 = relevant.iter().sum::<f64>() / (relevant.len() as f64);
     let estimated_total = avg_daily * (total_days as f64);
-    let month_ends = month_end_dates(accrual_date, until_date);
+    let month_ends = month_end_dates(accrual_date, until_date)?;
     for m in month_ends {
         let month_start = NaiveDate::from_ymd_opt(m.year(), m.month(), 1).expect(
             "re-constructing date from NaiveDate.year() and .month() should always yield a valid date",
@@ -772,7 +807,6 @@ where
 
 // -- VariableExpenseInit --
 pub fn process_variable_expense_init<E, R, B>(
-    _record: &CsvRecord,
     accrual_date: NaiveDate,
     payment_date: NaiveDate,
     until_date: NaiveDate,
@@ -783,7 +817,7 @@ pub fn process_variable_expense_init<E, R, B>(
     description: &str,
     _amount: f64,
     var_history: &mut HashMap<Expense, Vec<(NaiveDate, f64)>>,
-) -> Result<Vec<LedgerTransaction>, Box<dyn Error>>
+) -> Result<Vec<LedgerTransaction>, ServerError>
 where
     E: ExpenseHandler,
     R: ReimbursableEntityHandler,
@@ -792,7 +826,7 @@ where
     let mut transactions = Vec::new();
     let total_days = (until_date - accrual_date).num_days() + 1;
     let init_daily = (estimate as f64) / (total_days as f64);
-    let month_ends = month_end_dates(accrual_date, until_date);
+    let month_ends = month_end_dates(accrual_date, until_date)?;
     let mut estimated_sum = 0.0;
     for m in month_ends {
         let month_start = NaiveDate::from_ymd_opt(m.year(), m.month(), 1).expect(
@@ -859,14 +893,13 @@ where
 
 // -- ImmaterialIncome --
 pub fn process_immaterial_income<I, R, B>(
-    _record: &CsvRecord,
     payment_date: NaiveDate,
     income: I,
     backing_account: &BackingAccount<R, B>,
     commodity: &str,
     description: &str,
     amount: f64,
-) -> Result<Vec<LedgerTransaction>, Box<dyn Error>>
+) -> Result<Vec<LedgerTransaction>, ServerError>
 where
     I: IncomeHandler,
     R: ReimbursableEntityHandler,
@@ -897,14 +930,13 @@ where
 
 // -- ImmaterialExpense --
 pub fn process_immaterial_expense<E, R, B>(
-    _record: &CsvRecord,
     payment_date: NaiveDate,
     expense: E,
     backing_account: &BackingAccount<R, B>,
     commodity: &str,
     description: &str,
     amount: f64,
-) -> Result<Vec<LedgerTransaction>, Box<dyn Error>>
+) -> Result<Vec<LedgerTransaction>, ServerError>
 where
     E: ExpenseHandler,
     R: ReimbursableEntityHandler,
@@ -935,14 +967,13 @@ where
 
 // -- Reimburse --
 pub fn process_reimburse<R, B>(
-    _record: &CsvRecord,
     payment_date: NaiveDate,
     reimbursable: R,
     backing_account: &BackingAccount<R, B>,
     commodity: &str,
     description: &str,
     amount: f64,
-) -> Result<Vec<LedgerTransaction>, Box<dyn Error>>
+) -> Result<Vec<LedgerTransaction>, ServerError>
 where
     R: ReimbursableEntityHandler,
     B: CashHandler,
@@ -972,7 +1003,6 @@ where
 
 // -- ClearVat --
 pub fn process_clear_vat(
-    _record: &CsvRecord,
     accrual_date: NaiveDate,
     backing_account: Asset,
     commodity: &str,
@@ -980,7 +1010,7 @@ pub fn process_clear_vat(
     amount: f64,
     start: NaiveDate,
     end: NaiveDate,
-) -> Result<Vec<LedgerTransaction>, Box<dyn Error>> {
+) -> Result<Vec<LedgerTransaction>, ServerError> {
     let tx = LedgerTransaction {
         date: accrual_date,
         description: format!("Clear VAT from {} to {}: {}", start, end, description),
@@ -1013,7 +1043,7 @@ pub fn apply_decorators(
     payment_date: NaiveDate,
     commodity: &str,
     description: &str,
-) -> Result<Vec<LedgerTransaction>, Box<dyn Error>> {
+) -> Result<Vec<LedgerTransaction>, ServerError> {
     let mut side_txs = Vec::new();
     if txs.is_empty() {
         return Ok(side_txs);
@@ -1151,6 +1181,26 @@ pub fn apply_decorators(
                 };
                 side_txs.push(side_tx);
             }
+            Decorator::PaymentFee(fee) => {
+                let side_tx = LedgerTransaction {
+                    date: payment_date,
+                    description: format!("Payment Fee: {} for {}", fee, description),
+                    postings: vec![
+                        Posting {
+                            account: Expense("PaymentFees".into()).into(),
+                            amount: *fee,
+                            commodity: commodity.to_string(),
+                        },
+                        Posting {
+                            account: Asset("Cash:Hana".into()).into(),
+                            amount: -fee,
+                            commodity: commodity.to_string(),
+                        },
+                    ],
+                    notes: vec![],
+                };
+                side_txs.push(side_tx);
+            }
         }
     }
     Ok(side_txs)
@@ -1160,9 +1210,81 @@ pub fn apply_decorators(
 // Main processing function.
 // Reads CSV content and returns (ledger_output, list of notes).
 // ---------------------------------------------------------------------
-pub fn process_csv<E, A, I, R, B>(
-    csv_content: &str,
-) -> Result<(String, Vec<String>), Box<dyn Error>>
+
+#[derive(Debug)]
+pub struct AccountingAmount(pub f64);
+impl FromStr for AccountingAmount {
+    type Err = ServerError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let raw = s.replace(",", "");
+        let is_negative = raw.trim().starts_with("(") && raw.trim().ends_with(")");
+        let numeric_part = raw.trim_matches(|c| c == '(' || c == ')');
+        let amount = numeric_part
+            .parse::<f64>()
+            .map_err(|_| InvalidAccountingAmount::new(numeric_part))?;
+        Ok(AccountingAmount(if is_negative { -amount } else { amount }))
+    }
+}
+
+pub struct CsvRecord<E, A, I, R, B>
+where
+    E: ExpenseHandler,
+    A: AssetHandler,
+    I: IncomeHandler,
+    R: ReimbursableEntityHandler,
+    B: CashHandler,
+{
+    pub accrual_date: ISODate,
+    pub until: Option<ISODate>,
+    pub payment_date: ISODate,
+    pub accounting_logic: AccountingLogic<E, A, I, R>,
+    pub decorators: Vec<Decorator>,
+    pub entity: String,
+    pub description: String,
+    pub amount: AccountingAmount,
+    pub commodity: String,
+    pub backing_account: BackingAccount<R, B>,
+}
+
+impl<E, A, I, R, B> CsvRecord<E, A, I, R, B>
+where
+    E: ExpenseHandler + for<'de> Deserialize<'de> + std::fmt::Debug,
+    A: AssetHandler + for<'de> Deserialize<'de> + std::fmt::Debug,
+    I: IncomeHandler + for<'de> Deserialize<'de> + std::fmt::Debug,
+    R: ReimbursableEntityHandler + for<'de> Deserialize<'de> + std::fmt::Debug,
+    B: CashHandler + for<'de> Deserialize<'de> + std::fmt::Debug,
+{
+    pub fn parse(
+        accrual_date: &str,
+        until: Option<&str>,
+        payment_date: &str,
+        accounting_logic: &str,
+        decorators: &str,
+        entity: impl Into<String>,
+        description: impl Into<String>,
+        amount: &str,
+        commodity: impl Into<String>,
+        backing_account: &str,
+    ) -> Result<Self, ServerError> {
+        Ok(Self {
+            accrual_date: ISODate::from_str(accrual_date)?,
+            until: until.map(ISODate::from_str).transpose()?,
+            payment_date: ISODate::from_str(payment_date)?,
+            accounting_logic: from_str(accounting_logic)
+                .map_err(|e| InvalidRon::with_debug("AccountingLogic", &e))?,
+            decorators: from_str(&format!("[{}]", decorators))
+                .map_err(|e| InvalidRon::with_debug("Decorator", &e))?,
+            entity: entity.into(),
+            description: description.into(),
+            amount: AccountingAmount::from_str(amount)?,
+            commodity: commodity.into(),
+            backing_account: from_str(backing_account)
+                .map_err(|e| InvalidRon::with_debug("BackingAccount", &e))?,
+        })
+    }
+}
+
+pub fn process_csv<E, A, I, R, B>(csv_content: &str) -> Result<(String, Vec<String>), ServerError>
 where
     E: ExpenseHandler + for<'de> Deserialize<'de> + std::fmt::Debug,
     A: AssetHandler + for<'de> Deserialize<'de> + std::fmt::Debug,
@@ -1177,162 +1299,149 @@ where
 
     let mut rdr = csv::Reader::from_reader(csv_content.as_bytes());
     for result in rdr.records() {
-        let record = result?;
+        let record = result.map_err(|e| InvalidCsv::with_debug(&e))?;
         // Map CSV columns (order as specified):
-        let csv_record = CsvRecord {
-            accrual_date: record.get(0).unwrap_or("").to_string(),
-            until: {
-                let s = record.get(1).unwrap_or("").trim();
-                if s.is_empty() {
-                    None
-                } else {
-                    Some(s.to_string())
-                }
+        let csv_record = CsvRecord::<E, A, I, R, B>::parse(
+            record.get(0).unwrap_or(""),
+            match record.get(1) {
+                Some(s) if !s.is_empty() => Some(s),
+                _ => None,
             },
-            payment_date: record.get(2).unwrap_or("").to_string(),
-            accounting_logic: record.get(3).unwrap_or("").to_string(),
-            decorators: record.get(4).unwrap_or("").to_string(),
-            entity: record.get(5).unwrap_or("").to_string(),
-            description: record.get(6).unwrap_or("").to_string(),
-            amount: record.get(7).unwrap_or("0").to_string(),
-            commodity: record.get(8).unwrap_or("").to_string(),
-            backing_account: record.get(9).unwrap_or("").to_string(),
-        };
-
-        let amount = match csv_record.amount.starts_with('(') {
-            true => {
-                let s = csv_record.amount.trim_matches(|c| c == '(' || c == ')');
-                -s.replace(",", "").parse::<f64>()?
-            }
-            false => csv_record.amount.replace(",", "").parse::<f64>()?,
-        };
-        let accrual_date = NaiveDate::parse_from_str(&csv_record.accrual_date, "%Y-%m-%d")?;
-        let payment_date = NaiveDate::parse_from_str(&csv_record.payment_date, "%Y-%m-%d")?;
-        // Parse accounting logic (RON)
-        let accounting_logic: AccountingLogic<E, A, I, R> = from_str(&csv_record.accounting_logic)?;
-        // Parse decorators (add square brackets to form a valid RON list)
-        let decorators_ron = format!("[{}]", csv_record.decorators);
-        let decorators: Vec<Decorator> = from_str(&decorators_ron)?;
-        // Parse backing account.
-        let backing_account: BackingAccount<R, B> = from_str(&csv_record.backing_account)?;
+            record.get(2).unwrap_or(""),
+            record.get(3).unwrap_or(""),
+            record.get(4).unwrap_or(""),
+            record.get(5).unwrap_or(""),
+            record.get(6).unwrap_or(""),
+            record.get(7).unwrap_or("0"),
+            record.get(8).unwrap_or(""),
+            record.get(9).unwrap_or(""),
+        )?;
 
         let mut txs: Vec<LedgerTransaction> = Vec::new();
         // Process based on accounting logic.
-        match accounting_logic {
+        match csv_record.accounting_logic {
             AccountingLogic::SimpleExpense(expense) => {
+                if csv_record.until.is_some() {
+                    return Err(AccrualRangeNotSupported::new(
+                        "SimpleExpense",
+                        &csv_record.description,
+                    ));
+                }
                 let transactions = process_simple_expense(
-                    &csv_record,
-                    accrual_date,
-                    payment_date,
+                    csv_record.accrual_date.0,
+                    csv_record.payment_date.0,
                     expense,
-                    &backing_account,
+                    &csv_record.backing_account,
                     &csv_record.commodity,
                     &csv_record.description,
-                    amount,
+                    csv_record.amount.0,
                 )?;
                 txs.extend(transactions);
             }
             AccountingLogic::Capitalize(asset) => {
+                if csv_record.until.is_some() {
+                    return Err(AccrualRangeNotSupported::new(
+                        "Capitalize",
+                        &csv_record.description,
+                    ));
+                }
                 let transactions = process_capitalize(
-                    &csv_record,
-                    accrual_date,
-                    payment_date,
+                    csv_record.accrual_date.0,
+                    csv_record.payment_date.0,
                     asset,
-                    &backing_account,
+                    &csv_record.backing_account,
                     &csv_record.commodity,
                     &csv_record.description,
-                    amount,
+                    csv_record.amount.0,
                 )?;
                 txs.extend(transactions);
             }
             AccountingLogic::Amortize(asset) => {
-                let until_str = csv_record
-                    .until
-                    .as_ref()
-                    .ok_or("Missing Until date for Amortize")?;
-                let until_date = NaiveDate::parse_from_str(until_str, "%Y-%m-%d")?;
                 let transactions = process_amortize(
-                    &csv_record,
-                    accrual_date,
-                    payment_date,
-                    until_date,
+                    csv_record.accrual_date.0,
+                    csv_record.payment_date.0,
+                    csv_record
+                        .until
+                        .ok_or_else(|| {
+                            AccrualRangeRequired::new("Amortize", &csv_record.description)
+                        })?
+                        .0,
                     asset,
-                    &backing_account,
+                    &csv_record.backing_account,
                     &csv_record.commodity,
                     &csv_record.description,
-                    amount,
+                    csv_record.amount.0,
                 )?;
                 txs.extend(transactions);
             }
             AccountingLogic::FixedExpense(expense) => {
-                let until_str = csv_record
-                    .until
-                    .as_ref()
-                    .ok_or("Missing Until date for FixedExpense")?;
-                let until_date = NaiveDate::parse_from_str(until_str, "%Y-%m-%d")?;
                 let transactions = process_fixed_expense(
-                    &csv_record,
-                    accrual_date,
-                    payment_date,
-                    until_date,
+                    csv_record.accrual_date.0,
+                    csv_record.payment_date.0,
+                    csv_record
+                        .until
+                        .ok_or_else(|| {
+                            AccrualRangeRequired::new("FixedExpense", &csv_record.description)
+                        })?
+                        .0,
                     expense,
-                    &backing_account,
+                    &csv_record.backing_account,
                     &csv_record.commodity,
                     &csv_record.description,
-                    amount,
+                    csv_record.amount.0,
                 )?;
                 txs.extend(transactions);
             }
             AccountingLogic::VariableExpense(expense) => {
-                let until_str = csv_record
-                    .until
-                    .as_ref()
-                    .ok_or("Missing Until date for VariableExpense")?;
-                let until_date = NaiveDate::parse_from_str(until_str, "%Y-%m-%d")?;
                 let transactions = process_variable_expense(
-                    &csv_record,
-                    accrual_date,
-                    payment_date,
-                    until_date,
+                    csv_record.accrual_date.0,
+                    csv_record.payment_date.0,
+                    csv_record
+                        .until
+                        .ok_or_else(|| {
+                            AccrualRangeRequired::new("VariableExpense", &csv_record.description)
+                        })?
+                        .0,
                     expense,
-                    &backing_account,
+                    &csv_record.backing_account,
                     &csv_record.commodity,
                     &csv_record.description,
-                    amount,
+                    csv_record.amount.0,
                     &mut var_exp_history,
                 )?;
                 txs.extend(transactions);
             }
             AccountingLogic::VariableExpenseInit { account, estimate } => {
-                let until_str = csv_record
-                    .until
-                    .as_ref()
-                    .ok_or("Missing Until date for VariableExpenseInit")?;
-                let until_date = NaiveDate::parse_from_str(until_str, "%Y-%m-%d")?;
                 let transactions = process_variable_expense_init(
-                    &csv_record,
-                    accrual_date,
-                    payment_date,
-                    until_date,
+                    csv_record.accrual_date.0,
+                    csv_record.payment_date.0,
+                    csv_record
+                        .until
+                        .ok_or_else(|| {
+                            AccrualRangeRequired::new(
+                                "VariableExpenseInit",
+                                &csv_record.description,
+                            )
+                        })?
+                        .0,
                     account,
                     estimate,
-                    &backing_account,
+                    &csv_record.backing_account,
                     &csv_record.commodity,
                     &csv_record.description,
-                    amount,
+                    csv_record.amount.0,
                     &mut var_exp_history,
                 )?;
                 txs.extend(transactions);
             }
             AccountingLogic::ImmaterialIncome(income) => {
                 let transactions = process_immaterial_income(
-                    &csv_record,
-                    payment_date,
+                    csv_record.payment_date.0,
                     income,
-                    &backing_account,
+                    &csv_record.backing_account,
                     &csv_record.commodity,
                     &csv_record.description,
-                    amount,
+                    csv_record.amount.0,
                 )?;
                 txs.extend(transactions);
                 global_notes.push(format!(
@@ -1342,13 +1451,12 @@ where
             }
             AccountingLogic::ImmaterialExpense(expense) => {
                 let transactions = process_immaterial_expense(
-                    &csv_record,
-                    payment_date,
+                    csv_record.payment_date.0,
                     expense,
-                    &backing_account,
+                    &csv_record.backing_account,
                     &csv_record.commodity,
                     &csv_record.description,
-                    amount,
+                    csv_record.amount.0,
                 )?;
                 txs.extend(transactions);
                 global_notes.push(format!(
@@ -1358,27 +1466,28 @@ where
             }
             AccountingLogic::Reimburse(reimbursable) => {
                 let transactions = process_reimburse(
-                    &csv_record,
-                    payment_date,
+                    csv_record.payment_date.0,
                     reimbursable,
-                    &backing_account,
+                    &csv_record.backing_account,
                     &csv_record.commodity,
                     &csv_record.description,
-                    amount,
+                    csv_record.amount.0,
                 )?;
                 txs.extend(transactions);
             }
             AccountingLogic::ClearVat { from, to } => {
                 let transactions = process_clear_vat(
-                    &csv_record,
-                    accrual_date,
-                    match backing_account {
+                    csv_record.accrual_date.0,
+                    match csv_record.backing_account {
                         BackingAccount::Cash(b) => Ok(b.account()),
-                        BackingAccount::Reimburse(_) => Err("Backing account must be Cash"),
+                        _ => Err(ClearVatInvalidBackingAccount::with_debug(
+                            &csv_record.description,
+                            &csv_record.backing_account,
+                        )),
                     }?,
                     &csv_record.commodity,
                     &csv_record.description,
-                    amount,
+                    csv_record.amount.0,
                     from.0,
                     to.0,
                 )?;
@@ -1388,9 +1497,9 @@ where
         // Process decorators.
         let side_txs = apply_decorators(
             &mut txs,
-            &decorators,
-            accrual_date,
-            payment_date,
+            &csv_record.decorators,
+            csv_record.accrual_date.0,
+            csv_record.payment_date.0,
             &csv_record.commodity,
             &csv_record.description,
         )?;
