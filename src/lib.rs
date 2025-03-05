@@ -176,7 +176,7 @@ pub struct CsvRecord {
     pub decorators: String,
     pub entity: String,
     pub description: String,
-    pub amount: f64,
+    pub amount: String,
     pub commodity: String,
     pub backing_account: String,
 }
@@ -1194,11 +1194,18 @@ where
             decorators: record.get(4).unwrap_or("").to_string(),
             entity: record.get(5).unwrap_or("").to_string(),
             description: record.get(6).unwrap_or("").to_string(),
-            amount: record.get(7).unwrap_or("0").parse::<f64>()?,
+            amount: record.get(7).unwrap_or("0").to_string(),
             commodity: record.get(8).unwrap_or("").to_string(),
             backing_account: record.get(9).unwrap_or("").to_string(),
         };
 
+        let amount = match csv_record.amount.starts_with('(') {
+            true => {
+                let s = csv_record.amount.trim_matches(|c| c == '(' || c == ')');
+                -s.replace(",", "").parse::<f64>()?
+            }
+            false => csv_record.amount.replace(",", "").parse::<f64>()?,
+        };
         let accrual_date = NaiveDate::parse_from_str(&csv_record.accrual_date, "%Y-%m-%d")?;
         let payment_date = NaiveDate::parse_from_str(&csv_record.payment_date, "%Y-%m-%d")?;
         // Parse accounting logic (RON)
@@ -1221,7 +1228,7 @@ where
                     &backing_account,
                     &csv_record.commodity,
                     &csv_record.description,
-                    csv_record.amount,
+                    amount,
                 )?;
                 txs.extend(transactions);
             }
@@ -1234,7 +1241,7 @@ where
                     &backing_account,
                     &csv_record.commodity,
                     &csv_record.description,
-                    csv_record.amount,
+                    amount,
                 )?;
                 txs.extend(transactions);
             }
@@ -1253,7 +1260,7 @@ where
                     &backing_account,
                     &csv_record.commodity,
                     &csv_record.description,
-                    csv_record.amount,
+                    amount,
                 )?;
                 txs.extend(transactions);
             }
@@ -1272,7 +1279,7 @@ where
                     &backing_account,
                     &csv_record.commodity,
                     &csv_record.description,
-                    csv_record.amount,
+                    amount,
                 )?;
                 txs.extend(transactions);
             }
@@ -1291,7 +1298,7 @@ where
                     &backing_account,
                     &csv_record.commodity,
                     &csv_record.description,
-                    csv_record.amount,
+                    amount,
                     &mut var_exp_history,
                 )?;
                 txs.extend(transactions);
@@ -1312,7 +1319,7 @@ where
                     &backing_account,
                     &csv_record.commodity,
                     &csv_record.description,
-                    csv_record.amount,
+                    amount,
                     &mut var_exp_history,
                 )?;
                 txs.extend(transactions);
@@ -1325,7 +1332,7 @@ where
                     &backing_account,
                     &csv_record.commodity,
                     &csv_record.description,
-                    csv_record.amount,
+                    amount,
                 )?;
                 txs.extend(transactions);
                 global_notes.push(format!(
@@ -1341,7 +1348,7 @@ where
                     &backing_account,
                     &csv_record.commodity,
                     &csv_record.description,
-                    csv_record.amount,
+                    amount,
                 )?;
                 txs.extend(transactions);
                 global_notes.push(format!(
@@ -1357,7 +1364,7 @@ where
                     &backing_account,
                     &csv_record.commodity,
                     &csv_record.description,
-                    csv_record.amount,
+                    amount,
                 )?;
                 txs.extend(transactions);
             }
@@ -1371,7 +1378,7 @@ where
                     }?,
                     &csv_record.commodity,
                     &csv_record.description,
-                    csv_record.amount,
+                    amount,
                     from.0,
                     to.0,
                 )?;
