@@ -1284,7 +1284,12 @@ where
     }
 }
 
-pub fn process_csv<E, A, I, R, B>(csv_content: &str) -> Result<(String, Vec<String>), ServerError>
+pub struct FinancialRecords {
+    pub ledger: String,
+    pub notes: Vec<String>,
+}
+
+pub fn process_csv<E, A, I, R, B>(csv_content: &str) -> Result<FinancialRecords, ServerError>
 where
     E: ExpenseHandler + for<'de> Deserialize<'de> + std::fmt::Debug,
     A: AssetHandler + for<'de> Deserialize<'de> + std::fmt::Debug,
@@ -1523,5 +1528,8 @@ where
         }
         ledger_output.push('\n');
     }
-    Ok((ledger_output, global_notes))
+    Ok(FinancialRecords {
+        ledger: ledger_output,
+        notes: global_notes,
+    })
 }
