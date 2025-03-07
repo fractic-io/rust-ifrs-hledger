@@ -21,26 +21,24 @@ use crate::{
 
 pub type Ledger = String;
 
-pub struct IfrsHledgerUtil<
+pub struct IfrsHledgerUtil<A, I, E, C, R, D, M, H = HandlersImpl<A, I, E, R, C, D, M>>
+where
     A: AssetHandler,
     I: IncomeHandler,
     E: ExpenseHandler,
-    C: CashHandler,
     R: ReimbursableEntityHandler,
+    C: CashHandler,
     D: DecoratorHandler,
     M: CommodityHandler,
-> {
+    H: Handlers,
+{
     process_usecase: ProcessUsecaseImpl<
-        HandlersImpl<A, I, E, R, C, D, M>,
-        RecordsRepositoryImpl<
-            HandlersImpl<A, I, E, R, C, D, M>,
-            BalancesCsvDatasourceImpl<HandlersImpl<A, I, E, R, C, D, M>>,
-            TransactionsCsvDatasourceImpl<HandlersImpl<A, I, E, R, C, D, M>>,
-        >,
-        IfrsLogicImpl<HandlersImpl<A, I, E, R, C, D, M>>,
+        H,
+        RecordsRepositoryImpl<H, BalancesCsvDatasourceImpl<H>, TransactionsCsvDatasourceImpl<H>>,
+        IfrsLogicImpl<H>,
     >,
     printer: HledgerPrinter,
-    _phantom: std::marker::PhantomData<HandlersImpl<A, I, E, R, C, D, M>>,
+    _phantom: std::marker::PhantomData<(A, I, E, R, C, D, M)>,
 }
 
 impl<A, I, E, C, R, D, M> IfrsHledgerUtil<A, I, E, C, R, D, M>
