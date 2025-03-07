@@ -7,16 +7,16 @@ pub enum Account {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-pub struct AssetAccount(String);
+pub struct AssetAccount(pub(crate) String);
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-pub struct LiabilityAccount(String);
+pub struct LiabilityAccount(pub(crate) String);
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-pub struct IncomeAccount(String);
+pub struct IncomeAccount(pub(crate) String);
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-pub struct ExpenseAccount(String);
+pub struct ExpenseAccount(pub(crate) String);
 
 // Shorthand constructors.
 

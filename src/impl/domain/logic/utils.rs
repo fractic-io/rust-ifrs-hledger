@@ -1,4 +1,10 @@
-fn month_end_dates(start: NaiveDate, end: NaiveDate) -> Result<Vec<NaiveDate>, ServerError> {
+use chrono::{Datelike, Duration, NaiveDate};
+use fractic_server_error::{CriticalError, ServerError};
+
+pub(crate) fn month_end_dates(
+    start: NaiveDate,
+    end: NaiveDate,
+) -> Result<Vec<NaiveDate>, ServerError> {
     let mut dates = Vec::new();
     let mut current = start;
     while current <= end {

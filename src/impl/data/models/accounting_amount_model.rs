@@ -1,3 +1,9 @@
+use std::str::FromStr;
+
+use fractic_server_error::ServerError;
+
+use crate::errors::InvalidAccountingAmount;
+
 #[derive(Debug)]
 pub(crate) struct AccountingAmountModel(pub f64);
 impl FromStr for AccountingAmountModel {
@@ -14,5 +20,11 @@ impl FromStr for AccountingAmountModel {
         } else {
             amount
         }))
+    }
+}
+
+impl Into<f64> for AccountingAmountModel {
+    fn into(self) -> f64 {
+        self.0
     }
 }

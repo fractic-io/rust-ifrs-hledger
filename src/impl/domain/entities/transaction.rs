@@ -1,3 +1,7 @@
+use chrono::NaiveDate;
+
+use super::account::Account;
+
 pub struct Posting {
     pub account: Account,
     pub amount: f64,

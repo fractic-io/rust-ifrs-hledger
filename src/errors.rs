@@ -1,6 +1,9 @@
 use chrono::NaiveDate;
 use fractic_server_error::define_client_error;
 
+// IO-related.
+define_client_error!(ReadError, "Error reading file.");
+
 // Parsing-related.
 define_client_error!(InvalidCsv, "Invalid CSV format.");
 define_client_error!(InvalidRon, "Invalid {ron_type} (invalid RON format).", { ron_type: &str });

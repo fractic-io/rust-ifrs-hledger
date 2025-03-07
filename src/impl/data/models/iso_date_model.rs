@@ -1,3 +1,11 @@
+use std::str::FromStr;
+
+use chrono::NaiveDate;
+use fractic_server_error::ServerError;
+use serde::Deserialize;
+
+use crate::errors::InvalidIsoDate;
+
 #[derive(Debug)]
 pub(crate) struct ISODateModel(NaiveDate);
 impl FromStr for ISODateModel {
@@ -15,5 +23,11 @@ impl<'de> Deserialize<'de> for ISODateModel {
     {
         let s = String::deserialize(deserializer)?;
         ISODateModel::from_str(&s).map_err(serde::de::Error::custom)
+    }
+}
+
+impl Into<NaiveDate> for ISODateModel {
+    fn into(self) -> NaiveDate {
+        self.0
     }
 }

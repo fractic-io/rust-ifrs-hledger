@@ -3,8 +3,8 @@
 
 pub(crate) mod standard_decorators {
     pub(crate) mod card_fx;
-    pub(crate) mod korea_vat;
     pub(crate) mod payment_fee;
+    pub(crate) mod vat_korea;
 }
 
 // Public exports.
@@ -18,7 +18,7 @@ pub mod exports {
 
     pub mod standard_decorators {
         pub use crate::impl_ext::standard_decorators::card_fx::*;
-        pub use crate::impl_ext::standard_decorators::korea_vat::*;
         pub use crate::impl_ext::standard_decorators::payment_fee::*;
+        pub use crate::impl_ext::standard_decorators::vat_korea::*;
     }
 }

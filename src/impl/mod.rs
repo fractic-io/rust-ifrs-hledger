@@ -20,6 +20,9 @@ pub(crate) mod data {
 pub(crate) mod domain {
     pub(crate) mod entities {
         pub(crate) mod account;
+        pub(crate) mod assertion;
+        pub(crate) mod assertion_spec;
+        pub(crate) mod decorator_logic;
         pub(crate) mod financial_records;
         pub(crate) mod handlers;
         pub(crate) mod transaction;
@@ -52,6 +55,9 @@ pub mod exports {
 
     pub mod entities {
         pub use crate::domain::entities::account::*;
+        pub use crate::domain::entities::assertion::*;
+        pub use crate::domain::entities::assertion_spec::*;
+        pub use crate::domain::entities::decorator_logic::*;
         pub use crate::domain::entities::financial_records::*;
         pub use crate::domain::entities::handlers::*;
         pub use crate::domain::entities::transaction::*;

@@ -7,7 +7,6 @@ pub(crate) use r#impl::presentation;
 mod impl_ext;
 pub mod ext {
     pub use super::impl_ext::exports::*;
-    pub(crate) use super::impl_ext::standard_decorators;
 }
 
 pub mod errors;
