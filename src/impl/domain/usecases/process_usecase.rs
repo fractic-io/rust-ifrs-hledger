@@ -12,10 +12,7 @@ use crate::{
         logic::ifrs_logic::{IfrsLogic, IfrsLogicImpl},
         repositories::records_repository::RecordsRepository,
     },
-    entities::{
-        AssetHandler, CashHandler, CommodityHandler, DecoratorHandler, ExpenseHandler,
-        FinancialRecords, IncomeHandler, ReimbursableEntityHandler,
-    },
+    entities::{FinancialRecords, Handlers},
 };
 
 pub trait ProcessUsecase {
@@ -34,34 +31,20 @@ pub trait ProcessUsecase {
         P: AsRef<std::path::Path>;
 }
 
-pub(crate) struct ProcessUsecaseImpl<A, I, E, C, R, D, M, R1, L1>
+pub(crate) struct ProcessUsecaseImpl<H: Handlers, R1, L1>
 where
-    A: AssetHandler,
-    I: IncomeHandler,
-    E: ExpenseHandler,
-    C: CashHandler,
-    R: ReimbursableEntityHandler,
-    D: DecoratorHandler,
-    M: CommodityHandler,
-    R1: RecordsRepository<A, I, E, C, R, D, M>,
-    L1: IfrsLogic<A, I, E, C, R, D, M>,
+    R1: RecordsRepository<H>,
+    L1: IfrsLogic<H>,
 {
     records_repository: R1,
     ifrs_logic: L1,
-    _phantom: std::marker::PhantomData<(A, I, E, C, R, D, M)>,
+    _phantom: std::marker::PhantomData<H>,
 }
 
-impl<A, I, E, C, R, D, M, R1, L1> ProcessUsecase for ProcessUsecaseImpl<A, I, E, C, R, D, M, R1, L1>
+impl<H: Handlers, R1, L1> ProcessUsecase for ProcessUsecaseImpl<H, R1, L1>
 where
-    A: AssetHandler,
-    I: IncomeHandler,
-    E: ExpenseHandler,
-    C: CashHandler,
-    R: ReimbursableEntityHandler,
-    D: DecoratorHandler,
-    M: CommodityHandler,
-    R1: RecordsRepository<A, I, E, C, R, D, M>,
-    L1: IfrsLogic<A, I, E, C, R, D, M>,
+    R1: RecordsRepository<H>,
+    L1: IfrsLogic<H>,
 {
     fn from_string(
         &self,
@@ -89,36 +72,12 @@ where
     }
 }
 
-impl<A, I, E, C, R, D, M>
+impl<H: Handlers>
     ProcessUsecaseImpl<
-        A,
-        I,
-        E,
-        C,
-        R,
-        D,
-        M,
-        RecordsRepositoryImpl<
-            A,
-            I,
-            E,
-            C,
-            R,
-            D,
-            M,
-            BalancesCsvDatasourceImpl<C, M>,
-            TransactionsCsvDatasourceImpl<A, I, E, C, R, D, M>,
-        >,
-        IfrsLogicImpl<A, I, E, C, R, D, M>,
+        H,
+        RecordsRepositoryImpl<H, BalancesCsvDatasourceImpl<H>, TransactionsCsvDatasourceImpl<H>>,
+        IfrsLogicImpl<H>,
     >
-where
-    A: AssetHandler,
-    I: IncomeHandler,
-    E: ExpenseHandler,
-    C: CashHandler,
-    R: ReimbursableEntityHandler,
-    D: DecoratorHandler,
-    M: CommodityHandler,
 {
     pub(crate) fn new() -> Self {
         ProcessUsecaseImpl {

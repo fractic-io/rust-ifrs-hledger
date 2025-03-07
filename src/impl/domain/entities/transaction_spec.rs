@@ -1,9 +1,6 @@
 use chrono::NaiveDate;
 
-use super::handlers::{
-    AssetHandler, CashHandler, CommodityHandler, DecoratorHandler, ExpenseHandler, IncomeHandler,
-    ReimbursableEntityHandler,
-};
+use super::handlers::Handlers;
 
 pub enum AccountingLogic<E, A, I, R> {
     SimpleExpense(E),
@@ -23,24 +20,15 @@ pub enum BackingAccount<R, C> {
     Cash(C),
 }
 
-pub struct TransactionSpec<A, I, E, C, R, D, M>
-where
-    A: AssetHandler,
-    I: IncomeHandler,
-    E: ExpenseHandler,
-    C: CashHandler,
-    R: ReimbursableEntityHandler,
-    D: DecoratorHandler,
-    M: CommodityHandler,
-{
+pub struct TransactionSpec<H: Handlers> {
     pub accrual_date: NaiveDate,
     pub until: Option<NaiveDate>,
     pub payment_date: NaiveDate,
-    pub accounting_logic: AccountingLogic<E, A, I, R>,
-    pub decorators: Vec<D>,
+    pub accounting_logic: AccountingLogic<H::E, H::A, H::I, H::R>,
+    pub decorators: Vec<H::D>,
     pub entity: String,
     pub description: String,
     pub amount: f64,
-    pub commodity: M,
-    pub backing_account: BackingAccount<R, C>,
+    pub commodity: H::M,
+    pub backing_account: BackingAccount<H::R, H::C>,
 }

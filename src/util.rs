@@ -14,15 +14,14 @@ use crate::{
     },
     entities::{
         AssetHandler, CashHandler, CommodityHandler, DecoratorHandler, ExpenseHandler,
-        FinancialRecords, IncomeHandler, ReimbursableEntityHandler,
+        FinancialRecords, Handlers, HandlersImpl, IncomeHandler, ReimbursableEntityHandler,
     },
     presentation::hledger_printer::HledgerPrinter,
 };
 
 pub type Ledger = String;
 
-pub struct IfrsHledgerUtil<A, I, E, C, R, D, M>
-where
+pub struct IfrsHledgerUtil<
     A: AssetHandler,
     I: IncomeHandler,
     E: ExpenseHandler,
@@ -30,29 +29,18 @@ where
     R: ReimbursableEntityHandler,
     D: DecoratorHandler,
     M: CommodityHandler,
-{
+> {
     process_usecase: ProcessUsecaseImpl<
-        A,
-        I,
-        E,
-        C,
-        R,
-        D,
-        M,
+        HandlersImpl<A, I, E, R, C, D, M>,
         RecordsRepositoryImpl<
-            A,
-            I,
-            E,
-            C,
-            R,
-            D,
-            M,
-            BalancesCsvDatasourceImpl<C, M>,
-            TransactionsCsvDatasourceImpl<A, I, E, C, R, D, M>,
+            HandlersImpl<A, I, E, R, C, D, M>,
+            BalancesCsvDatasourceImpl<HandlersImpl<A, I, E, R, C, D, M>>,
+            TransactionsCsvDatasourceImpl<HandlersImpl<A, I, E, R, C, D, M>>,
         >,
-        IfrsLogicImpl<A, I, E, C, R, D, M>,
+        IfrsLogicImpl<HandlersImpl<A, I, E, R, C, D, M>>,
     >,
     printer: HledgerPrinter,
+    _phantom: std::marker::PhantomData<HandlersImpl<A, I, E, R, C, D, M>>,
 }
 
 impl<A, I, E, C, R, D, M> IfrsHledgerUtil<A, I, E, C, R, D, M>
@@ -69,6 +57,7 @@ where
         Self {
             process_usecase: ProcessUsecaseImpl::new(),
             printer: HledgerPrinter::new(),
+            _phantom: std::marker::PhantomData,
         }
     }
 

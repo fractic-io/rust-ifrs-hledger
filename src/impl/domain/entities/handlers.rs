@@ -8,6 +8,39 @@ use super::{
     decorator_logic::DecoratorLogic,
 };
 
+pub trait Handlers {
+    type A: AssetHandler;
+    type I: IncomeHandler;
+    type E: ExpenseHandler;
+    type R: ReimbursableEntityHandler;
+    type C: CashHandler;
+    type D: DecoratorHandler;
+    type M: CommodityHandler;
+}
+
+pub(crate) struct HandlersImpl<A, I, E, R, C, D, M> {
+    pub _phantom: std::marker::PhantomData<(A, I, E, R, C, D, M)>,
+}
+
+impl<A, I, E, R, C, D, M> Handlers for HandlersImpl<A, I, E, R, C, D, M>
+where
+    A: AssetHandler,
+    I: IncomeHandler,
+    E: ExpenseHandler,
+    R: ReimbursableEntityHandler,
+    C: CashHandler,
+    D: DecoratorHandler,
+    M: CommodityHandler,
+{
+    type A = A;
+    type I = I;
+    type E = E;
+    type R = R;
+    type C = C;
+    type D = D;
+    type M = M;
+}
+
 pub trait AssetHandler: for<'de> Deserialize<'de> {
     fn account(&self) -> AssetAccount;
     fn while_prepaid(&self) -> AssetAccount;

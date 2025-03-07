@@ -1,14 +1,10 @@
 use chrono::NaiveDate;
 
-use super::handlers::{CashHandler, CommodityHandler};
+use super::handlers::Handlers;
 
-pub struct AssertionSpec<C, M>
-where
-    C: CashHandler,
-    M: CommodityHandler,
-{
+pub struct AssertionSpec<H: Handlers> {
     pub date: NaiveDate,
-    pub account: C,
+    pub account: H::C,
     pub balance: f64,
-    pub commodity: M,
+    pub commodity: H::M,
 }

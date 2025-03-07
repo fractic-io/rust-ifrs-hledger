@@ -1,44 +1,17 @@
 use crate::entities::{
     AssetHandler, CashHandler, CommodityHandler, DecoratorHandler, ExpenseHandler,
-    FinancialRecordSpecs, FinancialRecords, IncomeHandler, ReimbursableEntityHandler,
+    FinancialRecordSpecs, FinancialRecords, Handlers, IncomeHandler, ReimbursableEntityHandler,
 };
 
-pub(crate) trait IfrsLogic<A, I, E, C, R, D, M>
-where
-    A: AssetHandler,
-    I: IncomeHandler,
-    E: ExpenseHandler,
-    C: CashHandler,
-    R: ReimbursableEntityHandler,
-    D: DecoratorHandler,
-    M: CommodityHandler,
-{
-    fn process(&self, specs: FinancialRecordSpecs<A, I, E, C, R, D, M>) -> FinancialRecords;
+pub(crate) trait IfrsLogic<H: Handlers> {
+    fn process(&self, specs: FinancialRecordSpecs<H>) -> FinancialRecords;
 }
 
-pub(crate) struct IfrsLogicImpl<A, I, E, C, R, D, M>
-where
-    A: AssetHandler,
-    I: IncomeHandler,
-    E: ExpenseHandler,
-    C: CashHandler,
-    R: ReimbursableEntityHandler,
-    D: DecoratorHandler,
-    M: CommodityHandler,
-{
-    _phantom: std::marker::PhantomData<(A, I, E, C, R, D, M)>,
+pub(crate) struct IfrsLogicImpl<H: Handlers> {
+    _phantom: std::marker::PhantomData<H>,
 }
 
-impl<A, I, E, C, R, D, M> IfrsLogicImpl<A, I, E, C, R, D, M>
-where
-    A: AssetHandler,
-    I: IncomeHandler,
-    E: ExpenseHandler,
-    C: CashHandler,
-    R: ReimbursableEntityHandler,
-    D: DecoratorHandler,
-    M: CommodityHandler,
-{
+impl<H: Handlers> IfrsLogicImpl<H> {
     pub fn new() -> Self {
         Self {
             _phantom: std::marker::PhantomData,
@@ -46,17 +19,8 @@ where
     }
 }
 
-impl<A, I, E, C, R, D, M> IfrsLogic<A, I, E, C, R, D, M> for IfrsLogicImpl<A, I, E, C, R, D, M>
-where
-    A: AssetHandler,
-    I: IncomeHandler,
-    E: ExpenseHandler,
-    C: CashHandler,
-    R: ReimbursableEntityHandler,
-    D: DecoratorHandler,
-    M: CommodityHandler,
-{
-    fn process(&self, specs: FinancialRecordSpecs<A, I, E, C, R, D, M>) -> FinancialRecords {
+impl<H: Handlers> IfrsLogic<H> for IfrsLogicImpl<H> {
+    fn process(&self, specs: FinancialRecordSpecs<H>) -> FinancialRecords {
         unimplemented!()
     }
 }

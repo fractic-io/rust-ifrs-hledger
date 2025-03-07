@@ -6,35 +6,23 @@ use ron::from_str;
 use crate::{
     data::models::{accounting_amount_model::AccountingAmountModel, iso_date_model::ISODateModel},
     domain::entities::assertion_spec::AssertionSpec,
-    entities::{CashHandler, CommodityHandler},
+    entities::Handlers,
     errors::{InvalidCsv, InvalidRon, ReadError},
 };
 
-pub(crate) trait BalancesCsvDatasource<C, M>
-where
-    C: CashHandler,
-    M: CommodityHandler,
-{
-    fn from_string(&self, s: &str) -> Result<Vec<AssertionSpec<C, M>>, ServerError>;
+pub(crate) trait BalancesCsvDatasource<H: Handlers> {
+    fn from_string(&self, s: &str) -> Result<Vec<AssertionSpec<H>>, ServerError>;
 
-    fn from_file<P>(&self, path: P) -> Result<Vec<AssertionSpec<C, M>>, ServerError>
+    fn from_file<P>(&self, path: P) -> Result<Vec<AssertionSpec<H>>, ServerError>
     where
         P: AsRef<std::path::Path>;
 }
 
-pub(crate) struct BalancesCsvDatasourceImpl<C, M>
-where
-    C: CashHandler,
-    M: CommodityHandler,
-{
-    _phantom: std::marker::PhantomData<(C, M)>,
+pub(crate) struct BalancesCsvDatasourceImpl<H: Handlers> {
+    _phantom: std::marker::PhantomData<H>,
 }
 
-impl<C, M> BalancesCsvDatasourceImpl<C, M>
-where
-    C: CashHandler,
-    M: CommodityHandler,
-{
+impl<H: Handlers> BalancesCsvDatasourceImpl<H> {
     pub(crate) fn new() -> Self {
         Self {
             _phantom: std::marker::PhantomData,
@@ -42,12 +30,8 @@ where
     }
 }
 
-impl<C, M> BalancesCsvDatasource<C, M> for BalancesCsvDatasourceImpl<C, M>
-where
-    C: CashHandler,
-    M: CommodityHandler,
-{
-    fn from_string(&self, s: &str) -> Result<Vec<AssertionSpec<C, M>>, ServerError> {
+impl<H: Handlers> BalancesCsvDatasource<H> for BalancesCsvDatasourceImpl<H> {
+    fn from_string(&self, s: &str) -> Result<Vec<AssertionSpec<H>>, ServerError> {
         csv::Reader::from_reader(s.as_bytes())
             .records()
             .map(|r| {
@@ -60,11 +44,11 @@ where
 
                     // Parse.
                     let date: ISODateModel = ISODateModel::from_str(raw_date)?;
-                    let account: C =
+                    let account: H::C =
                         from_str(raw_account).map_err(|e| InvalidRon::with_debug("Cash", &e))?;
                     let balance: AccountingAmountModel =
                         AccountingAmountModel::from_str(raw_balance)?;
-                    let commodity: M = from_str(raw_commodity)
+                    let commodity: H::M = from_str(raw_commodity)
                         .map_err(|e| InvalidRon::with_debug("Commodity", &e))?;
 
                     // Build.
@@ -79,7 +63,7 @@ where
             .collect()
     }
 
-    fn from_file<P>(&self, path: P) -> Result<Vec<AssertionSpec<C, M>>, ServerError>
+    fn from_file<P>(&self, path: P) -> Result<Vec<AssertionSpec<H>>, ServerError>
     where
         P: AsRef<std::path::Path>,
     {
