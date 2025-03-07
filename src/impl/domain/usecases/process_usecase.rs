@@ -1,13 +1,7 @@
 use fractic_server_error::ServerError;
 
 use crate::{
-    data::{
-        datasources::{
-            balances_csv_datasource::BalancesCsvDatasourceImpl,
-            transactions_csv_datasource::TransactionsCsvDatasourceImpl,
-        },
-        repositories::records_repository_impl::RecordsRepositoryImpl,
-    },
+    data::repositories::records_repository_impl::RecordsRepositoryImpl,
     domain::{
         logic::ifrs_logic::{IfrsLogic, IfrsLogicImpl},
         repositories::records_repository::RecordsRepository,
@@ -31,8 +25,12 @@ pub trait ProcessUsecase {
         P: AsRef<std::path::Path>;
 }
 
-pub(crate) struct ProcessUsecaseImpl<H: Handlers, R1, L1>
-where
+pub(crate) struct ProcessUsecaseImpl<
+    H,
+    R1 = RecordsRepositoryImpl<H>, // Default.
+    L1 = IfrsLogicImpl<H>,         // Default.
+> where
+    H: Handlers,
     R1: RecordsRepository<H>,
     L1: IfrsLogic<H>,
 {
@@ -41,8 +39,9 @@ where
     _phantom: std::marker::PhantomData<H>,
 }
 
-impl<H: Handlers, R1, L1> ProcessUsecase for ProcessUsecaseImpl<H, R1, L1>
+impl<H, R1, L1> ProcessUsecase for ProcessUsecaseImpl<H, R1, L1>
 where
+    H: Handlers,
     R1: RecordsRepository<H>,
     L1: IfrsLogic<H>,
 {
@@ -72,13 +71,7 @@ where
     }
 }
 
-impl<H: Handlers>
-    ProcessUsecaseImpl<
-        H,
-        RecordsRepositoryImpl<H, BalancesCsvDatasourceImpl<H>, TransactionsCsvDatasourceImpl<H>>,
-        IfrsLogicImpl<H>,
-    >
-{
+impl<H: Handlers> ProcessUsecaseImpl<H> {
     pub(crate) fn new() -> Self {
         ProcessUsecaseImpl {
             records_repository: RecordsRepositoryImpl::new(),

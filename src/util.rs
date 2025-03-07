@@ -1,27 +1,17 @@
 use fractic_server_error::ServerError;
 
 use crate::{
-    data::{
-        datasources::{
-            balances_csv_datasource::BalancesCsvDatasourceImpl,
-            transactions_csv_datasource::TransactionsCsvDatasourceImpl,
-        },
-        repositories::records_repository_impl::RecordsRepositoryImpl,
-    },
-    domain::{
-        logic::ifrs_logic::IfrsLogicImpl,
-        usecases::process_usecase::{ProcessUsecase as _, ProcessUsecaseImpl},
-    },
+    domain::usecases::process_usecase::{ProcessUsecase as _, ProcessUsecaseImpl},
     entities::{
         AssetHandler, CashHandler, CommodityHandler, DecoratorHandler, ExpenseHandler,
-        FinancialRecords, Handlers, HandlersImpl, IncomeHandler, ReimbursableEntityHandler,
+        FinancialRecords, HandlersImpl, IncomeHandler, ReimbursableEntityHandler,
     },
     presentation::hledger_printer::HledgerPrinter,
 };
 
 pub type Ledger = String;
 
-pub struct IfrsHledgerUtil<A, I, E, C, R, D, M, H = HandlersImpl<A, I, E, R, C, D, M>>
+pub struct IfrsHledgerUtil<A, I, E, C, R, D, M>
 where
     A: AssetHandler,
     I: IncomeHandler,
@@ -30,15 +20,9 @@ where
     C: CashHandler,
     D: DecoratorHandler,
     M: CommodityHandler,
-    H: Handlers,
 {
-    process_usecase: ProcessUsecaseImpl<
-        H,
-        RecordsRepositoryImpl<H, BalancesCsvDatasourceImpl<H>, TransactionsCsvDatasourceImpl<H>>,
-        IfrsLogicImpl<H>,
-    >,
+    process_usecase: ProcessUsecaseImpl<HandlersImpl<A, I, E, R, C, D, M>>,
     printer: HledgerPrinter,
-    _phantom: std::marker::PhantomData<(A, I, E, R, C, D, M)>,
 }
 
 impl<A, I, E, C, R, D, M> IfrsHledgerUtil<A, I, E, C, R, D, M>
@@ -55,7 +39,6 @@ where
         Self {
             process_usecase: ProcessUsecaseImpl::new(),
             printer: HledgerPrinter::new(),
-            _phantom: std::marker::PhantomData,
         }
     }
 

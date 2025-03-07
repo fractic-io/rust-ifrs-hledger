@@ -9,8 +9,12 @@ use crate::{
     entities::{FinancialRecordSpecs, Handlers},
 };
 
-pub(crate) struct RecordsRepositoryImpl<H: Handlers, DS1, DS2>
-where
+pub(crate) struct RecordsRepositoryImpl<
+    H,
+    DS1 = BalancesCsvDatasourceImpl<H>,     // Default.
+    DS2 = TransactionsCsvDatasourceImpl<H>, // Default.
+> where
+    H: Handlers,
     DS1: BalancesCsvDatasource<H>,
     DS2: TransactionsCsvDatasource<H>,
 {
@@ -19,8 +23,9 @@ where
     _phantom: std::marker::PhantomData<H>,
 }
 
-impl<H: Handlers, DS1, DS2> RecordsRepository<H> for RecordsRepositoryImpl<H, DS1, DS2>
+impl<H, DS1, DS2> RecordsRepository<H> for RecordsRepositoryImpl<H, DS1, DS2>
 where
+    H: Handlers,
     DS1: BalancesCsvDatasource<H>,
     DS2: TransactionsCsvDatasource<H>,
 {
@@ -50,9 +55,7 @@ where
     }
 }
 
-impl<H: Handlers>
-    RecordsRepositoryImpl<H, BalancesCsvDatasourceImpl<H>, TransactionsCsvDatasourceImpl<H>>
-{
+impl<H: Handlers> RecordsRepositoryImpl<H> {
     pub(crate) fn new() -> Self {
         RecordsRepositoryImpl {
             transactions_datasource: TransactionsCsvDatasourceImpl::new(),

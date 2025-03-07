@@ -46,7 +46,8 @@ pub trait CommodityHandler: for<'de> Deserialize<'de> {
     fn iso_symbol(&self) -> String;
 }
 
-// Some type-magic to combine all handlers into a single type.
+// Some type-magic to combine all handlers into a single type, greatly
+// shortening type parameters.
 // ---
 
 pub trait Handlers {
@@ -59,7 +60,7 @@ pub trait Handlers {
     type M: CommodityHandler;
 }
 
-pub struct HandlersImpl<A, I, E, R, C, D, M> {
+pub(crate) struct HandlersImpl<A, I, E, R, C, D, M> {
     pub _phantom: std::marker::PhantomData<(A, I, E, R, C, D, M)>,
 }
 
