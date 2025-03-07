@@ -47,7 +47,7 @@ pub trait CommodityHandler: for<'de> Deserialize<'de> {
 }
 
 // Some type-magic to combine all handlers into a single type, greatly
-// shortening type parameters.
+// shortening type parameters throughout the repo.
 // ---
 
 pub trait Handlers {
