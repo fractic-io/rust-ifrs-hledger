@@ -4,7 +4,7 @@ use chrono::{Datelike, Duration, NaiveDate};
 use fractic_server_error::ServerError;
 
 use crate::{
-    domain::logic::utils::month_end_dates,
+    domain::logic::utils::{month_end_dates, month_start},
     entities::{
         asset, Account, AccountingLogic, Assertion, AssetHandler, BackingAccount, CashHandler,
         CommodityHandler, ExpenseAccount, ExpenseHandler, FinancialRecordSpecs, FinancialRecords,
@@ -22,10 +22,25 @@ pub(crate) struct SpecProcessor<H: Handlers> {
     specs: FinancialRecordSpecs<H>,
 }
 
+/// A record that stores the daily accrual rate for a given period.
+/// (Note: We use the accrual period [start, end] – the clearing date is handled in the transactions.)
+#[derive(Clone, Debug)]
+pub struct VariableExpenseRecord {
+    pub start: NaiveDate,
+    pub end: NaiveDate,
+    pub daily_rate: f64,
+}
+
+struct Transformation {
+    transactions: Vec<Transaction>,
+    expense_history_delta: Option<(ExpenseAccount, VariableExpenseRecord)>,
+    notes: Vec<Note>,
+}
+
 struct FoldState {
     accounts: Vec<Account>,
     transactions: Vec<Transaction>,
-    expense_history: HashMap<ExpenseAccount, Vec<(NaiveDate, NaiveDate, f64)>>,
+    expense_history: HashMap<ExpenseAccount, Vec<VariableExpenseRecord>>,
     notes: Vec<Note>,
 }
 
@@ -53,11 +68,8 @@ impl FoldState {
         );
 
         transactions.extend(t.transactions);
-        if let Some((account, start, end, amount)) = t.expense_history_delta {
-            expense_history
-                .entry(account)
-                .or_insert(Vec::new())
-                .push((start, end, amount));
+        if let Some((account, record)) = t.expense_history_delta {
+            expense_history.entry(account).or_default().push(record);
         }
         notes.extend(t.notes);
 
@@ -68,17 +80,6 @@ impl FoldState {
             notes,
         }
     }
-}
-
-struct Transformation {
-    transactions: Vec<Transaction>,
-    expense_history_delta: Option<(ExpenseAccount, NaiveDate, NaiveDate, f64)>,
-    notes: Vec<Note>,
-}
-
-// Helper for variable expense history.
-fn get_variable_expense_history(_account: &ExpenseAccount) -> Vec<(NaiveDate, f64)> {
-    unimplemented!()
 }
 
 impl<R, C> BackingAccount<R, C>
@@ -125,16 +126,16 @@ impl<H: Handlers> SpecProcessor<H> {
             transaction_specs
                 .into_iter()
                 .try_fold(FoldState::new(), |state, spec| {
-                    Ok(state.step(match &spec.accounting_logic {
+                    let transformation = match &spec.accounting_logic {
                         AccountingLogic::SimpleExpense(..) => Self::process_simple_expense(spec)?,
                         AccountingLogic::Capitalize(..) => Self::process_capitalize(spec)?,
                         AccountingLogic::Amortize(..) => Self::process_amortize(spec)?,
                         AccountingLogic::FixedExpense(..) => Self::process_fixed_expense(spec)?,
                         AccountingLogic::VariableExpense(..) => {
-                            Self::process_variable_expense(spec)?
+                            Self::process_variable_expense(spec, &state.expense_history)?
                         }
                         AccountingLogic::VariableExpenseInit { .. } => {
-                            Self::process_variable_expense_init(spec)?
+                            Self::process_variable_expense_init(spec, &state.expense_history)?
                         }
                         AccountingLogic::ImmaterialIncome(..) => {
                             Self::process_immaterial_income(spec)?
@@ -144,7 +145,8 @@ impl<H: Handlers> SpecProcessor<H> {
                         }
                         AccountingLogic::Reimburse(..) => Self::process_reimburse(spec)?,
                         AccountingLogic::ClearVat { .. } => Self::process_clear_vat(spec)?,
-                    }))
+                    };
+                    Ok(state.step(transformation))
                 })?;
 
         let assertions = assertion_specs
@@ -630,7 +632,43 @@ impl<H: Handlers> SpecProcessor<H> {
         })
     }
 
-    fn process_variable_expense(spec: TransactionSpec<H>) -> Result<Transformation, ServerError> {
+    /// Given a slice of variable expense records and a window defined by
+    /// [window_start, window_end], this computes the “effective” daily accrual
+    /// rate by summing the contributions of all overlapping records.  Days not
+    /// covered by any record count as zero.
+    fn compute_daily_average(
+        records: &[VariableExpenseRecord],
+        window_start: NaiveDate,
+        window_end: NaiveDate,
+    ) -> Option<f64> {
+        let total_window_days = (window_end - window_start).num_days() + 1;
+        if total_window_days <= 0 {
+            return None;
+        }
+        let mut total_amount = 0.0;
+        // For each record, add (daily_rate * number_of_overlapping_days)
+        for record in records {
+            let overlap_start = std::cmp::max(record.start, window_start);
+            let overlap_end = std::cmp::min(record.end, window_end);
+            if overlap_start <= overlap_end {
+                let days = (overlap_end - overlap_start).num_days() + 1;
+                total_amount += record.daily_rate * (days as f64);
+            }
+        }
+        // If no days contributed (i.e. no overlapping records) then we have no history.
+        if total_amount == 0.0 {
+            None
+        } else {
+            Some(total_amount / (total_window_days as f64))
+        }
+    }
+
+    /// Process a VariableExpense spec. It uses historical data (the past 90
+    /// days prior to the accrual date) to compute the daily average.
+    fn process_variable_expense(
+        spec: TransactionSpec<H>,
+        history: &HashMap<ExpenseAccount, Vec<VariableExpenseRecord>>,
+    ) -> Result<Transformation, ServerError> {
         let TransactionSpec {
             id,
             accrual_date,
@@ -657,33 +695,36 @@ impl<H: Handlers> SpecProcessor<H> {
             ));
         }
 
-        let total_days = (until_date - accrual_date).num_days() + 1;
-        // TODO: This avg fetching logic is completely wrong.
-        let recent_daily_avg = get_variable_expense_history(&expense.account());
-        let cutoff = accrual_date - Duration::days(90);
-        let relevant: Vec<f64> = recent_daily_avg
-            .into_iter()
-            .filter(|(d, _)| *d >= cutoff)
-            .map(|(_d, v)| v)
-            .collect();
-        if relevant.is_empty() {
-            return Err(VariableExpenseNoHistoricalData::new(&description));
-        }
-        let avg_daily = relevant.iter().sum::<f64>() / (relevant.len() as f64);
-        let estimated_total = avg_daily * (total_days as f64);
+        // Use the last 90 days of history before (and including) the accrual_date.
+        let history_window_start = accrual_date - Duration::days(90);
+        let history_window_end = accrual_date; // include accrual_date itself
+        let expense_account = expense.account();
+        let records = history
+            .get(&expense_account)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[]);
+
+        // Compute the average daily accrual rate over the 90-day window.
+        let avg_daily =
+            Self::compute_daily_average(records, history_window_start, history_window_end)
+                .ok_or_else(|| VariableExpenseNoHistoricalData::new(&description))?;
+
+        let accrual_days = (until_date - accrual_date).num_days() + 1;
+        let estimated_total = avg_daily * (accrual_days as f64);
+
+        // Break the accrual period into month‐end segments.
         let month_ends = month_end_dates(accrual_date, until_date)?;
         let mut transactions = Vec::new();
         for m in month_ends {
-            let month_start =
-                NaiveDate::from_ymd_opt(m.year(), m.month(), 1).expect("invalid date");
-            let period_start = if accrual_date > month_start {
+            let period_start = if accrual_date > month_start(m) {
                 accrual_date
             } else {
-                month_start
+                month_start(m)
             };
             let period_end = if until_date < m { until_date } else { m };
             let days_in_period = (period_end - period_start).num_days() + 1;
             let monthly_estimate = avg_daily * (days_in_period as f64);
+
             transactions.push(Transaction {
                 spec_id: id.clone(),
                 date: m,
@@ -707,6 +748,7 @@ impl<H: Handlers> SpecProcessor<H> {
                 notes: vec![],
             });
         }
+
         let discrepancy = amount - estimated_total;
         let mut postings = vec![
             Posting {
@@ -727,6 +769,7 @@ impl<H: Handlers> SpecProcessor<H> {
                 currency: commodity.iso_symbol(),
             });
         }
+        // Clearing transaction on the payment date.
         transactions.push(Transaction {
             spec_id: id,
             date: payment_date,
@@ -736,20 +779,25 @@ impl<H: Handlers> SpecProcessor<H> {
             notes: vec![],
         });
 
+        // Return the transformation and record this variable expense’s daily rate for future history.
+        let new_record = VariableExpenseRecord {
+            start: accrual_date,
+            end: until_date,
+            daily_rate: avg_daily,
+        };
+
         Ok(Transformation {
             transactions,
-            expense_history_delta: Some((
-                expense.account().into(),
-                accrual_date,
-                payment_date,
-                avg_daily,
-            )),
+            expense_history_delta: Some((expense_account.into(), new_record)),
             notes: vec![],
         })
     }
 
+    /// Process a VariableExpenseInit spec. In this case the daily accrual is
+    /// computed directly from the provided estimate.
     fn process_variable_expense_init(
         spec: TransactionSpec<H>,
+        _history: &HashMap<ExpenseAccount, Vec<VariableExpenseRecord>>, // Not used for computing init daily
     ) -> Result<Transformation, ServerError> {
         let TransactionSpec {
             id,
@@ -763,7 +811,7 @@ impl<H: Handlers> SpecProcessor<H> {
                 },
             payee: entity,
             description,
-            amount: _amount,
+            amount: _amount, // unused aside from sign check
             commodity,
             backing_account,
             ..
@@ -773,18 +821,17 @@ impl<H: Handlers> SpecProcessor<H> {
         };
         amount_should_be_negative!(_amount, "VariableExpenseInit", &id);
 
-        let total_days = (until_date - accrual_date).num_days() + 1;
-        let init_daily = (estimate as f64) / (total_days as f64);
+        let accrual_days = (until_date - accrual_date).num_days() + 1;
+        let init_daily = (estimate as f64) / (accrual_days as f64);
+
         let month_ends = month_end_dates(accrual_date, until_date)?;
         let mut transactions = Vec::new();
         let mut estimated_sum = 0.0;
         for m in month_ends {
-            let month_start =
-                NaiveDate::from_ymd_opt(m.year(), m.month(), 1).expect("invalid date");
-            let period_start = if accrual_date > month_start {
+            let period_start = if accrual_date > month_start(m) {
                 accrual_date
             } else {
-                month_start
+                month_start(m)
             };
             let period_end = if until_date < m { until_date } else { m };
             let days_in_period = (period_end - period_start).num_days() + 1;
@@ -833,14 +880,15 @@ impl<H: Handlers> SpecProcessor<H> {
             notes: vec![],
         });
 
+        let new_record = VariableExpenseRecord {
+            start: accrual_date,
+            end: until_date,
+            daily_rate: init_daily,
+        };
+
         Ok(Transformation {
             transactions,
-            expense_history_delta: Some((
-                expense.account().into(),
-                accrual_date,
-                payment_date,
-                init_daily,
-            )),
+            expense_history_delta: Some((expense.account().into(), new_record)),
             notes: vec![],
         })
     }

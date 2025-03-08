@@ -28,3 +28,8 @@ pub(crate) fn month_end_dates(
     }
     Ok(dates)
 }
+
+pub(crate) fn month_start(date: NaiveDate) -> NaiveDate {
+    NaiveDate::from_ymd_opt(date.year(), date.month(), 1)
+        .expect("copying a NaiveDate with overridden day=1 should never fail")
+}
