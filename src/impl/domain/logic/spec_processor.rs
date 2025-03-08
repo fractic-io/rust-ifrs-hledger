@@ -9,7 +9,9 @@ use crate::{
         ExpenseAccount, ExpenseHandler, FinancialRecordSpecs, FinancialRecords, Handlers, Note,
         PayeeHandler, Posting, ReimbursableEntityHandler, Transaction, TransactionSpec,
     },
-    errors::InvalidArgumentsForAccountingLogic,
+    errors::{
+        InvalidArgumentsForAccountingLogic, UnexpectedNegativeValue, UnexpectedPositiveValue,
+    },
 };
 
 pub(crate) struct SpecProcessor<H: Handlers> {
@@ -81,6 +83,22 @@ where
             BackingAccount::Cash(c) => c.account().into(),
         }
     }
+}
+
+macro_rules! amount_should_be_negative {
+    ($amount:expr, $logic:expr, $id:expr) => {
+        if $amount >= 0.0 {
+            return Err(UnexpectedPositiveValue::new($amount, $logic, $id));
+        }
+    };
+}
+
+macro_rules! amount_should_be_positive {
+    ($amount:expr, $logic:expr, $id:expr) => {
+        if $amount <= 0.0 {
+            return Err(UnexpectedNegativeValue::new($amount, $logic, $id));
+        }
+    };
 }
 
 impl<H: Handlers> SpecProcessor<H> {
@@ -155,6 +173,8 @@ impl<H: Handlers> SpecProcessor<H> {
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
         };
+        amount_should_be_negative!(amount, "SimpleExpense", &id);
+
         let transactions = if payment_date == accrual_date {
             vec![Transaction {
                 spec_id: id,
@@ -163,13 +183,13 @@ impl<H: Handlers> SpecProcessor<H> {
                 description: description,
                 postings: vec![
                     Posting {
-                        account: expense.account().into(),
-                        amount,
+                        account: backing_account.account(),
+                        amount: -amount.abs(),
                         currency: commodity.iso_symbol(),
                     },
                     Posting {
-                        account: backing_account.account(),
-                        amount: -amount,
+                        account: expense.account().into(),
+                        amount: amount.abs(),
                         currency: commodity.iso_symbol(),
                     },
                 ],
@@ -185,13 +205,13 @@ impl<H: Handlers> SpecProcessor<H> {
                     description: format!("Prepaid: {}", description),
                     postings: vec![
                         Posting {
-                            account: expense.while_prepaid().into(),
-                            amount,
+                            account: backing_account.account(),
+                            amount: -amount.abs(),
                             currency: commodity.iso_symbol(),
                         },
                         Posting {
-                            account: backing_account.account(),
-                            amount: -amount,
+                            account: expense.while_prepaid().into(),
+                            amount: amount.abs(),
                             currency: commodity.iso_symbol(),
                         },
                     ],
@@ -204,13 +224,13 @@ impl<H: Handlers> SpecProcessor<H> {
                     description: format!("Clear Prepaid: {}", description),
                     postings: vec![
                         Posting {
-                            account: expense.account().into(),
-                            amount,
+                            account: expense.while_prepaid().into(),
+                            amount: -amount.abs(),
                             currency: commodity.iso_symbol(),
                         },
                         Posting {
-                            account: expense.while_prepaid().into(),
-                            amount: -amount,
+                            account: expense.account().into(),
+                            amount: amount.abs(),
                             currency: commodity.iso_symbol(),
                         },
                     ],
@@ -227,13 +247,13 @@ impl<H: Handlers> SpecProcessor<H> {
                     description: format!("Accrued Expense: {}", description),
                     postings: vec![
                         Posting {
-                            account: expense.account().into(),
-                            amount,
+                            account: expense.while_payable().into(),
+                            amount: -amount.abs(),
                             currency: commodity.iso_symbol(),
                         },
                         Posting {
-                            account: expense.while_payable().into(),
-                            amount: -amount,
+                            account: expense.account().into(),
+                            amount: amount.abs(),
                             currency: commodity.iso_symbol(),
                         },
                     ],
@@ -246,13 +266,13 @@ impl<H: Handlers> SpecProcessor<H> {
                     description: format!("Clear Accrued Expense: {}", description),
                     postings: vec![
                         Posting {
-                            account: expense.while_payable().into(),
-                            amount,
+                            account: backing_account.account(),
+                            amount: -amount.abs(),
                             currency: commodity.iso_symbol(),
                         },
                         Posting {
-                            account: backing_account.account(),
-                            amount: -amount,
+                            account: expense.while_payable().into(),
+                            amount: amount.abs(),
                             currency: commodity.iso_symbol(),
                         },
                     ],
@@ -260,6 +280,7 @@ impl<H: Handlers> SpecProcessor<H> {
                 },
             ]
         };
+
         Ok(Transformation {
             transactions,
             expense_history_delta: None,
@@ -284,6 +305,8 @@ impl<H: Handlers> SpecProcessor<H> {
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
         };
+        amount_should_be_negative!(amount, "Capitalize", &id);
+
         unimplemented!()
     }
 
@@ -304,6 +327,8 @@ impl<H: Handlers> SpecProcessor<H> {
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
         };
+        amount_should_be_negative!(amount, "Amortize", &id);
+
         unimplemented!()
     }
 
@@ -324,6 +349,8 @@ impl<H: Handlers> SpecProcessor<H> {
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
         };
+        amount_should_be_negative!(amount, "FixedExpense", &id);
+
         unimplemented!()
     }
 
@@ -344,6 +371,8 @@ impl<H: Handlers> SpecProcessor<H> {
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
         };
+        amount_should_be_negative!(amount, "VariableExpense", &id);
+
         unimplemented!()
     }
 
@@ -366,6 +395,8 @@ impl<H: Handlers> SpecProcessor<H> {
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
         };
+        amount_should_be_negative!(amount, "VariableExpenseInit", &id);
+
         unimplemented!()
     }
 
@@ -386,6 +417,8 @@ impl<H: Handlers> SpecProcessor<H> {
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
         };
+        amount_should_be_positive!(amount, "ImmaterialIncome", &id);
+
         unimplemented!()
     }
 
@@ -406,6 +439,8 @@ impl<H: Handlers> SpecProcessor<H> {
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
         };
+        amount_should_be_negative!(amount, "ImmaterialExpense", &id);
+
         unimplemented!()
     }
 
@@ -426,6 +461,8 @@ impl<H: Handlers> SpecProcessor<H> {
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
         };
+        amount_should_be_negative!(amount, "Reimburse", &id);
+
         unimplemented!()
     }
 
@@ -446,6 +483,7 @@ impl<H: Handlers> SpecProcessor<H> {
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
         };
+
         unimplemented!()
     }
 }

@@ -1,6 +1,8 @@
 use chrono::NaiveDate;
 use fractic_server_error::define_client_error;
 
+use crate::entities::TransactionSpecId;
+
 // IO-related.
 define_client_error!(ReadError, "Error reading file.");
 
@@ -38,4 +40,14 @@ define_client_error!(
 define_client_error!(
     InvalidArgumentsForAccountingLogic,
     "Invalid arguments provided for accounting logic type."
+);
+define_client_error!(
+    UnexpectedNegativeValue,
+    "Unexpected negative amount ({amount}) for '{accounting_logic}' accounting logic (id: {spec_id:?}).",
+    { amount: f64, accounting_logic: &str, spec_id: &TransactionSpecId }
+);
+define_client_error!(
+    UnexpectedPositiveValue,
+    "Unexpected positive amount ({amount}) for '{accounting_logic}' accounting logic (id: {spec_id:?}).",
+    { amount: f64, accounting_logic: &str, spec_id: &TransactionSpecId }
 );

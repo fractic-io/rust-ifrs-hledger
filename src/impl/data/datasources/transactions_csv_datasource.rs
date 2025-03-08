@@ -78,7 +78,7 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
 
                     // Build.
                     Ok(TransactionSpec {
-                        id: TransactionSpecId(i as u64),
+                        id: TransactionSpecId((i + 2) as u64),
                         accrual_date: accrual_date.into(),
                         until: until.map(Into::into),
                         payment_date: payment_date.into(),
