@@ -8,45 +8,45 @@ use super::{
 // Account handlers.
 // ---
 
-pub trait AssetHandler: for<'de> Deserialize<'de> + std::fmt::Debug {
+pub trait AssetHandler: for<'de> Deserialize<'de> + std::fmt::Debug + Clone {
     fn account(&self) -> AssetAccount;
     fn while_prepaid(&self) -> AssetAccount;
     fn while_payable(&self) -> LiabilityAccount;
     fn upon_accrual(&self) -> Option<ExpenseAccount>;
 }
 
-pub trait IncomeHandler: for<'de> Deserialize<'de> + std::fmt::Debug {
+pub trait IncomeHandler: for<'de> Deserialize<'de> + std::fmt::Debug + Clone {
     fn account(&self) -> IncomeAccount;
     fn while_prepaid(&self) -> LiabilityAccount;
     fn while_receivable(&self) -> AssetAccount;
 }
 
-pub trait ExpenseHandler: for<'de> Deserialize<'de> + std::fmt::Debug {
+pub trait ExpenseHandler: for<'de> Deserialize<'de> + std::fmt::Debug + Clone {
     fn account(&self) -> ExpenseAccount;
     fn while_prepaid(&self) -> AssetAccount;
     fn while_payable(&self) -> LiabilityAccount;
 }
 
-pub trait CashHandler: for<'de> Deserialize<'de> + std::fmt::Debug {
+pub trait CashHandler: for<'de> Deserialize<'de> + std::fmt::Debug + Clone {
     fn account(&self) -> CashAccount;
 }
 
 // Other.
 // ---
 
-pub trait PayeeHandler: for<'de> Deserialize<'de> + std::fmt::Debug {
+pub trait PayeeHandler: for<'de> Deserialize<'de> + std::fmt::Debug + Clone {
     fn name(&self) -> String;
 }
 
-pub trait ReimbursableEntityHandler: for<'de> Deserialize<'de> + std::fmt::Debug {
+pub trait ReimbursableEntityHandler: for<'de> Deserialize<'de> + std::fmt::Debug + Clone {
     fn account(&self) -> LiabilityAccount;
 }
 
-pub trait DecoratorHandler: for<'de> Deserialize<'de> + std::fmt::Debug {
+pub trait DecoratorHandler: for<'de> Deserialize<'de> + std::fmt::Debug + Clone {
     fn logic(&self) -> Box<dyn DecoratorLogic>;
 }
 
-pub trait CommodityHandler: for<'de> Deserialize<'de> + std::fmt::Debug {
+pub trait CommodityHandler: for<'de> Deserialize<'de> + std::fmt::Debug + Clone {
     fn iso_symbol(&self) -> String;
 }
 

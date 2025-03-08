@@ -30,6 +30,7 @@ pub(crate) mod domain {
         pub(crate) mod transaction_spec;
     }
     pub(crate) mod logic {
+        pub(crate) mod decorator_processor;
         pub(crate) mod spec_processor;
         mod utils;
     }
