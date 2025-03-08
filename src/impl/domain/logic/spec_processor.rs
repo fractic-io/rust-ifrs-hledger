@@ -896,8 +896,8 @@ impl<H: Handlers> SpecProcessor<H> {
     fn process_immaterial_income(spec: TransactionSpec<H>) -> Result<Transformation, ServerError> {
         let TransactionSpec {
             id,
-            accrual_date: _,
-            until: None,
+            accrual_date: _, // Ignored.
+            until: _,        // Ignored.
             payment_date,
             accounting_logic: AccountingLogic::ImmaterialIncome(income),
             payee: entity,
@@ -942,8 +942,8 @@ impl<H: Handlers> SpecProcessor<H> {
     fn process_immaterial_expense(spec: TransactionSpec<H>) -> Result<Transformation, ServerError> {
         let TransactionSpec {
             id,
-            accrual_date: _,
-            until: None,
+            accrual_date: _, // Ignored.
+            until: _,        // Ignored.
             payment_date,
             accounting_logic: AccountingLogic::ImmaterialExpense(expense),
             payee: entity,
