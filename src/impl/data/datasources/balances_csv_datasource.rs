@@ -54,7 +54,7 @@ impl<H: Handlers> BalancesCsvDatasource<H> for BalancesCsvDatasourceImpl<H> {
                     // Build.
                     Ok(AssertionSpec {
                         date: date.into(),
-                        account,
+                        cash_handler: account,
                         balance: balance.into(),
                         commodity,
                     })

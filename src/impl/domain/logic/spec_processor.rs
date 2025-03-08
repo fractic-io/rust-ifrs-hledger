@@ -1,26 +1,451 @@
-use crate::entities::{
-    AssetHandler, CashHandler, CommodityHandler, DecoratorHandler, ExpenseHandler,
-    FinancialRecordSpecs, FinancialRecords, Handlers, IncomeHandler, ReimbursableEntityHandler,
+use std::collections::HashMap;
+
+use chrono::NaiveDate;
+use fractic_server_error::ServerError;
+
+use crate::{
+    entities::{
+        Account, AccountingLogic, Assertion, BackingAccount, CashHandler, CommodityHandler,
+        ExpenseAccount, ExpenseHandler, FinancialRecordSpecs, FinancialRecords, Handlers, Note,
+        PayeeHandler, Posting, ReimbursableEntityHandler, Transaction, TransactionSpec,
+    },
+    errors::InvalidArgumentsForAccountingLogic,
 };
 
-pub(crate) trait IfrsLogic<H: Handlers> {
-    fn process(&self, specs: FinancialRecordSpecs<H>) -> FinancialRecords;
+pub(crate) struct SpecProcessor<H: Handlers> {
+    specs: FinancialRecordSpecs<H>,
 }
 
-pub(crate) struct IfrsLogicImpl<H: Handlers> {
-    _phantom: std::marker::PhantomData<H>,
+struct FoldState {
+    accounts: Vec<Account>,
+    transactions: Vec<Transaction>,
+    expense_history: HashMap<ExpenseAccount, Vec<(NaiveDate, NaiveDate, f64)>>,
+    notes: Vec<Note>,
 }
 
-impl<H: Handlers> IfrsLogicImpl<H> {
-    pub fn new() -> Self {
+impl FoldState {
+    fn new() -> Self {
         Self {
-            _phantom: std::marker::PhantomData,
+            accounts: Vec::new(),
+            transactions: Vec::new(),
+            expense_history: HashMap::new(),
+            notes: Vec::new(),
+        }
+    }
+
+    /// Update current state with the given transformation.
+    fn step(self, t: Transformation) -> Self {
+        let mut accounts = self.accounts;
+        let mut transactions = self.transactions;
+        let mut expense_history = self.expense_history;
+        let mut notes = self.notes;
+
+        accounts.extend(
+            t.transactions
+                .iter()
+                .flat_map(|t| t.postings.iter().map(|p| p.account.clone())),
+        );
+
+        transactions.extend(t.transactions);
+        if let Some((account, start, end, amount)) = t.expense_history_delta {
+            expense_history
+                .entry(account)
+                .or_insert(Vec::new())
+                .push((start, end, amount));
+        }
+        notes.extend(t.notes);
+
+        Self {
+            accounts,
+            transactions,
+            expense_history,
+            notes,
         }
     }
 }
 
-impl<H: Handlers> IfrsLogic<H> for IfrsLogicImpl<H> {
-    fn process(&self, specs: FinancialRecordSpecs<H>) -> FinancialRecords {
+struct Transformation {
+    transactions: Vec<Transaction>,
+    expense_history_delta: Option<(ExpenseAccount, NaiveDate, NaiveDate, f64)>,
+    notes: Vec<Note>,
+}
+
+impl<R, C> BackingAccount<R, C>
+where
+    R: ReimbursableEntityHandler,
+    C: CashHandler,
+{
+    fn account(&self) -> Account {
+        match self {
+            BackingAccount::Reimburse(r) => r.account().into(),
+            BackingAccount::Cash(c) => c.account().into(),
+        }
+    }
+}
+
+impl<H: Handlers> SpecProcessor<H> {
+    pub(crate) fn new(specs: FinancialRecordSpecs<H>) -> Self {
+        Self { specs }
+    }
+
+    pub(crate) fn process(self) -> Result<FinancialRecords, ServerError> {
+        let FinancialRecordSpecs {
+            transaction_specs,
+            assertion_specs,
+        } = self.specs;
+
+        let transactions_fold_result =
+            transaction_specs
+                .into_iter()
+                .try_fold(FoldState::new(), |state, spec| {
+                    Ok(state.step(match &spec.accounting_logic {
+                        AccountingLogic::SimpleExpense(..) => Self::process_simple_expense(spec)?,
+                        AccountingLogic::Capitalize(..) => Self::process_capitalize(spec)?,
+                        AccountingLogic::Amortize(..) => Self::process_amortize(spec)?,
+                        AccountingLogic::FixedExpense(..) => Self::process_fixed_expense(spec)?,
+                        AccountingLogic::VariableExpense(..) => {
+                            Self::process_variable_expense(spec)?
+                        }
+                        AccountingLogic::VariableExpenseInit { .. } => {
+                            Self::process_variable_expense_init(spec)?
+                        }
+                        AccountingLogic::ImmaterialIncome(..) => {
+                            Self::process_immaterial_income(spec)?
+                        }
+                        AccountingLogic::ImmaterialExpense(..) => {
+                            Self::process_immaterial_expense(spec)?
+                        }
+                        AccountingLogic::Reimburse(..) => Self::process_reimburse(spec)?,
+                        AccountingLogic::ClearVat { .. } => Self::process_clear_vat(spec)?,
+                    }))
+                })?;
+
+        let assertions = assertion_specs
+            .into_iter()
+            .map(|spec| Assertion {
+                date: spec.date,
+                account: spec.cash_handler.account().into(),
+                balance: spec.balance,
+                currency: spec.commodity.iso_symbol(),
+            })
+            .collect();
+
+        Ok(FinancialRecords {
+            accounts: transactions_fold_result.accounts,
+            transactions: transactions_fold_result.transactions,
+            notes: transactions_fold_result.notes,
+            assertions,
+        })
+    }
+
+    fn process_simple_expense(spec: TransactionSpec<H>) -> Result<Transformation, ServerError> {
+        let TransactionSpec {
+            id,
+            accrual_date,
+            until: None,
+            payment_date,
+            accounting_logic: AccountingLogic::SimpleExpense(expense),
+            payee: entity,
+            description,
+            amount,
+            commodity,
+            backing_account,
+            ..
+        } = spec
+        else {
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+        };
+        let transactions = if payment_date == accrual_date {
+            vec![Transaction {
+                spec_id: id,
+                date: payment_date,
+                entity: entity.name(),
+                description: description,
+                postings: vec![
+                    Posting {
+                        account: expense.account().into(),
+                        amount,
+                        currency: commodity.iso_symbol(),
+                    },
+                    Posting {
+                        account: backing_account.account(),
+                        amount: -amount,
+                        currency: commodity.iso_symbol(),
+                    },
+                ],
+                notes: vec![],
+            }]
+        } else if payment_date < accrual_date {
+            // Payment made earlier: record as prepaid expense then clear on accrual.
+            vec![
+                Transaction {
+                    spec_id: id,
+                    date: payment_date,
+                    entity: entity.name(),
+                    description: format!("Prepaid: {}", description),
+                    postings: vec![
+                        Posting {
+                            account: expense.while_prepaid().into(),
+                            amount,
+                            currency: commodity.iso_symbol(),
+                        },
+                        Posting {
+                            account: backing_account.account(),
+                            amount: -amount,
+                            currency: commodity.iso_symbol(),
+                        },
+                    ],
+                    notes: vec![],
+                },
+                Transaction {
+                    spec_id: id,
+                    date: accrual_date,
+                    entity: entity.name(),
+                    description: format!("Clear Prepaid: {}", description),
+                    postings: vec![
+                        Posting {
+                            account: expense.account().into(),
+                            amount,
+                            currency: commodity.iso_symbol(),
+                        },
+                        Posting {
+                            account: expense.while_prepaid().into(),
+                            amount: -amount,
+                            currency: commodity.iso_symbol(),
+                        },
+                    ],
+                    notes: vec![],
+                },
+            ]
+        } else {
+            // Payment made later: record accrued expense then clear on payment date.
+            vec![
+                Transaction {
+                    spec_id: id,
+                    date: accrual_date,
+                    entity: entity.name(),
+                    description: format!("Accrued Expense: {}", description),
+                    postings: vec![
+                        Posting {
+                            account: expense.account().into(),
+                            amount,
+                            currency: commodity.iso_symbol(),
+                        },
+                        Posting {
+                            account: expense.while_payable().into(),
+                            amount: -amount,
+                            currency: commodity.iso_symbol(),
+                        },
+                    ],
+                    notes: vec![],
+                },
+                Transaction {
+                    spec_id: id,
+                    date: payment_date,
+                    entity: entity.name(),
+                    description: format!("Clear Accrued Expense: {}", description),
+                    postings: vec![
+                        Posting {
+                            account: expense.while_payable().into(),
+                            amount,
+                            currency: commodity.iso_symbol(),
+                        },
+                        Posting {
+                            account: backing_account.account(),
+                            amount: -amount,
+                            currency: commodity.iso_symbol(),
+                        },
+                    ],
+                    notes: vec![],
+                },
+            ]
+        };
+        Ok(Transformation {
+            transactions,
+            expense_history_delta: None,
+            notes: vec![],
+        })
+    }
+
+    fn process_capitalize(spec: TransactionSpec<H>) -> Result<Transformation, ServerError> {
+        let TransactionSpec {
+            id,
+            accrual_date,
+            until: None,
+            payment_date,
+            accounting_logic: AccountingLogic::Capitalize(asset),
+            decorators,
+            payee: entity,
+            description,
+            amount,
+            commodity,
+            backing_account,
+        } = spec
+        else {
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+        };
+        unimplemented!()
+    }
+
+    fn process_amortize(spec: TransactionSpec<H>) -> Result<Transformation, ServerError> {
+        let TransactionSpec {
+            id,
+            accrual_date,
+            until: Some(until_date),
+            payment_date,
+            accounting_logic: AccountingLogic::Amortize(asset),
+            decorators,
+            payee: entity,
+            description,
+            amount,
+            commodity,
+            backing_account,
+        } = spec
+        else {
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+        };
+        unimplemented!()
+    }
+
+    fn process_fixed_expense(spec: TransactionSpec<H>) -> Result<Transformation, ServerError> {
+        let TransactionSpec {
+            id,
+            accrual_date,
+            until: Some(until_date),
+            payment_date,
+            accounting_logic: AccountingLogic::FixedExpense(expense),
+            decorators,
+            payee: entity,
+            description,
+            amount,
+            commodity,
+            backing_account,
+        } = spec
+        else {
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+        };
+        unimplemented!()
+    }
+
+    fn process_variable_expense(spec: TransactionSpec<H>) -> Result<Transformation, ServerError> {
+        let TransactionSpec {
+            id,
+            accrual_date,
+            until: Some(until_date),
+            payment_date,
+            accounting_logic: AccountingLogic::VariableExpense(expense),
+            decorators,
+            payee: entity,
+            description,
+            amount,
+            commodity,
+            backing_account,
+        } = spec
+        else {
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+        };
+        unimplemented!()
+    }
+
+    fn process_variable_expense_init(
+        spec: TransactionSpec<H>,
+    ) -> Result<Transformation, ServerError> {
+        let TransactionSpec {
+            id,
+            accrual_date,
+            until: Some(until_date),
+            payment_date,
+            accounting_logic: AccountingLogic::VariableExpenseInit { account, estimate },
+            decorators,
+            payee: entity,
+            description,
+            amount,
+            commodity,
+            backing_account,
+        } = spec
+        else {
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+        };
+        unimplemented!()
+    }
+
+    fn process_immaterial_income(spec: TransactionSpec<H>) -> Result<Transformation, ServerError> {
+        let TransactionSpec {
+            id,
+            accrual_date,
+            until: None,
+            payment_date,
+            accounting_logic: AccountingLogic::ImmaterialIncome(income),
+            decorators,
+            payee: entity,
+            description,
+            amount,
+            commodity,
+            backing_account,
+        } = spec
+        else {
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+        };
+        unimplemented!()
+    }
+
+    fn process_immaterial_expense(spec: TransactionSpec<H>) -> Result<Transformation, ServerError> {
+        let TransactionSpec {
+            id,
+            accrual_date,
+            until: None,
+            payment_date,
+            accounting_logic: AccountingLogic::ImmaterialExpense(expense),
+            decorators,
+            payee: entity,
+            description,
+            amount,
+            commodity,
+            backing_account,
+        } = spec
+        else {
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+        };
+        unimplemented!()
+    }
+
+    fn process_reimburse(spec: TransactionSpec<H>) -> Result<Transformation, ServerError> {
+        let TransactionSpec {
+            id,
+            accrual_date,
+            until: None,
+            payment_date,
+            accounting_logic: AccountingLogic::Reimburse(reimbursable),
+            decorators,
+            payee: entity,
+            description,
+            amount,
+            commodity,
+            backing_account,
+        } = spec
+        else {
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+        };
+        unimplemented!()
+    }
+
+    fn process_clear_vat(spec: TransactionSpec<H>) -> Result<Transformation, ServerError> {
+        let TransactionSpec {
+            id,
+            accrual_date,
+            until: None,
+            payment_date,
+            accounting_logic: AccountingLogic::ClearVat { from, to },
+            decorators,
+            payee: entity,
+            description,
+            amount,
+            commodity,
+            backing_account: BackingAccount::Cash(cash),
+        } = spec
+        else {
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+        };
         unimplemented!()
     }
 }

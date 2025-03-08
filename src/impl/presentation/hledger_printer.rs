@@ -4,6 +4,7 @@ impl Account {
     fn ledger(&self) -> String {
         match self {
             Account::Asset(s) => format!("Assets:{}", s.0),
+            Account::Cash(s) => format!("Assets:Cash:{}", s.0),
             Account::Liability(s) => format!("Liabilities:{}", s.0),
             Account::Income(s) => format!("Income:{}", s.0),
             Account::Expense(s) => format!("Expenses:{}", s.0),
@@ -27,7 +28,7 @@ impl HledgerPrinter {
                     "    {:30} {:10.2} {}\n",
                     posting.account.ledger(),
                     posting.amount,
-                    posting.commodity
+                    posting.currency
                 ));
             }
             for note in &tx.notes {

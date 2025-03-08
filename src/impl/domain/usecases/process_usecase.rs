@@ -3,8 +3,7 @@ use fractic_server_error::ServerError;
 use crate::{
     data::repositories::records_repository_impl::RecordsRepositoryImpl,
     domain::{
-        logic::ifrs_logic::{IfrsLogic, IfrsLogicImpl},
-        repositories::records_repository::RecordsRepository,
+        logic::spec_processor::SpecProcessor, repositories::records_repository::RecordsRepository,
     },
     entities::{FinancialRecords, Handlers},
 };
@@ -28,22 +27,18 @@ pub trait ProcessUsecase {
 pub(crate) struct ProcessUsecaseImpl<
     H,
     R1 = RecordsRepositoryImpl<H>, // Default.
-    L1 = IfrsLogicImpl<H>,         // Default.
 > where
     H: Handlers,
     R1: RecordsRepository<H>,
-    L1: IfrsLogic<H>,
 {
     records_repository: R1,
-    ifrs_logic: L1,
     _phantom: std::marker::PhantomData<H>,
 }
 
-impl<H, R1, L1> ProcessUsecase for ProcessUsecaseImpl<H, R1, L1>
+impl<H, R1> ProcessUsecase for ProcessUsecaseImpl<H, R1>
 where
     H: Handlers,
     R1: RecordsRepository<H>,
-    L1: IfrsLogic<H>,
 {
     fn from_string(
         &self,
@@ -53,7 +48,7 @@ where
         let specs = self
             .records_repository
             .from_string(transactions_csv, balances_csv)?;
-        Ok(self.ifrs_logic.process(specs))
+        SpecProcessor::new(specs).process()
     }
 
     fn from_file<P>(
@@ -67,7 +62,7 @@ where
         let specs = self
             .records_repository
             .from_file(transactions_csv, balances_csv)?;
-        Ok(self.ifrs_logic.process(specs))
+        SpecProcessor::new(specs).process()
     }
 }
 
@@ -75,7 +70,6 @@ impl<H: Handlers> ProcessUsecaseImpl<H> {
     pub(crate) fn new() -> Self {
         ProcessUsecaseImpl {
             records_repository: RecordsRepositoryImpl::new(),
-            ifrs_logic: IfrsLogicImpl::new(),
             _phantom: std::marker::PhantomData,
         }
     }

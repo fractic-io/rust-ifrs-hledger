@@ -25,11 +25,12 @@ pub(crate) mod domain {
         pub(crate) mod decorator_logic;
         pub(crate) mod financial_records;
         pub(crate) mod handlers;
+        pub(crate) mod note;
         pub(crate) mod transaction;
         pub(crate) mod transaction_spec;
     }
     pub(crate) mod logic {
-        pub(crate) mod ifrs_logic;
+        pub(crate) mod spec_processor;
         mod utils;
     }
     pub(crate) mod repositories {
@@ -60,6 +61,7 @@ pub mod exports {
         pub use crate::domain::entities::decorator_logic::*;
         pub use crate::domain::entities::financial_records::*;
         pub use crate::domain::entities::handlers::*;
+        pub use crate::domain::entities::note::*;
         pub use crate::domain::entities::transaction::*;
         pub use crate::domain::entities::transaction_spec::*;
     }

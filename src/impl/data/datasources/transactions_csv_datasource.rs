@@ -9,7 +9,7 @@ use crate::{
         accounting_logic_model::AccountingLogicModel, backing_account_model::BackingAccountModel,
         iso_date_model::ISODateModel,
     },
-    entities::{Handlers, TransactionSpec},
+    entities::{Handlers, TransactionSpec, TransactionSpecId},
     errors::{InvalidCsv, InvalidRon, ReadError},
 };
 
@@ -37,7 +37,8 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
     fn from_string(&self, s: &str) -> Result<Vec<TransactionSpec<H>>, ServerError> {
         csv::Reader::from_reader(s.as_bytes())
             .records()
-            .map(|r| {
+            .enumerate()
+            .map(|(i, r)| {
                 r.map_err(|e| InvalidCsv::with_debug(&e)).and_then(|r| {
                     // Extract from CSV record.
                     let raw_accrual_date = r.get(0).unwrap_or("");
@@ -64,7 +65,8 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                             .map_err(|e| InvalidRon::with_debug("AccountingLogic", &e))?;
                     let decorators: Vec<H::D> = from_str(&format!("[{}]", raw_decorators))
                         .map_err(|e| InvalidRon::with_debug("Decorator", &e))?;
-                    let entity: String = raw_entity.into();
+                    let payee: H::P =
+                        from_str(raw_entity).map_err(|e| InvalidRon::with_debug("Payee", &e))?;
                     let description: String = raw_description.into();
                     let amount: AccountingAmountModel =
                         AccountingAmountModel::from_str(raw_amount)?;
@@ -76,12 +78,13 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
 
                     // Build.
                     Ok(TransactionSpec {
+                        id: TransactionSpecId(i as u64),
                         accrual_date: accrual_date.into(),
                         until: until.map(Into::into),
                         payment_date: payment_date.into(),
                         accounting_logic: accounting_logic.into(),
                         decorators,
-                        entity,
+                        payee,
                         description,
                         amount: amount.into(),
                         commodity,

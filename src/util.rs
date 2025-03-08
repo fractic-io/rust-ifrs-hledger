@@ -4,14 +4,14 @@ use crate::{
     domain::usecases::process_usecase::{ProcessUsecase as _, ProcessUsecaseImpl},
     entities::{
         AssetHandler, CashHandler, CommodityHandler, DecoratorHandler, ExpenseHandler,
-        FinancialRecords, HandlersImpl, IncomeHandler, ReimbursableEntityHandler,
+        FinancialRecords, HandlersImpl, IncomeHandler, PayeeHandler, ReimbursableEntityHandler,
     },
     presentation::hledger_printer::HledgerPrinter,
 };
 
 pub type Ledger = String;
 
-pub struct IfrsHledgerUtil<A, I, E, C, R, D, M>
+pub struct IfrsHledgerUtil<A, I, E, C, R, D, M, P>
 where
     A: AssetHandler,
     I: IncomeHandler,
@@ -20,12 +20,13 @@ where
     C: CashHandler,
     D: DecoratorHandler,
     M: CommodityHandler,
+    P: PayeeHandler,
 {
-    process_usecase: ProcessUsecaseImpl<HandlersImpl<A, I, E, R, C, D, M>>,
+    process_usecase: ProcessUsecaseImpl<HandlersImpl<A, I, E, R, C, D, M, P>>,
     printer: HledgerPrinter,
 }
 
-impl<A, I, E, C, R, D, M> IfrsHledgerUtil<A, I, E, C, R, D, M>
+impl<A, I, E, C, R, D, M, P> IfrsHledgerUtil<A, I, E, C, R, D, M, P>
 where
     A: AssetHandler,
     I: IncomeHandler,
@@ -34,6 +35,7 @@ where
     R: ReimbursableEntityHandler,
     D: DecoratorHandler,
     M: CommodityHandler,
+    P: PayeeHandler,
 {
     pub fn new() -> Self {
         Self {
@@ -56,13 +58,13 @@ where
         ))
     }
 
-    pub fn from_file<P>(
+    pub fn from_file<T>(
         &self,
-        transactions_csv: P,
-        balances_csv: P,
+        transactions_csv: T,
+        balances_csv: T,
     ) -> Result<(Ledger, FinancialRecords), ServerError>
     where
-        P: AsRef<std::path::Path>,
+        T: AsRef<std::path::Path>,
     {
         let financial_records = self
             .process_usecase

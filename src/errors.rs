@@ -36,12 +36,6 @@ define_client_error!(
     { description: &str }
 );
 define_client_error!(
-    AccrualRangeRequired,
-    "{account_logic} requires an accrual range, but entry '{description}' does not have accrual until-date.",
-    { account_logic: &str, description: &str }
-);
-define_client_error!(
-    AccrualRangeNotSupported,
-    "{account_logic} requires an accrual range, but entry '{description}' has an accrual until-date.",
-    { account_logic: &str, description: &str }
+    InvalidArgumentsForAccountingLogic,
+    "Invalid arguments provided for accounting logic type."
 );

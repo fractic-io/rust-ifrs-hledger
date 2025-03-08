@@ -1,27 +1,35 @@
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Account {
     Asset(AssetAccount),
+    Cash(CashAccount),
     Liability(LiabilityAccount),
     Income(IncomeAccount),
     Expense(ExpenseAccount),
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct AssetAccount(pub(crate) String);
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct CashAccount(pub(crate) String);
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct LiabilityAccount(pub(crate) String);
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct IncomeAccount(pub(crate) String);
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct ExpenseAccount(pub(crate) String);
 
 // Shorthand constructors.
 
 pub fn asset(name: impl Into<String>) -> AssetAccount {
     AssetAccount(name.into())
+}
+
+pub fn cash(name: impl Into<String>) -> CashAccount {
+    CashAccount(name.into())
 }
 
 pub fn liability(name: impl Into<String>) -> LiabilityAccount {
@@ -49,6 +57,7 @@ macro_rules! impl_into_account {
 }
 
 impl_into_account!(AssetAccount, Asset);
+impl_into_account!(CashAccount, Cash);
 impl_into_account!(LiabilityAccount, Liability);
 impl_into_account!(IncomeAccount, Income);
 impl_into_account!(ExpenseAccount, Expense);
