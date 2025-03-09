@@ -4,7 +4,8 @@ use crate::{
     domain::usecases::process_usecase::{ProcessUsecase as _, ProcessUsecaseImpl},
     entities::{
         AssetHandler, CashHandler, CommodityHandler, DecoratorHandler, ExpenseHandler,
-        FinancialRecords, HandlersImpl, IncomeHandler, PayeeHandler, ReimbursableEntityHandler,
+        FinancialRecords, HandlersImpl, IncomeHandler, NotesToFinancialRecords, PayeeHandler,
+        ReimbursableEntityHandler,
     },
     presentation::hledger_printer::HledgerPrinter,
 };
@@ -48,30 +49,26 @@ where
         &self,
         transactions_csv: &str,
         balances_csv: &str,
-    ) -> Result<(Ledger, FinancialRecords), ServerError> {
-        let financial_records = self
+    ) -> Result<(FinancialRecords, NotesToFinancialRecords, Ledger), ServerError> {
+        let (financial_records, notes_to_financial_records) = self
             .process_usecase
             .from_string(transactions_csv, balances_csv)?;
-        Ok((
-            self.printer.print_ledger(&financial_records),
-            financial_records,
-        ))
+        let ledger = self.printer.print_ledger(&financial_records);
+        Ok((financial_records, notes_to_financial_records, ledger))
     }
 
     pub fn from_file<T>(
         &self,
         transactions_csv: T,
         balances_csv: T,
-    ) -> Result<(Ledger, FinancialRecords), ServerError>
+    ) -> Result<(FinancialRecords, NotesToFinancialRecords, Ledger), ServerError>
     where
         T: AsRef<std::path::Path>,
     {
-        let financial_records = self
+        let (financial_records, notes_to_financial_records) = self
             .process_usecase
             .from_file(transactions_csv, balances_csv)?;
-        Ok((
-            self.printer.print_ledger(&financial_records),
-            financial_records,
-        ))
+        let ledger = self.printer.print_ledger(&financial_records);
+        Ok((financial_records, notes_to_financial_records, ledger))
     }
 }

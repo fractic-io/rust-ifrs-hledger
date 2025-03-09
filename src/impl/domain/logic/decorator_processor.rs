@@ -1,3 +1,21 @@
+use fractic_server_error::ServerError;
+
+use crate::entities::{DecoratedFinancialRecordSpecs, FinancialRecordSpecs, Handlers};
+
+pub(crate) struct DecoratorProcessor<H: Handlers> {
+    specs: FinancialRecordSpecs<H>,
+}
+
+impl<H: Handlers> DecoratorProcessor<H> {
+    pub(crate) fn new(specs: FinancialRecordSpecs<H>) -> Self {
+        Self { specs }
+    }
+
+    pub(crate) fn process(self) -> Result<DecoratedFinancialRecordSpecs<H>, ServerError> {
+        unimplemented!()
+    }
+}
+
 // // ---------------------------------------------------------------------
 // // Decorator processing.
 // // This function takes the “core” transactions (assumed to be in txs[0])

@@ -3,9 +3,13 @@ use fractic_server_error::ServerError;
 use crate::{
     data::repositories::records_repository_impl::RecordsRepositoryImpl,
     domain::{
-        logic::spec_processor::SpecProcessor, repositories::records_repository::RecordsRepository,
+        logic::{
+            annotation_processor::AnnotationProcessor, decorator_processor::DecoratorProcessor,
+            spec_processor::SpecProcessor,
+        },
+        repositories::records_repository::RecordsRepository,
     },
-    entities::{FinancialRecords, Handlers},
+    entities::{FinancialRecords, Handlers, NotesToFinancialRecords},
 };
 
 pub trait ProcessUsecase {
@@ -13,13 +17,13 @@ pub trait ProcessUsecase {
         &self,
         balances_csv: &str,
         transactions_csv: &str,
-    ) -> Result<FinancialRecords, ServerError>;
+    ) -> Result<(FinancialRecords, NotesToFinancialRecords), ServerError>;
 
     fn from_file<P>(
         &self,
         balances_csv: P,
         transactions_csv: P,
-    ) -> Result<FinancialRecords, ServerError>
+    ) -> Result<(FinancialRecords, NotesToFinancialRecords), ServerError>
     where
         P: AsRef<std::path::Path>;
 }
@@ -44,25 +48,31 @@ where
         &self,
         transactions_csv: &str,
         balances_csv: &str,
-    ) -> Result<FinancialRecords, ServerError> {
+    ) -> Result<(FinancialRecords, NotesToFinancialRecords), ServerError> {
         let specs = self
             .records_repository
             .from_string(transactions_csv, balances_csv)?;
-        SpecProcessor::new(specs).process()
+        let decorated_specs = DecoratorProcessor::new(specs).process()?;
+        let financial_records = SpecProcessor::new(decorated_specs).process()?;
+        let notes_to_financial_records = AnnotationProcessor::new(&financial_records).process()?;
+        Ok((financial_records, notes_to_financial_records))
     }
 
     fn from_file<P>(
         &self,
         transactions_csv: P,
         balances_csv: P,
-    ) -> Result<FinancialRecords, ServerError>
+    ) -> Result<(FinancialRecords, NotesToFinancialRecords), ServerError>
     where
         P: AsRef<std::path::Path>,
     {
         let specs = self
             .records_repository
             .from_file(transactions_csv, balances_csv)?;
-        SpecProcessor::new(specs).process()
+        let decorated_specs = DecoratorProcessor::new(specs).process()?;
+        let financial_records = SpecProcessor::new(decorated_specs).process()?;
+        let notes_to_financial_records = AnnotationProcessor::new(&financial_records).process()?;
+        Ok((financial_records, notes_to_financial_records))
     }
 }
 

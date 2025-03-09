@@ -54,7 +54,7 @@ pub trait CommodityHandler: for<'de> Deserialize<'de> + std::fmt::Debug + Clone 
 // shortening type parameters throughout the repo.
 // ---
 
-pub trait Handlers: std::fmt::Debug {
+pub(crate) trait Handlers: std::fmt::Debug {
     type A: AssetHandler;
     type I: IncomeHandler;
     type E: ExpenseHandler;

@@ -6,10 +6,11 @@ use fractic_server_error::ServerError;
 use crate::{
     domain::logic::utils::{month_end_dates, month_start},
     entities::{
-        asset, Account, AccountingLogic, Assertion, AssetHandler, BackingAccount, CashHandler,
-        CommodityHandler, ExpenseAccount, ExpenseHandler, FinancialRecordSpecs, FinancialRecords,
-        Handlers, IncomeHandler, Note, PayeeHandler, Posting, ReimbursableEntityHandler,
-        Transaction, TransactionSpec,
+        asset, Account, AccountingLogic, Annotation, Assertion, AssetHandler, BackingAccount,
+        CashHandler, CommodityHandler, DecoratedFinancialRecordSpecs, DecoratedTransactionSpec,
+        ExpenseAccount, ExpenseHandler, FinancialRecords, Handlers, IncomeHandler, PayeeHandler,
+        ReimbursableEntityHandler, Transaction, TransactionLabel, TransactionPosting,
+        TransactionSpecId,
     },
     errors::{
         InvalidArgumentsForAccountingLogic, NonAmortizableAsset, UnexpectedNegativeValue,
@@ -19,7 +20,7 @@ use crate::{
 };
 
 pub(crate) struct SpecProcessor<H: Handlers> {
-    specs: FinancialRecordSpecs<H>,
+    specs: DecoratedFinancialRecordSpecs<H>,
 }
 
 /// A record that stores the daily accrual rate for a given period.
@@ -32,16 +33,20 @@ pub struct VariableExpenseRecord {
 }
 
 struct Transformation {
+    spec_id: TransactionSpecId,
+    label: TransactionLabel,
     transactions: Vec<Transaction>,
+    side_transactions: Vec<Transaction>,
     expense_history_delta: Option<(ExpenseAccount, VariableExpenseRecord)>,
-    notes: Vec<Note>,
+    annotations: Vec<Annotation>,
 }
 
 struct FoldState {
     accounts: Vec<Account>,
     transactions: Vec<Transaction>,
     expense_history: HashMap<ExpenseAccount, Vec<VariableExpenseRecord>>,
-    notes: Vec<Note>,
+    label_lookup: HashMap<TransactionSpecId, TransactionLabel>,
+    annotations_lookup: HashMap<TransactionSpecId, Vec<Annotation>>,
 }
 
 impl FoldState {
@@ -50,7 +55,8 @@ impl FoldState {
             accounts: Vec::new(),
             transactions: Vec::new(),
             expense_history: HashMap::new(),
-            notes: Vec::new(),
+            label_lookup: HashMap::new(),
+            annotations_lookup: HashMap::new(),
         }
     }
 
@@ -59,25 +65,31 @@ impl FoldState {
         let mut accounts = self.accounts;
         let mut transactions = self.transactions;
         let mut expense_history = self.expense_history;
-        let mut notes = self.notes;
+        let mut label_lookup = self.label_lookup;
+        let mut annotations_lookup = self.annotations_lookup;
 
         accounts.extend(
             t.transactions
                 .iter()
                 .flat_map(|t| t.postings.iter().map(|p| p.account.clone())),
         );
-
         transactions.extend(t.transactions);
+        transactions.extend(t.side_transactions);
         if let Some((account, record)) = t.expense_history_delta {
             expense_history.entry(account).or_default().push(record);
         }
-        notes.extend(t.notes);
+        label_lookup.insert(t.spec_id, t.label);
+        annotations_lookup
+            .entry(t.spec_id)
+            .or_default()
+            .extend(t.annotations);
 
         Self {
             accounts,
             transactions,
             expense_history,
-            notes,
+            label_lookup,
+            annotations_lookup,
         }
     }
 }
@@ -112,12 +124,12 @@ macro_rules! amount_should_be_positive {
 }
 
 impl<H: Handlers> SpecProcessor<H> {
-    pub(crate) fn new(specs: FinancialRecordSpecs<H>) -> Self {
+    pub(crate) fn new(specs: DecoratedFinancialRecordSpecs<H>) -> Self {
         Self { specs }
     }
 
     pub(crate) fn process(self) -> Result<FinancialRecords, ServerError> {
-        let FinancialRecordSpecs {
+        let DecoratedFinancialRecordSpecs {
             transaction_specs,
             assertion_specs,
         } = self.specs;
@@ -162,24 +174,28 @@ impl<H: Handlers> SpecProcessor<H> {
         Ok(FinancialRecords {
             accounts: transactions_fold_result.accounts,
             transactions: transactions_fold_result.transactions,
-            notes: transactions_fold_result.notes,
             assertions,
+            label_lookup: transactions_fold_result.label_lookup,
+            annotations_lookup: transactions_fold_result.annotations_lookup,
         })
     }
 
-    fn process_simple_expense(spec: TransactionSpec<H>) -> Result<Transformation, ServerError> {
-        let TransactionSpec {
+    fn process_simple_expense(
+        spec: DecoratedTransactionSpec<H>,
+    ) -> Result<Transformation, ServerError> {
+        let DecoratedTransactionSpec {
             id,
             accrual_date,
             until: None,
             payment_date,
             accounting_logic: AccountingLogic::SimpleExpense(expense),
-            payee: entity,
+            payee,
             description,
             amount,
             commodity,
             backing_account,
-            ..
+            annotations,
+            side_transactions,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -190,126 +206,125 @@ impl<H: Handlers> SpecProcessor<H> {
             vec![Transaction {
                 spec_id: id,
                 date: payment_date,
-                entity: entity.name(),
-                description: description,
+                comment: None,
                 postings: vec![
-                    Posting {
+                    TransactionPosting {
                         account: backing_account.account(),
                         amount: -amount.abs(),
                         currency: commodity.iso_symbol(),
                     },
-                    Posting {
+                    TransactionPosting {
                         account: expense.account().into(),
                         amount: amount.abs(),
                         currency: commodity.iso_symbol(),
                     },
                 ],
-                notes: vec![],
             }]
         } else if payment_date < accrual_date {
             vec![
                 Transaction {
-                    spec_id: id.clone(),
+                    spec_id: id,
                     date: payment_date,
-                    entity: entity.name(),
-                    description: format!("Prepaid: {}", description),
+                    comment: Some("Prepaid".into()),
                     postings: vec![
-                        Posting {
+                        TransactionPosting {
                             account: backing_account.account(),
                             amount: -amount.abs(),
                             currency: commodity.iso_symbol(),
                         },
-                        Posting {
+                        TransactionPosting {
                             account: expense.while_prepaid().into(),
                             amount: amount.abs(),
                             currency: commodity.iso_symbol(),
                         },
                     ],
-                    notes: vec![],
                 },
                 Transaction {
                     spec_id: id,
                     date: accrual_date,
-                    entity: entity.name(),
-                    description: format!("Clear Prepaid: {}", description),
+                    comment: Some("Clear Prepaid".into()),
                     postings: vec![
-                        Posting {
+                        TransactionPosting {
                             account: expense.while_prepaid().into(),
                             amount: -amount.abs(),
                             currency: commodity.iso_symbol(),
                         },
-                        Posting {
+                        TransactionPosting {
                             account: expense.account().into(),
                             amount: amount.abs(),
                             currency: commodity.iso_symbol(),
                         },
                     ],
-                    notes: vec![],
                 },
             ]
         } else {
             vec![
                 Transaction {
-                    spec_id: id.clone(),
+                    spec_id: id,
                     date: accrual_date,
-                    entity: entity.name(),
-                    description: format!("Accrued Expense: {}", description),
+                    comment: Some("Accrue Expense".into()),
                     postings: vec![
-                        Posting {
+                        TransactionPosting {
                             account: expense.while_payable().into(),
                             amount: -amount.abs(),
                             currency: commodity.iso_symbol(),
                         },
-                        Posting {
+                        TransactionPosting {
                             account: expense.account().into(),
                             amount: amount.abs(),
                             currency: commodity.iso_symbol(),
                         },
                     ],
-                    notes: vec![],
                 },
                 Transaction {
                     spec_id: id,
                     date: payment_date,
-                    entity: entity.name(),
-                    description: format!("Clear Accrued Expense: {}", description),
+                    comment: Some("Clear Accrued Expense".into()),
                     postings: vec![
-                        Posting {
+                        TransactionPosting {
                             account: backing_account.account(),
                             amount: -amount.abs(),
                             currency: commodity.iso_symbol(),
                         },
-                        Posting {
+                        TransactionPosting {
                             account: expense.while_payable().into(),
                             amount: amount.abs(),
                             currency: commodity.iso_symbol(),
                         },
                     ],
-                    notes: vec![],
                 },
             ]
         };
 
         Ok(Transformation {
+            spec_id: id,
+            label: TransactionLabel {
+                payee: payee.name(),
+                description,
+            },
             transactions,
+            side_transactions,
             expense_history_delta: None,
-            notes: vec![],
+            annotations,
         })
     }
 
-    fn process_capitalize(spec: TransactionSpec<H>) -> Result<Transformation, ServerError> {
-        let TransactionSpec {
+    fn process_capitalize(
+        spec: DecoratedTransactionSpec<H>,
+    ) -> Result<Transformation, ServerError> {
+        let DecoratedTransactionSpec {
             id,
             accrual_date,
             until: None,
             payment_date,
             accounting_logic: AccountingLogic::Capitalize(asset),
-            payee: entity,
+            payee,
             description,
             amount,
             commodity,
             backing_account,
-            ..
+            annotations,
+            side_transactions,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -320,126 +335,123 @@ impl<H: Handlers> SpecProcessor<H> {
             vec![Transaction {
                 spec_id: id,
                 date: payment_date,
-                entity: entity.name(),
-                description: description,
+                comment: None,
                 postings: vec![
-                    Posting {
+                    TransactionPosting {
                         account: asset.account().into(),
                         amount: amount.abs(),
                         currency: commodity.iso_symbol(),
                     },
-                    Posting {
+                    TransactionPosting {
                         account: backing_account.account(),
                         amount: -amount.abs(),
                         currency: commodity.iso_symbol(),
                     },
                 ],
-                notes: vec![],
             }]
         } else if payment_date < accrual_date {
             vec![
                 Transaction {
-                    spec_id: id.clone(),
+                    spec_id: id,
                     date: payment_date,
-                    entity: entity.name(),
-                    description: format!("Prepaid Asset: {}", description),
+                    comment: Some("Prepaid Asset".into()),
                     postings: vec![
-                        Posting {
+                        TransactionPosting {
                             account: asset.while_prepaid().into(),
                             amount: amount.abs(),
                             currency: commodity.iso_symbol(),
                         },
-                        Posting {
+                        TransactionPosting {
                             account: backing_account.account(),
                             amount: -amount.abs(),
                             currency: commodity.iso_symbol(),
                         },
                     ],
-                    notes: vec![],
                 },
                 Transaction {
                     spec_id: id,
                     date: accrual_date,
-                    entity: entity.name(),
-                    description: format!("Clear Prepaid Asset: {}", description),
+                    comment: Some("Clear Prepaid Asset".into()),
                     postings: vec![
-                        Posting {
+                        TransactionPosting {
                             account: asset.account().into(),
                             amount: amount.abs(),
                             currency: commodity.iso_symbol(),
                         },
-                        Posting {
+                        TransactionPosting {
                             account: asset.while_prepaid().into(),
                             amount: -amount.abs(),
                             currency: commodity.iso_symbol(),
                         },
                     ],
-                    notes: vec![],
                 },
             ]
         } else {
             vec![
                 Transaction {
-                    spec_id: id.clone(),
+                    spec_id: id,
                     date: accrual_date,
-                    entity: entity.name(),
-                    description: format!("Accrued Asset Purchase: {}", description),
+                    comment: Some("Accrued Asset Purchase".into()),
                     postings: vec![
-                        Posting {
+                        TransactionPosting {
                             account: asset.account().into(),
                             amount: amount.abs(),
                             currency: commodity.iso_symbol(),
                         },
-                        Posting {
+                        TransactionPosting {
                             account: asset.while_payable().into(),
                             amount: -amount.abs(),
                             currency: commodity.iso_symbol(),
                         },
                     ],
-                    notes: vec![],
                 },
                 Transaction {
                     spec_id: id,
                     date: payment_date,
-                    entity: entity.name(),
-                    description: format!("Clear Asset Payable: {}", description),
+                    comment: Some("Clear Asset Payable".into()),
                     postings: vec![
-                        Posting {
+                        TransactionPosting {
                             account: asset.while_payable().into(),
                             amount: amount.abs(),
                             currency: commodity.iso_symbol(),
                         },
-                        Posting {
+                        TransactionPosting {
                             account: backing_account.account(),
                             amount: -amount.abs(),
                             currency: commodity.iso_symbol(),
                         },
                     ],
-                    notes: vec![],
                 },
             ]
         };
 
         Ok(Transformation {
+            spec_id: id,
+            label: TransactionLabel {
+                payee: payee.name(),
+                description,
+            },
             transactions,
+            side_transactions,
             expense_history_delta: None,
-            notes: vec![],
+            annotations,
         })
     }
 
-    fn process_amortize(spec: TransactionSpec<H>) -> Result<Transformation, ServerError> {
-        let TransactionSpec {
+    fn process_amortize(spec: DecoratedTransactionSpec<H>) -> Result<Transformation, ServerError> {
+        let DecoratedTransactionSpec {
             id,
             accrual_date,
             until: Some(until_date),
             payment_date,
             accounting_logic: AccountingLogic::Amortize(asset),
-            payee: entity,
+            payee,
             description,
             amount,
             commodity,
             backing_account,
-            ..
+            annotations,
+            side_transactions,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -448,18 +460,19 @@ impl<H: Handlers> SpecProcessor<H> {
 
         let mut transactions = Vec::new();
 
-        let cap_transformation = Self::process_capitalize(TransactionSpec {
-            id: id.clone(),
+        let cap_transformation = Self::process_capitalize(DecoratedTransactionSpec {
+            id,
             accrual_date,
             until: None,
             payment_date,
             accounting_logic: AccountingLogic::Capitalize(asset.clone()),
-            decorators: Default::default(),
-            payee: entity.clone(),
+            payee: payee.clone(),
             description: description.clone(),
             amount,
             commodity: commodity.clone(),
             backing_account,
+            annotations: annotations.clone(),
+            side_transactions: Default::default(),
         })?;
         transactions.extend(cap_transformation.transactions);
 
@@ -482,49 +495,56 @@ impl<H: Handlers> SpecProcessor<H> {
                 .upon_accrual()
                 .ok_or_else(|| NonAmortizableAsset::new(&description))?;
             transactions.push(Transaction {
-                spec_id: id.clone(),
+                spec_id: id,
                 date: m,
-                entity: entity.name(),
-                description: format!(
-                    "Amortization adjustment: {} for period {} to {}",
-                    description, period_start, period_end
-                ),
+                comment: Some(format!(
+                    "Amortization Adjustment for Period {} to {}",
+                    period_start, period_end
+                )),
                 postings: vec![
-                    Posting {
+                    TransactionPosting {
                         account: asset.account().into(),
                         amount: -monthly_amort,
                         currency: commodity.iso_symbol(),
                     },
-                    Posting {
+                    TransactionPosting {
                         account: accrual_account.into(),
                         amount: monthly_amort,
                         currency: commodity.iso_symbol(),
                     },
                 ],
-                notes: vec![],
             });
         }
 
         Ok(Transformation {
+            spec_id: id,
+            label: TransactionLabel {
+                payee: payee.name(),
+                description,
+            },
             transactions,
+            side_transactions,
             expense_history_delta: None,
-            notes: vec![],
+            annotations,
         })
     }
 
-    fn process_fixed_expense(spec: TransactionSpec<H>) -> Result<Transformation, ServerError> {
-        let TransactionSpec {
+    fn process_fixed_expense(
+        spec: DecoratedTransactionSpec<H>,
+    ) -> Result<Transformation, ServerError> {
+        let DecoratedTransactionSpec {
             id,
             accrual_date,
             until: Some(until_date),
             payment_date,
             accounting_logic: AccountingLogic::FixedExpense(expense),
-            payee: entity,
+            payee,
             description,
             amount,
             commodity,
             backing_account,
-            ..
+            annotations,
+            side_transactions,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -550,50 +570,46 @@ impl<H: Handlers> SpecProcessor<H> {
             let monthly_expense = daily_expense * (days_in_period as f64);
             if m <= payment_date {
                 transactions.push(Transaction {
-                    spec_id: id.clone(),
+                    spec_id: id,
                     date: m,
-                    entity: entity.name(),
-                    description: format!(
-                        "FixedExpense accrual (pre-payment): {} for period {} to {}",
-                        description, period_start, period_end
-                    ),
+                    comment: Some(format!(
+                        "Accrual (Pre-Payment) for Period {} to {}",
+                        period_start, period_end
+                    )),
                     postings: vec![
-                        Posting {
+                        TransactionPosting {
                             account: expense.account().into(),
                             amount: monthly_expense,
                             currency: commodity.iso_symbol(),
                         },
-                        Posting {
+                        TransactionPosting {
                             account: expense.while_payable().into(),
                             amount: -monthly_expense,
                             currency: commodity.iso_symbol(),
                         },
                     ],
-                    notes: vec![],
                 });
                 before_sum += monthly_expense;
             } else {
                 transactions.push(Transaction {
-                    spec_id: id.clone(),
+                    spec_id: id,
                     date: m,
-                    entity: entity.name(),
-                    description: format!(
-                        "FixedExpense accrual (post-payment): {} for period {} to {}",
-                        description, period_start, period_end
-                    ),
+                    comment: Some(format!(
+                        "Accrual (Post-Payment) for Period {} to {}",
+                        period_start, period_end
+                    )),
                     postings: vec![
-                        Posting {
+                        TransactionPosting {
                             account: expense.while_payable().into(),
                             amount: monthly_expense,
                             currency: commodity.iso_symbol(),
                         },
-                        Posting {
+                        TransactionPosting {
                             account: expense.account().into(),
                             amount: -monthly_expense,
                             currency: commodity.iso_symbol(),
                         },
                     ],
-                    notes: vec![],
                 });
                 after_sum += monthly_expense;
             }
@@ -603,32 +619,36 @@ impl<H: Handlers> SpecProcessor<H> {
         transactions.push(Transaction {
             spec_id: id,
             date: payment_date,
-            entity: entity.name(),
-            description: format!("Clear FixedExpense adjustments: {}", description),
+            comment: Some("Clear Fixed Expense Adjustments".into()),
             postings: vec![
-                Posting {
+                TransactionPosting {
                     account: expense.while_payable().into(),
                     amount: before_sum,
                     currency: commodity.iso_symbol(),
                 },
-                Posting {
+                TransactionPosting {
                     account: expense.while_prepaid().into(),
                     amount: -after_sum,
                     currency: commodity.iso_symbol(),
                 },
-                Posting {
+                TransactionPosting {
                     account: backing_account.account(),
                     amount: -(before_sum - after_sum),
                     currency: commodity.iso_symbol(),
                 },
             ],
-            notes: vec![],
         });
 
         Ok(Transformation {
+            spec_id: id,
+            label: TransactionLabel {
+                payee: payee.name(),
+                description,
+            },
             transactions,
+            side_transactions,
             expense_history_delta: None,
-            notes: vec![],
+            annotations,
         })
     }
 
@@ -666,21 +686,22 @@ impl<H: Handlers> SpecProcessor<H> {
     /// Process a VariableExpense spec. It uses historical data (the past 90
     /// days prior to the accrual date) to compute the daily average.
     fn process_variable_expense(
-        spec: TransactionSpec<H>,
+        spec: DecoratedTransactionSpec<H>,
         history: &HashMap<ExpenseAccount, Vec<VariableExpenseRecord>>,
     ) -> Result<Transformation, ServerError> {
-        let TransactionSpec {
+        let DecoratedTransactionSpec {
             id,
             accrual_date,
             until: Some(until_date),
             payment_date,
             accounting_logic: AccountingLogic::VariableExpense(expense),
-            payee: entity,
+            payee,
             description,
             amount,
             commodity,
             backing_account,
-            ..
+            annotations,
+            side_transactions,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -726,44 +747,42 @@ impl<H: Handlers> SpecProcessor<H> {
             let monthly_estimate = avg_daily * (days_in_period as f64);
 
             transactions.push(Transaction {
-                spec_id: id.clone(),
+                spec_id: id,
                 date: m,
-                entity: entity.name(),
-                description: format!(
-                    "VariableExpense accrual: {} for period {} to {}",
-                    description, period_start, period_end
-                ),
+                comment: Some(format!(
+                    "Variable Expense Accrual for Period {} to {}",
+                    period_start, period_end
+                )),
                 postings: vec![
-                    Posting {
+                    TransactionPosting {
                         account: expense.account().into(),
                         amount: monthly_estimate,
                         currency: commodity.iso_symbol(),
                     },
-                    Posting {
+                    TransactionPosting {
                         account: expense.while_payable().into(),
                         amount: -monthly_estimate,
                         currency: commodity.iso_symbol(),
                     },
                 ],
-                notes: vec![],
             });
         }
 
         let discrepancy = amount - estimated_total;
         let mut postings = vec![
-            Posting {
+            TransactionPosting {
                 account: expense.while_payable().into(),
                 amount: estimated_total,
                 currency: commodity.iso_symbol(),
             },
-            Posting {
+            TransactionPosting {
                 account: backing_account.account(),
                 amount: -estimated_total,
                 currency: commodity.iso_symbol(),
             },
         ];
         if discrepancy.abs() > 0.01 {
-            postings.push(Posting {
+            postings.push(TransactionPosting {
                 account: expense.account().into(),
                 amount: discrepancy,
                 currency: commodity.iso_symbol(),
@@ -773,10 +792,8 @@ impl<H: Handlers> SpecProcessor<H> {
         transactions.push(Transaction {
             spec_id: id,
             date: payment_date,
-            entity: entity.name(),
-            description: format!("Clear VariableExpense adjustments: {}", description),
+            comment: Some("Clear Variable Expense Adjustments".into()),
             postings,
-            notes: vec![],
         });
 
         // Return the transformation and record this variable expense’s daily rate for future history.
@@ -787,19 +804,25 @@ impl<H: Handlers> SpecProcessor<H> {
         };
 
         Ok(Transformation {
+            spec_id: id,
+            label: TransactionLabel {
+                payee: payee.name(),
+                description,
+            },
             transactions,
+            side_transactions,
             expense_history_delta: Some((expense_account.into(), new_record)),
-            notes: vec![],
+            annotations,
         })
     }
 
     /// Process a VariableExpenseInit spec. In this case the daily accrual is
     /// computed directly from the provided estimate.
     fn process_variable_expense_init(
-        spec: TransactionSpec<H>,
+        spec: DecoratedTransactionSpec<H>,
         _history: &HashMap<ExpenseAccount, Vec<VariableExpenseRecord>>, // Not used for computing init daily
     ) -> Result<Transformation, ServerError> {
-        let TransactionSpec {
+        let DecoratedTransactionSpec {
             id,
             accrual_date,
             until: Some(until_date),
@@ -809,12 +832,13 @@ impl<H: Handlers> SpecProcessor<H> {
                     account: expense,
                     estimate,
                 },
-            payee: entity,
+            payee,
             description,
             amount: _amount, // unused aside from sign check
             commodity,
             backing_account,
-            ..
+            annotations,
+            side_transactions,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -838,46 +862,42 @@ impl<H: Handlers> SpecProcessor<H> {
             let monthly_estimate = init_daily * (days_in_period as f64);
             estimated_sum += monthly_estimate;
             transactions.push(Transaction {
-                spec_id: id.clone(),
+                spec_id: id,
                 date: m,
-                entity: entity.name(),
-                description: format!(
-                    "VariableExpenseInit accrual: {} for period {} to {}",
-                    description, period_start, period_end
-                ),
+                comment: Some(format!(
+                    "Variable Expense Accrual for Period {} to {}",
+                    period_start, period_end
+                )),
                 postings: vec![
-                    Posting {
+                    TransactionPosting {
                         account: expense.account().into(),
                         amount: monthly_estimate,
                         currency: commodity.iso_symbol(),
                     },
-                    Posting {
+                    TransactionPosting {
                         account: expense.while_payable().into(),
                         amount: -monthly_estimate,
                         currency: commodity.iso_symbol(),
                     },
                 ],
-                notes: vec![],
             });
         }
         transactions.push(Transaction {
             spec_id: id,
             date: payment_date,
-            entity: entity.name(),
-            description: format!("Clear VariableExpenseInit adjustments: {}", description),
+            comment: Some("Clear Variable Expense Adjustments".into()),
             postings: vec![
-                Posting {
+                TransactionPosting {
                     account: expense.while_payable().into(),
                     amount: estimated_sum,
                     currency: commodity.iso_symbol(),
                 },
-                Posting {
+                TransactionPosting {
                     account: backing_account.account(),
                     amount: -estimated_sum,
                     currency: commodity.iso_symbol(),
                 },
             ],
-            notes: vec![],
         });
 
         let new_record = VariableExpenseRecord {
@@ -887,25 +907,34 @@ impl<H: Handlers> SpecProcessor<H> {
         };
 
         Ok(Transformation {
+            spec_id: id,
+            label: TransactionLabel {
+                payee: payee.name(),
+                description,
+            },
             transactions,
+            side_transactions,
             expense_history_delta: Some((expense.account().into(), new_record)),
-            notes: vec![],
+            annotations,
         })
     }
 
-    fn process_immaterial_income(spec: TransactionSpec<H>) -> Result<Transformation, ServerError> {
-        let TransactionSpec {
+    fn process_immaterial_income(
+        spec: DecoratedTransactionSpec<H>,
+    ) -> Result<Transformation, ServerError> {
+        let DecoratedTransactionSpec {
             id,
             accrual_date: _, // Ignored.
             until: _,        // Ignored.
             payment_date,
             accounting_logic: AccountingLogic::ImmaterialIncome(income),
-            payee: entity,
+            payee,
             description,
             amount,
             commodity,
             backing_account,
-            ..
+            annotations,
+            side_transactions,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -915,43 +944,54 @@ impl<H: Handlers> SpecProcessor<H> {
         let tx = Transaction {
             spec_id: id,
             date: payment_date,
-            entity: entity.name(),
-            description: format!("ImmaterialIncome: {}", description),
+            comment: None,
             postings: vec![
-                Posting {
+                TransactionPosting {
                     account: income.account().into(),
                     amount,
                     currency: commodity.iso_symbol(),
                 },
-                Posting {
+                TransactionPosting {
                     account: backing_account.account(),
                     amount: -amount,
                     currency: commodity.iso_symbol(),
                 },
             ],
-            notes: vec![format!("Immaterial income recorded for {}", description)],
         };
 
         Ok(Transformation {
+            spec_id: id,
+            label: TransactionLabel {
+                payee: payee.name(),
+                description,
+            },
             transactions: vec![tx],
+            side_transactions,
             expense_history_delta: None,
-            notes: vec![],
+            annotations: {
+                let mut v = annotations;
+                v.push(Annotation::ImmaterialIncome);
+                v
+            },
         })
     }
 
-    fn process_immaterial_expense(spec: TransactionSpec<H>) -> Result<Transformation, ServerError> {
-        let TransactionSpec {
+    fn process_immaterial_expense(
+        spec: DecoratedTransactionSpec<H>,
+    ) -> Result<Transformation, ServerError> {
+        let DecoratedTransactionSpec {
             id,
             accrual_date: _, // Ignored.
             until: _,        // Ignored.
             payment_date,
             accounting_logic: AccountingLogic::ImmaterialExpense(expense),
-            payee: entity,
+            payee,
             description,
             amount,
             commodity,
             backing_account,
-            ..
+            annotations,
+            side_transactions,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -961,43 +1001,52 @@ impl<H: Handlers> SpecProcessor<H> {
         let tx = Transaction {
             spec_id: id,
             date: payment_date,
-            entity: entity.name(),
-            description: format!("ImmaterialExpense: {}", description),
+            comment: None,
             postings: vec![
-                Posting {
+                TransactionPosting {
                     account: expense.account().into(),
                     amount: amount.abs(),
                     currency: commodity.iso_symbol(),
                 },
-                Posting {
+                TransactionPosting {
                     account: backing_account.account(),
                     amount: -amount.abs(),
                     currency: commodity.iso_symbol(),
                 },
             ],
-            notes: vec![format!("Immaterial expense recorded for {}", description)],
         };
 
         Ok(Transformation {
+            spec_id: id,
+            label: TransactionLabel {
+                payee: payee.name(),
+                description,
+            },
             transactions: vec![tx],
+            side_transactions,
             expense_history_delta: None,
-            notes: vec![],
+            annotations: {
+                let mut v = annotations;
+                v.push(Annotation::ImmaterialExpense);
+                v
+            },
         })
     }
 
-    fn process_reimburse(spec: TransactionSpec<H>) -> Result<Transformation, ServerError> {
-        let TransactionSpec {
+    fn process_reimburse(spec: DecoratedTransactionSpec<H>) -> Result<Transformation, ServerError> {
+        let DecoratedTransactionSpec {
             id,
             accrual_date: _,
             until: None,
             payment_date,
             accounting_logic: AccountingLogic::Reimburse(reimbursable),
-            payee: entity,
+            payee,
             description,
             amount,
             commodity,
             backing_account,
-            ..
+            annotations,
+            side_transactions,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -1007,43 +1056,48 @@ impl<H: Handlers> SpecProcessor<H> {
         let tx = Transaction {
             spec_id: id,
             date: payment_date,
-            entity: entity.name(),
-            description: format!("Reimburse: {}", description),
+            comment: None,
             postings: vec![
-                Posting {
+                TransactionPosting {
                     account: reimbursable.account().into(),
                     amount: -amount.abs(),
                     currency: commodity.iso_symbol(),
                 },
-                Posting {
+                TransactionPosting {
                     account: backing_account.account(),
                     amount: amount.abs(),
                     currency: commodity.iso_symbol(),
                 },
             ],
-            notes: vec![format!("Reimbursement processed for {}", description)],
         };
 
         Ok(Transformation {
+            spec_id: id,
+            label: TransactionLabel {
+                payee: payee.name(),
+                description,
+            },
             transactions: vec![tx],
+            side_transactions,
             expense_history_delta: None,
-            notes: vec![],
+            annotations,
         })
     }
 
-    fn process_clear_vat(spec: TransactionSpec<H>) -> Result<Transformation, ServerError> {
-        let TransactionSpec {
+    fn process_clear_vat(spec: DecoratedTransactionSpec<H>) -> Result<Transformation, ServerError> {
+        let DecoratedTransactionSpec {
             id,
             accrual_date,
             until: None,
             payment_date: _,
             accounting_logic: AccountingLogic::ClearVat { from, to },
-            payee: entity,
+            payee,
             description,
             amount,
             commodity,
             backing_account: BackingAccount::Cash(cash),
-            ..
+            annotations,
+            side_transactions,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -1052,27 +1106,31 @@ impl<H: Handlers> SpecProcessor<H> {
         let tx = Transaction {
             spec_id: id,
             date: accrual_date,
-            entity: entity.name(),
-            description: format!("Clear VAT from {} to {}: {}", from, to, description),
+            comment: Some(format!("Clear VAT from {} to {}", from, to)),
             postings: vec![
-                Posting {
+                TransactionPosting {
                     account: asset("VatReceivable").into(),
                     amount: -amount,
                     currency: commodity.iso_symbol(),
                 },
-                Posting {
+                TransactionPosting {
                     account: cash.account().into(),
                     amount,
                     currency: commodity.iso_symbol(),
                 },
             ],
-            notes: vec![String::from("VAT clearance processed")],
         };
 
         Ok(Transformation {
+            spec_id: id,
+            label: TransactionLabel {
+                payee: payee.name(),
+                description,
+            },
             transactions: vec![tx],
+            side_transactions,
             expense_history_delta: None,
-            notes: vec![],
+            annotations,
         })
     }
 }

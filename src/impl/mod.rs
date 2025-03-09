@@ -20,16 +20,17 @@ pub(crate) mod data {
 pub(crate) mod domain {
     pub(crate) mod entities {
         pub(crate) mod account;
+        pub(crate) mod annotation;
         pub(crate) mod assertion;
         pub(crate) mod assertion_spec;
         pub(crate) mod decorator_logic;
         pub(crate) mod financial_records;
         pub(crate) mod handlers;
-        pub(crate) mod note;
         pub(crate) mod transaction;
         pub(crate) mod transaction_spec;
     }
     pub(crate) mod logic {
+        pub(crate) mod annotation_processor;
         pub(crate) mod decorator_processor;
         pub(crate) mod spec_processor;
         mod utils;
@@ -49,6 +50,8 @@ pub(crate) mod presentation {
 // Public exports.
 // ---
 
+#[doc(hidden)]
+#[allow(unused_imports)]
 pub mod exports {
     // This mod represents how clients see the library, and can differ from the
     // internal structure.
@@ -57,12 +60,12 @@ pub mod exports {
 
     pub mod entities {
         pub use crate::domain::entities::account::*;
+        pub use crate::domain::entities::annotation::*;
         pub use crate::domain::entities::assertion::*;
         pub use crate::domain::entities::assertion_spec::*;
         pub use crate::domain::entities::decorator_logic::*;
         pub use crate::domain::entities::financial_records::*;
         pub use crate::domain::entities::handlers::*;
-        pub use crate::domain::entities::note::*;
         pub use crate::domain::entities::transaction::*;
         pub use crate::domain::entities::transaction_spec::*;
     }

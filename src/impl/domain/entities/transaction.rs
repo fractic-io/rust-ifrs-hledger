@@ -1,22 +1,24 @@
 use chrono::NaiveDate;
 
-use crate::entities::TransactionSpecId;
+use super::{account::Account, transaction_spec::TransactionSpecId};
 
-use super::account::Account;
+#[derive(Debug, Clone)]
+pub struct TransactionLabel {
+    pub payee: String,
+    pub description: String,
+}
 
-#[derive(Debug)]
-pub struct Posting {
+#[derive(Debug, Clone)]
+pub struct TransactionPosting {
     pub account: Account,
     pub amount: f64,
     pub currency: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Transaction {
     pub spec_id: TransactionSpecId,
     pub date: NaiveDate,
-    pub entity: String,
-    pub description: String,
-    pub postings: Vec<Posting>,
-    pub notes: Vec<String>,
+    pub postings: Vec<TransactionPosting>,
+    pub comment: Option<String>,
 }

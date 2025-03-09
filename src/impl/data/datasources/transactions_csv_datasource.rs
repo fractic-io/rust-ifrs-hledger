@@ -9,7 +9,7 @@ use crate::{
         accounting_logic_model::AccountingLogicModel, backing_account_model::BackingAccountModel,
         iso_date_model::ISODateModel,
     },
-    entities::{Handlers, TransactionSpec, TransactionSpecId},
+    entities::{Annotation, Handlers, TransactionSpec, TransactionSpecId},
     errors::{InvalidCsv, InvalidRon, ReadError},
 };
 
@@ -54,6 +54,7 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                     let raw_amount = r.get(7).unwrap_or("0");
                     let raw_commodity = r.get(8).unwrap_or("");
                     let raw_backing_account = r.get(9).unwrap_or("");
+                    let raw_notes = r.get(10).unwrap_or("");
 
                     // Parse.
                     let accrual_date: ISODateModel = ISODateModel::from_str(raw_accrual_date)?;
@@ -75,6 +76,10 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                     let backing_account: BackingAccountModel<H::R, H::C> =
                         from_str(raw_backing_account)
                             .map_err(|e| InvalidRon::with_debug("BackingAccount", &e))?;
+                    let custom_notes: Vec<Annotation> = raw_notes
+                        .split(',')
+                        .map(|n| Annotation::Custom(n.into()))
+                        .collect();
 
                     // Build.
                     Ok(TransactionSpec {
@@ -89,6 +94,7 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                         amount: amount.into(),
                         commodity,
                         backing_account: backing_account.into(),
+                        annotations: custom_notes,
                     })
                 })
             })

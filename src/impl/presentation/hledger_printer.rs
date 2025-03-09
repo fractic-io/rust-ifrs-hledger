@@ -22,7 +22,13 @@ impl HledgerPrinter {
     pub(crate) fn print_ledger(&self, financial_records: &FinancialRecords) -> String {
         let mut ledger_output = String::new();
         for tx in &financial_records.transactions {
-            ledger_output.push_str(&format!("{} {}\n", tx.date, tx.description));
+            let label = financial_records
+                .label_lookup
+                .get(&tx.spec_id)
+                .map_or("(unknown)".to_string(), |label| {
+                    format!("{} | {}", label.payee, label.description)
+                });
+            ledger_output.push_str(&format!("{} ({}) {}\n", tx.date, tx.spec_id, label));
             for posting in &tx.postings {
                 ledger_output.push_str(&format!(
                     "    {:30} {:10.2} {}\n",
@@ -31,8 +37,12 @@ impl HledgerPrinter {
                     posting.currency
                 ));
             }
-            for note in &tx.notes {
-                ledger_output.push_str(&format!("    ; {}\n", note));
+            for annotation in financial_records
+                .annotations_lookup
+                .get(&tx.spec_id)
+                .unwrap_or(&vec![])
+            {
+                ledger_output.push_str(&format!("    ; {}\n", annotation));
             }
             ledger_output.push('\n');
         }
