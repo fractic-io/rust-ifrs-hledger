@@ -28,8 +28,18 @@ define_client_error!(
     { description: &str, payment_date: &NaiveDate, until_date: &NaiveDate }
 );
 define_client_error!(
-    VariableExpenseNoHistoricalData,
-    "No historical data for VariableExpense: '{description}'. Must initiate with a VariableExpenseInit entry.",
+    VariableExpenseNotEnoughHistoricalData,
+    "No historical data for VariableExpense: '{description}' in the previous 90 days.",
+    { description: &str }
+);
+define_client_error!(
+    VariableExpenseNoInit,
+    "VariableExpense: '{description}' not initialized. Must initiate with a VariableExpenseInit entry.",
+    { description: &str }
+);
+define_client_error!(
+    VariableExpenseDoubleInit,
+    "VariableExpense: '{description}' already initialized. Cannot initialize twice.",
     { description: &str }
 );
 define_client_error!(

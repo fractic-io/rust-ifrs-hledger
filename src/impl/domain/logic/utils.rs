@@ -1,7 +1,7 @@
 use chrono::{Datelike, Duration, NaiveDate};
 use fractic_server_error::{CriticalError, ServerError};
 
-use super::spec_processor::VariableExpenseRecord;
+use super::spec_processor::ExpenseHistoryPriceRecord;
 
 /// Returns the last day of each month between the given dates.
 pub(crate) fn month_end_dates(
@@ -79,7 +79,7 @@ pub(crate) fn monthly_accrual_periods(
 /// by summing the contributions of all overlapping records. Days not covered by
 /// any record count as zero.
 pub(crate) fn compute_daily_average(
-    records: &[VariableExpenseRecord],
+    records: &[ExpenseHistoryPriceRecord],
     window_start: NaiveDate,
     window_end: NaiveDate,
 ) -> Option<f64> {
@@ -88,15 +88,17 @@ pub(crate) fn compute_daily_average(
         return None;
     }
     let mut total_amount = 0.0;
-    // For each record, add (daily_rate * number_of_overlapping_days)
+
+    // For each record, add (daily_rate * number_of_overlapping_days).
     for record in records {
         let overlap_start = std::cmp::max(record.start, window_start);
         let overlap_end = std::cmp::min(record.end, window_end);
         if overlap_start <= overlap_end {
-            let days = (overlap_end - overlap_start).num_days() + 1;
-            total_amount += record.daily_rate * (days as f64);
+            let overlap_days = (overlap_end - overlap_start).num_days() + 1;
+            total_amount += record.daily_rate * (overlap_days as f64);
         }
     }
+
     // If no days contributed (i.e. no overlapping records) then we have no history.
     if total_amount == 0.0 {
         None

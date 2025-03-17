@@ -14,8 +14,8 @@ use crate::{
     },
     errors::{
         InvalidArgumentsForAccountingLogic, NonAmortizableAsset, UnexpectedNegativeValue,
-        UnexpectedPositiveValue, VariableExpenseInvalidPaymentDate,
-        VariableExpenseNoHistoricalData,
+        UnexpectedPositiveValue, VariableExpenseDoubleInit, VariableExpenseInvalidPaymentDate,
+        VariableExpenseNoInit, VariableExpenseNotEnoughHistoricalData,
     },
     impl_ext::standard_accounts::vat::{VAT_PAYABLE, VAT_RECEIVABLE},
 };
@@ -24,13 +24,24 @@ pub(crate) struct SpecProcessor<H: Handlers> {
     specs: DecoratedFinancialRecordSpecs<H>,
 }
 
-/// A record that stores the daily accrual rate for a given period.
-/// (Note: We use the accrual period [start, end] – the clearing date is handled in the transactions.)
-#[derive(Clone, Debug)]
-pub struct VariableExpenseRecord {
-    pub start: NaiveDate,
-    pub end: NaiveDate,
-    pub daily_rate: f64,
+/// Store historical information of variables expenses, to use for making
+/// estimates.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ExpenseHistory {
+    pub(crate) init_date: Option<NaiveDate>,
+    pub(crate) price_records: Vec<ExpenseHistoryPriceRecord>,
+}
+#[derive(Debug, Clone)]
+pub(crate) struct ExpenseHistoryPriceRecord {
+    pub(crate) start: NaiveDate,
+    pub(crate) end: NaiveDate,
+    pub(crate) daily_rate: f64,
+}
+#[derive(Debug, Clone)]
+pub(crate) struct ExpenseHistoryDelta {
+    pub(crate) account: ExpenseAccount,
+    pub(crate) price_record: ExpenseHistoryPriceRecord,
+    pub(crate) is_init: bool,
 }
 
 struct Transformation {
@@ -38,14 +49,14 @@ struct Transformation {
     label: TransactionLabel,
     transactions: Vec<Transaction>,
     side_transactions: Vec<Transaction>,
-    expense_history_delta: Option<(ExpenseAccount, VariableExpenseRecord)>,
+    expense_history_delta: Option<ExpenseHistoryDelta>,
     annotations: Vec<Annotation>,
 }
 
 struct FoldState {
     accounts: Vec<Account>,
     transactions: Vec<Transaction>,
-    expense_history: HashMap<ExpenseAccount, Vec<VariableExpenseRecord>>,
+    expense_history_lookup: HashMap<ExpenseAccount, ExpenseHistory>,
     label_lookup: HashMap<TransactionSpecId, TransactionLabel>,
     annotations_lookup: HashMap<TransactionSpecId, Vec<Annotation>>,
 }
@@ -55,17 +66,17 @@ impl FoldState {
         Self {
             accounts: Vec::new(),
             transactions: Vec::new(),
-            expense_history: HashMap::new(),
+            expense_history_lookup: HashMap::new(),
             label_lookup: HashMap::new(),
             annotations_lookup: HashMap::new(),
         }
     }
 
     /// Update current state with the given transformation.
-    fn step(self, t: Transformation) -> Self {
+    fn step(self, t: Transformation) -> Result<Self, ServerError> {
         let mut accounts = self.accounts;
         let mut transactions = self.transactions;
-        let mut expense_history = self.expense_history;
+        let mut expense_history_lookup = self.expense_history_lookup;
         let mut label_lookup = self.label_lookup;
         let mut annotations_lookup = self.annotations_lookup;
 
@@ -76,8 +87,15 @@ impl FoldState {
         );
         transactions.extend(t.transactions);
         transactions.extend(t.side_transactions);
-        if let Some((account, record)) = t.expense_history_delta {
-            expense_history.entry(account).or_default().push(record);
+        if let Some(delta) = t.expense_history_delta {
+            let expense_history = expense_history_lookup.entry(delta.account).or_default();
+            if delta.is_init {
+                if expense_history.init_date.is_some() {
+                    return Err(VariableExpenseDoubleInit::new(&t.label.description));
+                }
+                expense_history.init_date = Some(delta.price_record.start);
+            }
+            expense_history.price_records.push(delta.price_record);
         }
         label_lookup.insert(t.spec_id, t.label);
         annotations_lookup
@@ -85,13 +103,13 @@ impl FoldState {
             .or_default()
             .extend(t.annotations);
 
-        Self {
+        Ok(Self {
             accounts,
             transactions,
-            expense_history,
+            expense_history_lookup,
             label_lookup,
             annotations_lookup,
-        }
+        })
     }
 }
 
@@ -148,7 +166,7 @@ impl<H: Handlers> SpecProcessor<H> {
                             Self::process_variable_expense_init(spec)?
                         }
                         AccountingLogic::VariableExpense(..) => {
-                            Self::process_variable_expense(spec, &state.expense_history)?
+                            Self::process_variable_expense(spec, &state.expense_history_lookup)?
                         }
                         AccountingLogic::ImmaterialIncome(..) => {
                             Self::process_immaterial_income(spec)?
@@ -159,7 +177,7 @@ impl<H: Handlers> SpecProcessor<H> {
                         AccountingLogic::Reimburse(..) => Self::process_reimburse(spec)?,
                         AccountingLogic::ClearVat { .. } => Self::process_clear_vat(spec)?,
                     };
-                    Ok(state.step(transformation))
+                    state.step(transformation)
                 })?;
 
         let assertions = assertion_specs
@@ -688,15 +706,19 @@ impl<H: Handlers> SpecProcessor<H> {
         let init_daily = (estimate as f64) / (accrual_days as f64);
 
         let e_handler = e_handler.clone();
-        Self::process_variable_expense_helper(spec, e_handler, init_daily)
+        Self::process_variable_expense_helper(spec, e_handler, init_daily, true)
     }
 
     /// Uses the past 90 days of historical data (prior to accrual date) to
-    /// compute the daily average. If less than 90 days of historical data, uses
-    /// what is available. If no historical data, returns an error.
+    /// compute the daily average. If VariableExpenseInit is less than 90 days
+    /// prior, the window instead starts at the init date. If there is not
+    /// enough historical data, it returns an error.
+    ///
+    /// NOTE: May go without saying, but the order of transaction specs
+    /// therefore matters.
     fn process_variable_expense(
         spec: DecoratedTransactionSpec<H>,
-        history: &HashMap<ExpenseAccount, Vec<VariableExpenseRecord>>,
+        history_lookup: &HashMap<ExpenseAccount, ExpenseHistory>,
     ) -> Result<Transformation, ServerError> {
         let DecoratedTransactionSpec {
             accrual_start,
@@ -709,26 +731,34 @@ impl<H: Handlers> SpecProcessor<H> {
         };
 
         // Use the last 90 days of history before (and including) the accrual_date.
-        let history_window_start = accrual_start - Duration::days(90);
-        let history_window_end = accrual_start; // inclusive
         let expense_account = e_handler.account();
-        let records = history
+        let records = history_lookup
             .get(&expense_account)
-            .map(|v| v.as_slice())
+            .map(|v| v.price_records.as_slice())
             .unwrap_or(&[]);
+        let Some(history_init_date) = history_lookup
+            .get(&expense_account)
+            .and_then(|v| v.init_date)
+        else {
+            return Err(VariableExpenseNoInit::new(description));
+        };
+        let history_window_start =
+            std::cmp::max(history_init_date, accrual_start - Duration::days(90));
+        let history_window_end = accrual_start;
 
         // Compute the average daily accrual rate over the 90-day window.
         let daily_rate = compute_daily_average(records, history_window_start, history_window_end)
-            .ok_or_else(|| VariableExpenseNoHistoricalData::new(description))?;
+            .ok_or_else(|| VariableExpenseNotEnoughHistoricalData::new(description))?;
 
         let e_handler = e_handler.clone();
-        Self::process_variable_expense_helper(spec, e_handler, daily_rate)
+        Self::process_variable_expense_helper(spec, e_handler, daily_rate, false)
     }
 
     fn process_variable_expense_helper(
         spec: DecoratedTransactionSpec<H>,
         e_handler: H::E,
         daily_rate: f64,
+        is_init: bool,
     ) -> Result<Transformation, ServerError> {
         let DecoratedTransactionSpec {
             id,
@@ -834,10 +864,14 @@ impl<H: Handlers> SpecProcessor<H> {
         });
 
         // Record this variable expense’s daily rate for future history.
-        let new_record = VariableExpenseRecord {
-            start: accrual_start,
-            end: accrual_end,
-            daily_rate,
+        let expense_history_delta = ExpenseHistoryDelta {
+            account: e_handler.account(),
+            price_record: ExpenseHistoryPriceRecord {
+                start: accrual_start,
+                end: accrual_end,
+                daily_rate,
+            },
+            is_init,
         };
 
         Ok(Transformation {
@@ -848,7 +882,7 @@ impl<H: Handlers> SpecProcessor<H> {
             },
             transactions,
             side_transactions,
-            expense_history_delta: Some((e_handler.account(), new_record)),
+            expense_history_delta: Some(expense_history_delta),
             annotations,
         })
     }
