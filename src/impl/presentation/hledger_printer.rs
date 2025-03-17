@@ -22,12 +22,16 @@ impl HledgerPrinter {
     pub(crate) fn print_ledger(&self, financial_records: &FinancialRecords) -> String {
         let mut ledger_output = String::new();
         for tx in &financial_records.transactions {
-            let label = financial_records
-                .label_lookup
-                .get(&tx.spec_id)
-                .map_or("(unknown)".to_string(), |label| {
-                    format!("{} | {}", label.payee, label.description)
-                });
+            let label = financial_records.label_lookup.get(&tx.spec_id).map_or(
+                "(unknown)".to_string(),
+                |label| {
+                    if let Some(comment) = &tx.comment {
+                        format!("{} | {}: {}", label.payee, comment, label.description)
+                    } else {
+                        format!("{} | {}", label.payee, label.description)
+                    }
+                },
+            );
             ledger_output.push_str(&format!("{} ({}) {}\n", tx.date, tx.spec_id, label));
             for posting in &tx.postings {
                 ledger_output.push_str(&format!(

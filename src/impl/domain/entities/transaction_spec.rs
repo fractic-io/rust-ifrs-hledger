@@ -30,8 +30,8 @@ pub(crate) enum BackingAccount<R, C> {
 #[derive(Debug)]
 pub(crate) struct TransactionSpec<H: Handlers> {
     pub id: TransactionSpecId,
-    pub accrual_date: NaiveDate,
-    pub until: Option<NaiveDate>,
+    pub accrual_start: NaiveDate,
+    pub accrual_end: Option<NaiveDate>,
     pub payment_date: NaiveDate,
     pub accounting_logic: AccountingLogic<H::E, H::A, H::I, H::R>,
     pub decorators: Vec<H::D>,
@@ -46,8 +46,8 @@ pub(crate) struct TransactionSpec<H: Handlers> {
 #[derive(Debug)]
 pub(crate) struct DecoratedTransactionSpec<H: Handlers> {
     pub id: TransactionSpecId,
-    pub accrual_date: NaiveDate,
-    pub until: Option<NaiveDate>,
+    pub accrual_start: NaiveDate,
+    pub accrual_end: Option<NaiveDate>,
     pub payment_date: NaiveDate,
     pub accounting_logic: AccountingLogic<H::E, H::A, H::I, H::R>,
     pub payee: H::P,

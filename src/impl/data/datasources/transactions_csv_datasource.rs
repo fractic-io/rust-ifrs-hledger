@@ -57,8 +57,8 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                     let raw_notes = r.get(10).unwrap_or("");
 
                     // Parse.
-                    let accrual_date: ISODateModel = ISODateModel::from_str(raw_accrual_date)?;
-                    let until: Option<ISODateModel> =
+                    let accrual_start: ISODateModel = ISODateModel::from_str(raw_accrual_date)?;
+                    let accrual_end: Option<ISODateModel> =
                         raw_until.map(ISODateModel::from_str).transpose()?;
                     let payment_date: ISODateModel = ISODateModel::from_str(raw_payment_date)?;
                     let accounting_logic: AccountingLogicModel<H::E, H::A, H::I, H::R> =
@@ -84,8 +84,8 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                     // Build.
                     Ok(TransactionSpec {
                         id: TransactionSpecId((i + 2) as u64),
-                        accrual_date: accrual_date.into(),
-                        until: until.map(Into::into),
+                        accrual_start: accrual_start.into(),
+                        accrual_end: accrual_end.map(Into::into),
                         payment_date: payment_date.into(),
                         accounting_logic: accounting_logic.into(),
                         decorators,
