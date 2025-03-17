@@ -6,7 +6,7 @@ use ron::from_str;
 use crate::{
     data::models::{accounting_amount_model::AccountingAmountModel, iso_date_model::ISODateModel},
     domain::entities::assertion_spec::AssertionSpec,
-    entities::Handlers,
+    entities::{AssertableHandler, Handlers},
     errors::{InvalidCsv, InvalidRon, ReadError},
 };
 
@@ -44,7 +44,7 @@ impl<H: Handlers> BalancesCsvDatasource<H> for BalancesCsvDatasourceImpl<H> {
 
                     // Parse.
                     let date: ISODateModel = ISODateModel::from_str(raw_date)?;
-                    let account: H::C =
+                    let cash_handler: H::C =
                         from_str(raw_account).map_err(|e| InvalidRon::with_debug("Cash", &e))?;
                     let balance: AccountingAmountModel =
                         AccountingAmountModel::from_str(raw_balance)?;
@@ -54,7 +54,7 @@ impl<H: Handlers> BalancesCsvDatasource<H> for BalancesCsvDatasourceImpl<H> {
                     // Build.
                     Ok(AssertionSpec {
                         date: date.into(),
-                        cash_handler: account,
+                        handler: AssertableHandler::Cash(cash_handler),
                         balance: balance.into(),
                         commodity,
                     })

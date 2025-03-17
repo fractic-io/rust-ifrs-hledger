@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, iter::once};
 
 use chrono::{Duration, NaiveDate};
 use fractic_server_error::ServerError;
@@ -6,8 +6,8 @@ use fractic_server_error::ServerError;
 use crate::{
     domain::logic::utils::{compute_daily_average, monthly_accrual_periods, MonthlyAccrualPeriod},
     entities::{
-        Account, AccountingLogic, Annotation, Assertion, AssertionSpec, AssetHandler,
-        BackingAccount, CashHandler, CommodityHandler, DecoratedFinancialRecordSpecs,
+        Account, AccountingLogic, Annotation, AssertableHandler, Assertion, AssertionSpec,
+        AssetHandler, BackingAccount, CashHandler, CommodityHandler, DecoratedFinancialRecordSpecs,
         DecoratedTransactionSpec, ExpenseAccount, ExpenseHandler, FinancialRecords, Handlers,
         IncomeHandler, PayeeHandler, ReimbursableEntityHandler, Transaction, TransactionLabel,
         TransactionPosting, TransactionSpecId,
@@ -224,7 +224,7 @@ impl<H: Handlers> SpecProcessor<H> {
             .into_iter()
             .map(|spec| Assertion {
                 date: spec.date,
-                account: spec.cash_handler.account().into(),
+                account: spec.handler.account(),
                 balance: spec.balance,
                 currency: spec.commodity.iso_symbol(),
             })
@@ -939,6 +939,10 @@ impl<H: Handlers> SpecProcessor<H> {
             is_init,
         };
 
+        // Tag this transaction, since the accounting logic deserves a note in
+        // the financial records.
+        let note = Annotation::VariableExpense;
+
         Ok(Transformation {
             spec_id: id,
             label: TransactionLabel {
@@ -949,7 +953,7 @@ impl<H: Handlers> SpecProcessor<H> {
             ext_transaction_specs,
             ext_assertion_specs,
             expense_history_delta: Some(expense_history_delta),
-            annotations,
+            annotations: annotations.into_iter().chain(once(note)).collect(),
         })
     }
 
@@ -994,6 +998,10 @@ impl<H: Handlers> SpecProcessor<H> {
             ],
         };
 
+        // Tag this transaction, since the accounting logic deserves a note in
+        // the financial records.
+        let note = Annotation::ImmaterialIncome;
+
         Ok(Transformation {
             spec_id: id,
             label: TransactionLabel {
@@ -1004,11 +1012,7 @@ impl<H: Handlers> SpecProcessor<H> {
             ext_transaction_specs,
             ext_assertion_specs,
             expense_history_delta: None,
-            annotations: {
-                let mut v = annotations;
-                v.push(Annotation::ImmaterialIncome);
-                v
-            },
+            annotations: annotations.into_iter().chain(once(note)).collect(),
         })
     }
 
@@ -1053,6 +1057,10 @@ impl<H: Handlers> SpecProcessor<H> {
             ],
         };
 
+        // Tag this transaction, since the accounting logic deserves a note in
+        // the financial records.
+        let note = Annotation::ImmaterialExpense;
+
         Ok(Transformation {
             spec_id: id,
             label: TransactionLabel {
@@ -1063,11 +1071,7 @@ impl<H: Handlers> SpecProcessor<H> {
             ext_transaction_specs,
             ext_assertion_specs,
             expense_history_delta: None,
-            annotations: {
-                let mut v = annotations;
-                v.push(Annotation::ImmaterialExpense);
-                v
-            },
+            annotations: annotations.into_iter().chain(once(note)).collect(),
         })
     }
 
@@ -1111,6 +1115,12 @@ impl<H: Handlers> SpecProcessor<H> {
                 },
             ],
         };
+        let assrt = AssertionSpec {
+            date: payment_date,
+            handler: AssertableHandler::ReimbursableEntity(r_handler),
+            balance: 0.0,
+            commodity,
+        };
 
         Ok(Transformation {
             spec_id: id,
@@ -1120,7 +1130,7 @@ impl<H: Handlers> SpecProcessor<H> {
             },
             transactions: vec![tx],
             ext_transaction_specs,
-            ext_assertion_specs,
+            ext_assertion_specs: ext_assertion_specs.into_iter().chain(once(assrt)).collect(),
             expense_history_delta: None,
             annotations,
         })
@@ -1185,6 +1195,20 @@ impl<H: Handlers> SpecProcessor<H> {
                 ],
             }
         };
+        let assrt = vec![
+            AssertionSpec {
+                date: accrual_date,
+                handler: AssertableHandler::Custom(VAT_RECEIVABLE.clone().into()),
+                balance: 0.0,
+                commodity: commodity.clone(),
+            },
+            AssertionSpec {
+                date: accrual_date,
+                handler: AssertableHandler::Custom(VAT_PAYABLE.clone().into()),
+                balance: 0.0,
+                commodity: commodity.clone(),
+            },
+        ];
 
         Ok(Transformation {
             spec_id: id,
@@ -1194,7 +1218,7 @@ impl<H: Handlers> SpecProcessor<H> {
             },
             transactions: vec![tx],
             ext_transaction_specs,
-            ext_assertion_specs,
+            ext_assertion_specs: ext_assertion_specs.into_iter().chain(assrt).collect(),
             expense_history_delta: None,
             annotations,
         })
