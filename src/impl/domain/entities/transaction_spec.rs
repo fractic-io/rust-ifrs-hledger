@@ -1,6 +1,6 @@
 use chrono::NaiveDate;
 
-use crate::entities::{Annotation, Transaction};
+use crate::entities::{Annotation, AssertionSpec, Transaction};
 
 use super::handlers::Handlers;
 
@@ -55,8 +55,9 @@ pub(crate) struct DecoratedTransactionSpec<H: Handlers> {
     pub amount: f64,
     pub commodity: H::M,
     pub backing_account: BackingAccount<H::R, H::C>,
-    pub side_transactions: Vec<Transaction>,
     pub annotations: Vec<Annotation>,
+    pub ext_transaction_specs: Vec<DecoratedTransactionSpec<H>>,
+    pub ext_assertion_specs: Vec<AssertionSpec<H>>,
 }
 
 // --
