@@ -4,14 +4,11 @@ use chrono::{Duration, NaiveDate};
 use fractic_server_error::ServerError;
 
 use crate::{
-    domain::logic::utils::{
-        compute_daily_average, month_end_dates, month_start_date, monthly_accrual_periods,
-        MonthlyAccrualPeriod,
-    },
+    domain::logic::utils::{compute_daily_average, monthly_accrual_periods, MonthlyAccrualPeriod},
     entities::{
-        asset, Account, AccountingLogic, Annotation, Assertion, AssetHandler, BackingAccount,
-        CashHandler, CommodityHandler, DecoratedFinancialRecordSpecs, DecoratedTransactionSpec,
-        ExpenseAccount, ExpenseHandler, FinancialRecords, Handlers, IncomeHandler, PayeeHandler,
+        Account, AccountingLogic, Annotation, Assertion, AssetHandler, BackingAccount, CashHandler,
+        CommodityHandler, DecoratedFinancialRecordSpecs, DecoratedTransactionSpec, ExpenseAccount,
+        ExpenseHandler, FinancialRecords, Handlers, IncomeHandler, PayeeHandler,
         ReimbursableEntityHandler, Transaction, TransactionLabel, TransactionPosting,
         TransactionSpecId,
     },
@@ -20,6 +17,7 @@ use crate::{
         UnexpectedPositiveValue, VariableExpenseInvalidPaymentDate,
         VariableExpenseNoHistoricalData,
     },
+    impl_ext::standard_accounts::vat::{VAT_PAYABLE, VAT_RECEIVABLE},
 };
 
 pub(crate) struct SpecProcessor<H: Handlers> {
@@ -673,100 +671,24 @@ impl<H: Handlers> SpecProcessor<H> {
         spec: DecoratedTransactionSpec<H>,
     ) -> Result<Transformation, ServerError> {
         let DecoratedTransactionSpec {
-            id,
             accrual_start,
             accrual_end: Some(accrual_end),
-            payment_date,
             accounting_logic:
                 AccountingLogic::VariableExpenseInit {
-                    account: e_handler,
+                    account: ref e_handler,
                     estimate,
                 },
-            payee,
-            description,
-            amount,
-            commodity,
-            backing_account,
-            annotations,
-            side_transactions,
+            ..
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
         };
-        amount_should_be_negative!(amount, "VariableExpenseInit", &id);
 
         let accrual_days = (accrual_end - accrual_start).num_days() + 1;
         let init_daily = (estimate as f64) / (accrual_days as f64);
 
-        let month_ends = month_end_dates(accrual_start, accrual_end)?;
-        let mut transactions = Vec::new();
-        let mut estimated_sum = 0.0;
-        for m in month_ends {
-            let period_start = if accrual_start > month_start_date(m) {
-                accrual_start
-            } else {
-                month_start_date(m)
-            };
-            let period_end = if accrual_end < m { accrual_end } else { m };
-            let days_in_period = (period_end - period_start).num_days() + 1;
-            let monthly_estimate = init_daily * (days_in_period as f64);
-            estimated_sum += monthly_estimate;
-            transactions.push(Transaction {
-                spec_id: id,
-                date: m,
-                comment: Some(format!(
-                    "Variable Expense Accrual for Period {} to {}",
-                    period_start, period_end
-                )),
-                postings: vec![
-                    TransactionPosting {
-                        account: e_handler.account().into(),
-                        amount: monthly_estimate,
-                        currency: commodity.iso_symbol(),
-                    },
-                    TransactionPosting {
-                        account: e_handler.while_payable().into(),
-                        amount: -monthly_estimate,
-                        currency: commodity.iso_symbol(),
-                    },
-                ],
-            });
-        }
-        transactions.push(Transaction {
-            spec_id: id,
-            date: payment_date,
-            comment: Some("Clear Variable Expense Adjustments".into()),
-            postings: vec![
-                TransactionPosting {
-                    account: e_handler.while_payable().into(),
-                    amount: estimated_sum,
-                    currency: commodity.iso_symbol(),
-                },
-                TransactionPosting {
-                    account: backing_account.account(),
-                    amount: -estimated_sum,
-                    currency: commodity.iso_symbol(),
-                },
-            ],
-        });
-
-        let new_record = VariableExpenseRecord {
-            start: accrual_start,
-            end: accrual_end,
-            daily_rate: init_daily,
-        };
-
-        Ok(Transformation {
-            spec_id: id,
-            label: TransactionLabel {
-                payee: payee.name(),
-                description,
-            },
-            transactions,
-            side_transactions,
-            expense_history_delta: Some((e_handler.account().into(), new_record)),
-            annotations,
-        })
+        let e_handler = e_handler.clone();
+        Self::process_variable_expense_helper(spec, e_handler, init_daily)
     }
 
     /// Uses the past 90 days of historical data (prior to accrual date) to
@@ -777,11 +699,43 @@ impl<H: Handlers> SpecProcessor<H> {
         history: &HashMap<ExpenseAccount, Vec<VariableExpenseRecord>>,
     ) -> Result<Transformation, ServerError> {
         let DecoratedTransactionSpec {
+            accrual_start,
+            accounting_logic: AccountingLogic::VariableExpense(ref e_handler),
+            ref description,
+            ..
+        } = spec
+        else {
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+        };
+
+        // Use the last 90 days of history before (and including) the accrual_date.
+        let history_window_start = accrual_start - Duration::days(90);
+        let history_window_end = accrual_start; // inclusive
+        let expense_account = e_handler.account();
+        let records = history
+            .get(&expense_account)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[]);
+
+        // Compute the average daily accrual rate over the 90-day window.
+        let daily_rate = compute_daily_average(records, history_window_start, history_window_end)
+            .ok_or_else(|| VariableExpenseNoHistoricalData::new(description))?;
+
+        let e_handler = e_handler.clone();
+        Self::process_variable_expense_helper(spec, e_handler, daily_rate)
+    }
+
+    fn process_variable_expense_helper(
+        spec: DecoratedTransactionSpec<H>,
+        e_handler: H::E,
+        daily_rate: f64,
+    ) -> Result<Transformation, ServerError> {
+        let DecoratedTransactionSpec {
             id,
             accrual_start,
             accrual_end: Some(accrual_end),
             payment_date,
-            accounting_logic: AccountingLogic::VariableExpense(e_handler),
+            accounting_logic: _,
             payee,
             description,
             amount,
@@ -803,21 +757,8 @@ impl<H: Handlers> SpecProcessor<H> {
             ));
         }
 
-        // Use the last 90 days of history before (and including) the accrual_date.
-        let history_window_start = accrual_start - Duration::days(90);
-        let history_window_end = accrual_start; // include accrual_date itself
-        let expense_account = e_handler.account();
-        let records = history
-            .get(&expense_account)
-            .map(|v| v.as_slice())
-            .unwrap_or(&[]);
-
-        // Compute the average daily accrual rate over the 90-day window.
-        let avg_daily = compute_daily_average(records, history_window_start, history_window_end)
-            .ok_or_else(|| VariableExpenseNoHistoricalData::new(&description))?;
-
         let accrual_days = (accrual_end - accrual_start).num_days() + 1;
-        let estimated_total = avg_daily * (accrual_days as f64);
+        let estimated_total = daily_rate * (accrual_days as f64);
 
         // Break into monthly accrual periods.
         let mut transactions = Vec::new();
@@ -828,7 +769,7 @@ impl<H: Handlers> SpecProcessor<H> {
             adjustment_date,
         } in monthly_accrual_periods(accrual_start, accrual_end)?
         {
-            let period_estimate = avg_daily * (num_days as f64);
+            let period_estimate = daily_rate * (num_days as f64);
             transactions.push(Transaction {
                 spec_id: id,
                 date: adjustment_date,
@@ -851,39 +792,52 @@ impl<H: Handlers> SpecProcessor<H> {
             });
         }
 
-        let discrepancy = amount - estimated_total;
-        let mut postings = vec![
-            TransactionPosting {
-                account: e_handler.while_payable().into(),
-                amount: estimated_total,
-                currency: commodity.iso_symbol(),
-            },
-            TransactionPosting {
-                account: backing_account.account(),
-                amount: -estimated_total,
-                currency: commodity.iso_symbol(),
-            },
-        ];
+        // Record any estimation discrepancies.
+        let discrepancy = amount.abs() - estimated_total;
         if discrepancy.abs() > 0.01 {
-            postings.push(TransactionPosting {
-                account: e_handler.account().into(),
-                amount: discrepancy,
-                currency: commodity.iso_symbol(),
+            transactions.push(Transaction {
+                spec_id: id,
+                date: payment_date,
+                comment: Some("Correct estimatation discrepancy".into()),
+                postings: vec![
+                    TransactionPosting {
+                        account: e_handler.while_payable().into(),
+                        amount: -discrepancy,
+                        currency: commodity.iso_symbol(),
+                    },
+                    TransactionPosting {
+                        account: e_handler.account().into(),
+                        amount: discrepancy,
+                        currency: commodity.iso_symbol(),
+                    },
+                ],
             });
         }
-        // Clearing transaction on the payment date.
+
+        // Record the clearing transaction.
         transactions.push(Transaction {
             spec_id: id,
             date: payment_date,
-            comment: Some("Clear Variable Expense Adjustments".into()),
-            postings,
+            comment: Some("Clear payable expense".into()),
+            postings: vec![
+                TransactionPosting {
+                    account: backing_account.account(),
+                    amount: -amount.abs(),
+                    currency: commodity.iso_symbol(),
+                },
+                TransactionPosting {
+                    account: e_handler.while_payable().into(),
+                    amount: amount.abs(),
+                    currency: commodity.iso_symbol(),
+                },
+            ],
         });
 
-        // Return the transformation and record this variable expense’s daily rate for future history.
+        // Record this variable expense’s daily rate for future history.
         let new_record = VariableExpenseRecord {
             start: accrual_start,
             end: accrual_end,
-            daily_rate: avg_daily,
+            daily_rate,
         };
 
         Ok(Transformation {
@@ -894,7 +848,7 @@ impl<H: Handlers> SpecProcessor<H> {
             },
             transactions,
             side_transactions,
-            expense_history_delta: Some((expense_account.into(), new_record)),
+            expense_history_delta: Some((e_handler.account(), new_record)),
             annotations,
         })
     }
@@ -928,12 +882,12 @@ impl<H: Handlers> SpecProcessor<H> {
             postings: vec![
                 TransactionPosting {
                     account: i_handler.account().into(),
-                    amount,
+                    amount: -amount.abs(),
                     currency: commodity.iso_symbol(),
                 },
                 TransactionPosting {
                     account: backing_account.account(),
-                    amount: -amount,
+                    amount: amount.abs(),
                     currency: commodity.iso_symbol(),
                 },
             ],
@@ -984,13 +938,13 @@ impl<H: Handlers> SpecProcessor<H> {
             comment: None,
             postings: vec![
                 TransactionPosting {
-                    account: e_handler.account().into(),
-                    amount: amount.abs(),
+                    account: backing_account.account(),
+                    amount: -amount.abs(),
                     currency: commodity.iso_symbol(),
                 },
                 TransactionPosting {
-                    account: backing_account.account(),
-                    amount: -amount.abs(),
+                    account: e_handler.account().into(),
+                    amount: amount.abs(),
                     currency: commodity.iso_symbol(),
                 },
             ],
@@ -1039,12 +993,12 @@ impl<H: Handlers> SpecProcessor<H> {
             comment: None,
             postings: vec![
                 TransactionPosting {
-                    account: r_handler.account().into(),
+                    account: backing_account.account(),
                     amount: -amount.abs(),
                     currency: commodity.iso_symbol(),
                 },
                 TransactionPosting {
-                    account: backing_account.account(),
+                    account: r_handler.account().into(),
                     amount: amount.abs(),
                     currency: commodity.iso_symbol(),
                 },
@@ -1083,22 +1037,42 @@ impl<H: Handlers> SpecProcessor<H> {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
         };
 
-        let tx = Transaction {
-            spec_id: id,
-            date: accrual_date,
-            comment: Some(format!("Clear VAT from {} to {}", from, to)),
-            postings: vec![
-                TransactionPosting {
-                    account: asset("VatReceivable").into(),
-                    amount: -amount,
-                    currency: commodity.iso_symbol(),
-                },
-                TransactionPosting {
-                    account: cash.account().into(),
-                    amount,
-                    currency: commodity.iso_symbol(),
-                },
-            ],
+        let tx = if amount > 0.0 {
+            Transaction {
+                spec_id: id,
+                date: accrual_date,
+                comment: Some(format!("Clear VAT receivable for {} - {}", from, to)),
+                postings: vec![
+                    TransactionPosting {
+                        account: VAT_RECEIVABLE.clone().into(),
+                        amount: -amount.abs(),
+                        currency: commodity.iso_symbol(),
+                    },
+                    TransactionPosting {
+                        account: cash.account().into(),
+                        amount: amount.abs(),
+                        currency: commodity.iso_symbol(),
+                    },
+                ],
+            }
+        } else {
+            Transaction {
+                spec_id: id,
+                date: accrual_date,
+                comment: Some(format!("Clear VAT payable for {} - {}", from, to)),
+                postings: vec![
+                    TransactionPosting {
+                        account: cash.account().into(),
+                        amount: -amount.abs(),
+                        currency: commodity.iso_symbol(),
+                    },
+                    TransactionPosting {
+                        account: VAT_PAYABLE.clone().into(),
+                        amount: amount.abs(),
+                        currency: commodity.iso_symbol(),
+                    },
+                ],
+            }
         };
 
         Ok(Transformation {

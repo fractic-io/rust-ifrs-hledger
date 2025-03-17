@@ -1,6 +1,10 @@
 // Crate-internal.
 // ---
 
+pub(crate) mod standard_accounts {
+    pub(crate) mod vat;
+}
+
 pub(crate) mod standard_decorators {
     pub(crate) mod card_fx;
     pub(crate) mod payment_fee;

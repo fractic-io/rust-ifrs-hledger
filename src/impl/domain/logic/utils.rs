@@ -75,9 +75,9 @@ pub(crate) fn monthly_accrual_periods(
 }
 
 /// Given a slice of variable expense records and a window defined by
-/// [window_start, window_end], this computes the “effective” daily accrual
-/// rate by summing the contributions of all overlapping records. Days not
-/// covered by any record count as zero.
+/// [window_start, window_end], this computes the “effective” daily accrual rate
+/// by summing the contributions of all overlapping records. Days not covered by
+/// any record count as zero.
 pub(crate) fn compute_daily_average(
     records: &[VariableExpenseRecord],
     window_start: NaiveDate,
