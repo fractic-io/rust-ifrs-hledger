@@ -33,7 +33,7 @@ impl HledgerPrinter {
         let mut ledger_output = String::new();
 
         ledger_output.push_str(
-            "; --- Accounts --------------------------------------------------------------\n\n",
+            "; --- Accounts -----------------------------------------------------------------\n\n",
         );
         let sorted_account_declarations = {
             let mut v: Vec<String> = financial_records
@@ -41,7 +41,7 @@ impl HledgerPrinter {
                 .iter()
                 .map(|account| {
                     format!(
-                        "account {:58}  ; type: {}\n",
+                        "account {:61}  ; type: {}\n",
                         account.ledger(),
                         account.type_tag()
                     )
@@ -56,7 +56,7 @@ impl HledgerPrinter {
         ledger_output.push_str("\n\n");
 
         ledger_output.push_str(
-            "; --- Transactions ----------------------------------------------------------\n\n",
+            "; --- Transactions -------------------------------------------------------------\n\n",
         );
         let sorted_transactions = {
             let mut v: Vec<&Transaction> = financial_records.transactions.iter().collect();
@@ -77,7 +77,7 @@ impl HledgerPrinter {
             ledger_output.push_str(&format!("{} ({}) {}\n", tx.date, tx.spec_id, label));
             for posting in &tx.postings {
                 ledger_output.push_str(&format!(
-                    "    {:53} {:15.2} {}\n",
+                    "    {:56} {:15.2} {}\n",
                     posting.account.ledger(),
                     posting.amount,
                     posting.currency
@@ -88,14 +88,20 @@ impl HledgerPrinter {
                 .get(&tx.spec_id)
                 .unwrap_or(&vec![])
             {
-                ledger_output.push_str(&format!("    ; {}\n", annotation));
+                let s = annotation.to_string();
+                let wrapped = textwrap::wrap(&s, 74);
+                let prefix = "    ; ";
+                ledger_output.push_str(&format!("{}\n", prefix));
+                for line in wrapped {
+                    ledger_output.push_str(&format!("{}{}\n", prefix, line));
+                }
             }
             ledger_output.push('\n');
         }
         ledger_output.push_str("\n\n");
 
         ledger_output.push_str(
-            "; --- Assertions ------------------------------------------------------------\n\n",
+            "; --- Assertions ---------------------------------------------------------------\n\n",
         );
         let sorted_assertions = {
             let mut v: Vec<&Assertion> = financial_records.assertions.iter().collect();
@@ -105,7 +111,7 @@ impl HledgerPrinter {
         for assertion in sorted_assertions {
             ledger_output.push_str(&format!("{} <assertion>\n", assertion.date));
             ledger_output.push_str(&format!(
-                "    {:48} 0 == {:15.2} {}\n",
+                "    {:51} 0 == {:15.2} {}\n",
                 assertion.account.ledger(),
                 assertion.balance,
                 assertion.currency,
