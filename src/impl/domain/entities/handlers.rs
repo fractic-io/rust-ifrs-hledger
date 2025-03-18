@@ -1,3 +1,4 @@
+use fractic_server_error::ServerError;
 use serde::Deserialize;
 
 use super::{
@@ -43,7 +44,7 @@ pub trait ReimbursableEntityHandler: for<'de> Deserialize<'de> + std::fmt::Debug
 }
 
 pub trait DecoratorHandler: for<'de> Deserialize<'de> + std::fmt::Debug + Clone {
-    fn logic<H: Handlers>(&self) -> Box<dyn DecoratorLogic<H>>;
+    fn logic<H: Handlers>(&self) -> Result<Box<dyn DecoratorLogic<H>>, ServerError>;
 }
 
 pub trait CommodityHandler: for<'de> Deserialize<'de> + std::fmt::Debug + Clone {
