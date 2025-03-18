@@ -37,20 +37,18 @@ impl<'a> AnnotationProcessor<'a> {
                 map
             });
 
-        let accounting_notes = annotations_map
+        let notes = annotations_map
             .into_iter()
             .map(|(annotation, labels)| {
-                format!(
-                    "{} | Applies to: {}",
-                    annotation,
-                    labels.into_iter().collect::<Vec<_>>().join(", ")
+                (
+                    annotation.to_string(),
+                    labels.into_iter().collect::<Vec<_>>().join(", "),
                 )
             })
             .collect();
 
         Ok(NotesToFinancialRecords {
-            transaction_notes: vec![],
-            accounting_notes,
+            transaction_notes: notes,
         })
     }
 }

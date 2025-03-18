@@ -39,6 +39,5 @@ pub struct FinancialRecords {
 
 #[derive(Debug, Clone)]
 pub struct NotesToFinancialRecords {
-    pub transaction_notes: Vec<String>,
-    pub accounting_notes: Vec<String>,
+    pub transaction_notes: Vec<(String, String)>,
 }

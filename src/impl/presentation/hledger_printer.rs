@@ -1,4 +1,4 @@
-use crate::entities::{Account, FinancialRecords, Transaction};
+use crate::entities::{Account, Assertion, FinancialRecords, Transaction};
 
 impl Account {
     fn ledger(&self) -> String {
@@ -32,14 +32,16 @@ impl HledgerPrinter {
     pub(crate) fn print_ledger(&self, financial_records: &FinancialRecords) -> String {
         let mut ledger_output = String::new();
 
-        ledger_output.push_str("; ------------ Accounts ------------\n\n");
+        ledger_output.push_str(
+            "; --- Accounts --------------------------------------------------------------\n\n",
+        );
         let sorted_account_declarations = {
             let mut v: Vec<String> = financial_records
                 .accounts
                 .iter()
                 .map(|account| {
                     format!(
-                        "account {}  ; type: {}\n",
+                        "account {:58}  ; type: {}\n",
                         account.ledger(),
                         account.type_tag()
                     )
@@ -53,7 +55,9 @@ impl HledgerPrinter {
         }
         ledger_output.push_str("\n\n");
 
-        ledger_output.push_str("; ------------ Transactions ------------\n\n");
+        ledger_output.push_str(
+            "; --- Transactions ----------------------------------------------------------\n\n",
+        );
         let sorted_transactions = {
             let mut v: Vec<&Transaction> = financial_records.transactions.iter().collect();
             v.sort_by_key(|tx| tx.date);
@@ -73,7 +77,7 @@ impl HledgerPrinter {
             ledger_output.push_str(&format!("{} ({}) {}\n", tx.date, tx.spec_id, label));
             for posting in &tx.postings {
                 ledger_output.push_str(&format!(
-                    "    {:30} {:10.2} {}\n",
+                    "    {:53} {:15.2} {}\n",
                     posting.account.ledger(),
                     posting.amount,
                     posting.currency
@@ -90,11 +94,18 @@ impl HledgerPrinter {
         }
         ledger_output.push_str("\n\n");
 
-        ledger_output.push_str("; ------------ Assertions ------------\n\n");
-        for assertion in &financial_records.assertions {
+        ledger_output.push_str(
+            "; --- Assertions ------------------------------------------------------------\n\n",
+        );
+        let sorted_assertions = {
+            let mut v: Vec<&Assertion> = financial_records.assertions.iter().collect();
+            v.sort_by_key(|tx| tx.date);
+            v
+        };
+        for assertion in sorted_assertions {
             ledger_output.push_str(&format!("{} <assertion>\n", assertion.date));
             ledger_output.push_str(&format!(
-                "    {:30} 0 == {:10.2} {}\n",
+                "    {:48} 0 == {:15.2} {}\n",
                 assertion.account.ledger(),
                 assertion.balance,
                 assertion.currency,
