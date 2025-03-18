@@ -1,14 +1,17 @@
 use chrono::NaiveDate;
 
-use crate::entities::{Annotation, AssertionSpec, Transaction};
+use crate::entities::{Annotation, Assertion, Transaction};
 
-use super::handlers::Handlers;
+use super::{
+    account::Account,
+    handlers::{CashHandler, Handlers, ReimbursableEntityHandler},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TransactionSpecId(pub(crate) u64);
 
 #[derive(Debug)]
-pub(crate) enum AccountingLogic<E, A, I, R> {
+pub enum AccountingLogic<E, A, I, R> {
     SimpleExpense(E),
     Capitalize(A),
     Amortize(A),
@@ -21,8 +24,8 @@ pub(crate) enum AccountingLogic<E, A, I, R> {
     ClearVat { from: NaiveDate, to: NaiveDate },
 }
 
-#[derive(Debug)]
-pub(crate) enum BackingAccount<R, C> {
+#[derive(Debug, Clone)]
+pub enum BackingAccount<R, C> {
     Reimburse(R),
     Cash(C),
 }
@@ -44,7 +47,7 @@ pub(crate) struct TransactionSpec<H: Handlers> {
 }
 
 #[derive(Debug)]
-pub(crate) struct DecoratedTransactionSpec<H: Handlers> {
+pub struct DecoratedTransactionSpec<H: Handlers> {
     pub id: TransactionSpecId,
     pub accrual_start: NaiveDate,
     pub accrual_end: Option<NaiveDate>,
@@ -56,8 +59,8 @@ pub(crate) struct DecoratedTransactionSpec<H: Handlers> {
     pub commodity: H::M,
     pub backing_account: BackingAccount<H::R, H::C>,
     pub annotations: Vec<Annotation>,
-    pub ext_transaction_specs: Vec<DecoratedTransactionSpec<H>>,
-    pub ext_assertion_specs: Vec<AssertionSpec<H>>,
+    pub ext_transactions: Vec<Transaction>,
+    pub ext_assertions: Vec<Assertion>,
 }
 
 // --
@@ -65,5 +68,18 @@ pub(crate) struct DecoratedTransactionSpec<H: Handlers> {
 impl std::fmt::Display for TransactionSpecId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+impl<R, C> BackingAccount<R, C>
+where
+    R: ReimbursableEntityHandler,
+    C: CashHandler,
+{
+    pub fn account(&self) -> Account {
+        match self {
+            BackingAccount::Reimburse(r) => r.account().into(),
+            BackingAccount::Cash(c) => c.account().into(),
+        }
     }
 }

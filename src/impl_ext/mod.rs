@@ -2,6 +2,7 @@
 // ---
 
 pub(crate) mod standard_accounts {
+    pub(crate) mod core;
     pub(crate) mod vat;
 }
 
@@ -19,6 +20,11 @@ pub mod exports {
     // internal structure.
     //
     // The contents of this mod are re-exported in the root of the crate.
+
+    pub mod standard_accounts {
+        pub use crate::impl_ext::standard_accounts::core::*;
+        pub use crate::impl_ext::standard_accounts::vat::*;
+    }
 
     pub mod standard_decorators {
         pub use crate::impl_ext::standard_decorators::card_fx::*;

@@ -43,7 +43,7 @@ pub trait ReimbursableEntityHandler: for<'de> Deserialize<'de> + std::fmt::Debug
 }
 
 pub trait DecoratorHandler: for<'de> Deserialize<'de> + std::fmt::Debug + Clone {
-    fn logic(&self) -> Box<dyn DecoratorLogic>;
+    fn logic<H: Handlers>(&self) -> Box<dyn DecoratorLogic<H>>;
 }
 
 pub trait CommodityHandler: for<'de> Deserialize<'de> + std::fmt::Debug + Clone {
@@ -54,7 +54,7 @@ pub trait CommodityHandler: for<'de> Deserialize<'de> + std::fmt::Debug + Clone 
 // shortening type parameters throughout the repo.
 // ---
 
-pub(crate) trait Handlers: std::fmt::Debug {
+pub trait Handlers: std::fmt::Debug {
     type A: AssetHandler;
     type I: IncomeHandler;
     type E: ExpenseHandler;

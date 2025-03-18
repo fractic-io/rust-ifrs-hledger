@@ -1,6 +1,9 @@
 use fractic_server_error::ServerError;
 
-use crate::entities::{DecoratedFinancialRecordSpecs, FinancialRecordSpecs, Handlers};
+use crate::entities::{
+    DecoratedFinancialRecordSpecs, DecoratedTransactionSpec, DecoratorHandler,
+    FinancialRecordSpecs, Handlers,
+};
 
 pub(crate) struct DecoratorProcessor<H: Handlers> {
     specs: FinancialRecordSpecs<H>,
@@ -12,7 +15,39 @@ impl<H: Handlers> DecoratorProcessor<H> {
     }
 
     pub(crate) fn process(self) -> Result<DecoratedFinancialRecordSpecs<H>, ServerError> {
-        unimplemented!()
+        let FinancialRecordSpecs {
+            transaction_specs,
+            assertion_specs,
+        } = self.specs;
+
+        let decorated_transaction_specs = transaction_specs
+            .into_iter()
+            .map(|tx| {
+                tx.decorators.into_iter().try_fold(
+                    DecoratedTransactionSpec {
+                        id: tx.id,
+                        accrual_start: tx.accrual_start,
+                        accrual_end: tx.accrual_end,
+                        payment_date: tx.payment_date,
+                        accounting_logic: tx.accounting_logic,
+                        payee: tx.payee,
+                        description: tx.description,
+                        amount: tx.amount,
+                        commodity: tx.commodity,
+                        backing_account: tx.backing_account,
+                        annotations: tx.annotations,
+                        ext_transactions: Default::default(),
+                        ext_assertions: Default::default(),
+                    },
+                    |acc, dec| dec.logic().apply(acc),
+                )
+            })
+            .collect::<Result<Vec<_>, ServerError>>()?;
+
+        Ok(DecoratedFinancialRecordSpecs {
+            transaction_specs: decorated_transaction_specs,
+            assertion_specs,
+        })
     }
 }
 
