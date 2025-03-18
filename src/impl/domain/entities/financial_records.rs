@@ -1,7 +1,7 @@
 // Before processing.
 // ---
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::entities::{
     Annotation, Assertion, AssertionSpec, DecoratedTransactionSpec, Transaction, TransactionLabel,
@@ -30,7 +30,7 @@ pub(crate) struct DecoratedFinancialRecordSpecs<H: Handlers> {
 
 #[derive(Debug, Clone)]
 pub struct FinancialRecords {
-    pub accounts: Vec<Account>,
+    pub accounts: HashSet<Account>,
     pub transactions: Vec<Transaction>,
     pub assertions: Vec<Assertion>,
     pub label_lookup: HashMap<TransactionSpecId, TransactionLabel>,

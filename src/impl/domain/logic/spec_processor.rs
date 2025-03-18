@@ -1,4 +1,7 @@
-use std::{collections::HashMap, iter::once};
+use std::{
+    collections::{HashMap, HashSet},
+    iter::once,
+};
 
 use chrono::{Duration, NaiveDate};
 use fractic_server_error::ServerError;
@@ -55,7 +58,7 @@ struct Transformation {
 }
 
 struct FoldState {
-    accounts: Vec<Account>,
+    accounts: HashSet<Account>,
     transactions: Vec<Transaction>,
     assertions: Vec<Assertion>,
     expense_history_lookup: HashMap<ExpenseAccount, ExpenseHistory>,
@@ -66,7 +69,7 @@ struct FoldState {
 impl FoldState {
     fn new() -> Self {
         Self {
-            accounts: Vec::new(),
+            accounts: HashSet::new(),
             transactions: Vec::new(),
             assertions: Vec::new(),
             expense_history_lookup: HashMap::new(),

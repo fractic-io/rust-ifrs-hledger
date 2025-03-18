@@ -179,9 +179,9 @@ impl StandardDecoratorVatKorea {
                     },
                     TransactionPosting {
                         account: if amount_vat > 0.0 {
-                            VAT_RECEIVABLE.clone().into()
-                        } else {
                             VAT_PAYABLE.clone().into()
+                        } else {
+                            VAT_RECEIVABLE.clone().into()
                         },
                         amount: -amount_vat,
                         currency: commodity.iso_symbol(),

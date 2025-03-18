@@ -79,10 +79,14 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                     let backing_account: BackingAccountModel<H::R, H::C> =
                         from_str(raw_backing_account)
                             .map_err(|e| InvalidRon::with_debug("BackingAccount", &e))?;
-                    let custom_notes: Vec<Annotation> = raw_notes
-                        .split(',')
-                        .map(|n| Annotation::Custom(n.into()))
-                        .collect();
+                    let custom_notes: Vec<Annotation> = if raw_notes.is_empty() {
+                        vec![]
+                    } else {
+                        raw_notes
+                            .split(',')
+                            .map(|n| Annotation::Custom(n.into()))
+                            .collect()
+                    };
 
                     // Build.
                     Ok(TransactionSpec {

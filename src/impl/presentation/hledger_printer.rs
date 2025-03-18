@@ -1,4 +1,4 @@
-use crate::entities::{Account, FinancialRecords};
+use crate::entities::{Account, FinancialRecords, Transaction};
 
 impl Account {
     fn ledger(&self) -> String {
@@ -32,18 +32,34 @@ impl HledgerPrinter {
     pub(crate) fn print_ledger(&self, financial_records: &FinancialRecords) -> String {
         let mut ledger_output = String::new();
 
-        ledger_output.push_str("; ------------ Accounts ------------\n");
-        for account in &financial_records.accounts {
-            ledger_output.push_str(&format!(
-                "account {}  ; type: {}\n",
-                account.ledger(),
-                account.type_tag()
-            ));
+        ledger_output.push_str("; ------------ Accounts ------------\n\n");
+        let sorted_account_declarations = {
+            let mut v: Vec<String> = financial_records
+                .accounts
+                .iter()
+                .map(|account| {
+                    format!(
+                        "account {}  ; type: {}\n",
+                        account.ledger(),
+                        account.type_tag()
+                    )
+                })
+                .collect();
+            v.sort();
+            v
+        };
+        for d in sorted_account_declarations {
+            ledger_output.push_str(&d);
         }
-        ledger_output.push_str("\n\n\n");
+        ledger_output.push_str("\n\n");
 
-        ledger_output.push_str("; ------------ Transactions ------------\n");
-        for tx in &financial_records.transactions {
+        ledger_output.push_str("; ------------ Transactions ------------\n\n");
+        let sorted_transactions = {
+            let mut v: Vec<&Transaction> = financial_records.transactions.iter().collect();
+            v.sort_by_key(|tx| tx.date);
+            v
+        };
+        for tx in sorted_transactions {
             let label = financial_records.label_lookup.get(&tx.spec_id).map_or(
                 "(unknown)".to_string(),
                 |label| {
@@ -72,9 +88,9 @@ impl HledgerPrinter {
             }
             ledger_output.push('\n');
         }
-        ledger_output.push_str("\n\n\n");
+        ledger_output.push_str("\n\n");
 
-        ledger_output.push_str("; ------------ Assertions ------------\n");
+        ledger_output.push_str("; ------------ Assertions ------------\n\n");
         for assertion in &financial_records.assertions {
             ledger_output.push_str(&format!("{} <assertion>\n", assertion.date));
             ledger_output.push_str(&format!(
@@ -85,7 +101,7 @@ impl HledgerPrinter {
             ));
             ledger_output.push('\n');
         }
-        ledger_output.push_str("\n\n\n");
+        ledger_output.push_str("\n\n");
 
         ledger_output
     }
