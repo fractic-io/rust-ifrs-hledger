@@ -1,4 +1,4 @@
-use std::str::FromStr as _;
+use std::{path::PathBuf, str::FromStr as _};
 
 use chrono::NaiveDate;
 use fractic_server_error::ServerError;
@@ -12,23 +12,29 @@ pub struct StandardDecoratorCardFx {
     to_currency: String,
     settle_date: NaiveDate,
     settle_amount: f64,
+    currency_conversion_cache_path: PathBuf,
+    currency_conversion_api_key: String,
 }
 
 impl StandardDecoratorCardFx {
     pub fn new(
-        to_currency: String,
+        to_currency: impl Into<String>,
         settle_date: &String,
         settle_amount: f64,
+        currency_conversion_cache_path: impl Into<PathBuf>,
+        currency_conversion_api_key: impl Into<String>,
     ) -> Result<Self, ServerError> {
         Ok(Self {
-            to_currency,
+            to_currency: to_currency.into(),
             settle_date: ISODateModel::from_str(settle_date)?.into(),
             settle_amount,
+            currency_conversion_cache_path: currency_conversion_cache_path.into(),
+            currency_conversion_api_key: currency_conversion_api_key.into(),
         })
     }
 }
 
-impl<'a, H: Handlers> DecoratorLogic<'a, H> for StandardDecoratorCardFx {
+impl<H: Handlers> DecoratorLogic<H> for StandardDecoratorCardFx {
     fn apply(
         &self,
         tx: DecoratedTransactionSpec<H>,

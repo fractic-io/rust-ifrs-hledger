@@ -18,7 +18,7 @@ impl StandardDecoratorPaymentFee {
     }
 }
 
-impl<'a, H: Handlers> DecoratorLogic<'a, H> for StandardDecoratorPaymentFee {
+impl<H: Handlers> DecoratorLogic<H> for StandardDecoratorPaymentFee {
     fn apply(
         &self,
         mut tx: DecoratedTransactionSpec<H>,

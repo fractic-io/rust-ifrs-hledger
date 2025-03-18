@@ -233,7 +233,7 @@ impl StandardDecoratorVatKorea {
     }
 }
 
-impl<'a, H: Handlers> DecoratorLogic<'a, H> for StandardDecoratorVatKorea {
+impl<H: Handlers> DecoratorLogic<H> for StandardDecoratorVatKorea {
     fn apply(
         &self,
         tx: DecoratedTransactionSpec<H>,

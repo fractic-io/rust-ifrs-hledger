@@ -4,7 +4,7 @@ use crate::entities::DecoratedTransactionSpec;
 
 use super::handlers::Handlers;
 
-pub trait DecoratorLogic<'a, H: Handlers> {
+pub trait DecoratorLogic<H: Handlers> {
     fn apply(
         &self,
         tx: DecoratedTransactionSpec<H>,
