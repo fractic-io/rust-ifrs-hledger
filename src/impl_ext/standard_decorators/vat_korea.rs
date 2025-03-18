@@ -1,5 +1,6 @@
 use std::{iter::once, str::FromStr};
 
+use async_trait::async_trait;
 use chrono::NaiveDate;
 use fractic_server_error::ServerError;
 
@@ -12,6 +13,7 @@ use crate::{
     ext::standard_accounts::{VAT_PAYABLE, VAT_PENDING_RECEIPT, VAT_RECEIVABLE},
 };
 
+#[derive(Debug)]
 enum LogicType {
     AwaitingInvoice,
     Recoverable { invoice_date: NaiveDate },
@@ -19,6 +21,7 @@ enum LogicType {
     ReverseChargeExempt,
 }
 
+#[derive(Debug)]
 pub struct StandardDecoratorVatKorea {
     logic: LogicType,
 }
@@ -233,8 +236,9 @@ impl StandardDecoratorVatKorea {
     }
 }
 
+#[async_trait]
 impl<H: Handlers> DecoratorLogic<H> for StandardDecoratorVatKorea {
-    fn apply(
+    async fn apply(
         &self,
         tx: DecoratedTransactionSpec<H>,
     ) -> Result<DecoratedTransactionSpec<H>, ServerError> {

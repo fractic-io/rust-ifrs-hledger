@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use fractic_server_error::ServerError;
 
 use crate::{
@@ -8,6 +9,7 @@ use crate::{
     ext::standard_accounts::PAYMENT_FEES,
 };
 
+#[derive(Debug)]
 pub struct StandardDecoratorPaymentFee {
     fee: f64,
 }
@@ -18,8 +20,9 @@ impl StandardDecoratorPaymentFee {
     }
 }
 
+#[async_trait]
 impl<H: Handlers> DecoratorLogic<H> for StandardDecoratorPaymentFee {
-    fn apply(
+    async fn apply(
         &self,
         mut tx: DecoratedTransactionSpec<H>,
     ) -> Result<DecoratedTransactionSpec<H>, ServerError> {

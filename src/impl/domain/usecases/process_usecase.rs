@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use fractic_server_error::ServerError;
 
 use crate::{
@@ -12,20 +13,21 @@ use crate::{
     entities::{FinancialRecords, Handlers, NotesToFinancialRecords},
 };
 
-pub trait ProcessUsecase {
-    fn from_string(
+#[async_trait]
+pub trait ProcessUsecase: Send + Sync {
+    async fn from_string(
         &self,
         balances_csv: &str,
         transactions_csv: &str,
     ) -> Result<(FinancialRecords, NotesToFinancialRecords), ServerError>;
 
-    fn from_file<P>(
+    async fn from_file<P>(
         &self,
         balances_csv: P,
         transactions_csv: P,
     ) -> Result<(FinancialRecords, NotesToFinancialRecords), ServerError>
     where
-        P: AsRef<std::path::Path>;
+        P: AsRef<std::path::Path> + Send;
 }
 
 pub(crate) struct ProcessUsecaseImpl<
@@ -39,12 +41,13 @@ pub(crate) struct ProcessUsecaseImpl<
     _phantom: std::marker::PhantomData<H>,
 }
 
+#[async_trait]
 impl<H, R1> ProcessUsecase for ProcessUsecaseImpl<H, R1>
 where
     H: Handlers,
     R1: RecordsRepository<H>,
 {
-    fn from_string(
+    async fn from_string(
         &self,
         transactions_csv: &str,
         balances_csv: &str,
@@ -52,24 +55,25 @@ where
         let specs = self
             .records_repository
             .from_string(transactions_csv, balances_csv)?;
-        let decorated_specs = DecoratorProcessor::new(specs).process()?;
+        let decorated_specs = DecoratorProcessor::new(specs).process().await?;
         let financial_records = SpecProcessor::new(decorated_specs).process()?;
         let notes_to_financial_records = AnnotationProcessor::new(&financial_records).process()?;
         Ok((financial_records, notes_to_financial_records))
     }
 
-    fn from_file<P>(
+    async fn from_file<P>(
         &self,
         transactions_csv: P,
         balances_csv: P,
     ) -> Result<(FinancialRecords, NotesToFinancialRecords), ServerError>
     where
-        P: AsRef<std::path::Path>,
+        P: AsRef<std::path::Path> + Send,
     {
         let specs = self
             .records_repository
-            .from_file(transactions_csv, balances_csv)?;
-        let decorated_specs = DecoratorProcessor::new(specs).process()?;
+            .from_file(transactions_csv, balances_csv)
+            .await?;
+        let decorated_specs = DecoratorProcessor::new(specs).process().await?;
         let financial_records = SpecProcessor::new(decorated_specs).process()?;
         let notes_to_financial_records = AnnotationProcessor::new(&financial_records).process()?;
         Ok((financial_records, notes_to_financial_records))

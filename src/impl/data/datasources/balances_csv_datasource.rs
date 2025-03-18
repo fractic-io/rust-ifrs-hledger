@@ -1,5 +1,6 @@
-use std::{fs, str::FromStr as _};
+use std::str::FromStr as _;
 
+use async_trait::async_trait;
 use fractic_server_error::ServerError;
 use ron::from_str;
 
@@ -10,12 +11,13 @@ use crate::{
     errors::{InvalidCsv, InvalidRon, ReadError},
 };
 
-pub(crate) trait BalancesCsvDatasource<H: Handlers> {
+#[async_trait]
+pub(crate) trait BalancesCsvDatasource<H: Handlers>: Send + Sync {
     fn from_string(&self, s: &str) -> Result<Vec<AssertionSpec<H>>, ServerError>;
 
-    fn from_file<P>(&self, path: P) -> Result<Vec<AssertionSpec<H>>, ServerError>
+    async fn from_file<P>(&self, path: P) -> Result<Vec<AssertionSpec<H>>, ServerError>
     where
-        P: AsRef<std::path::Path>;
+        P: AsRef<std::path::Path> + Send;
 }
 
 pub(crate) struct BalancesCsvDatasourceImpl<H: Handlers> {
@@ -30,6 +32,7 @@ impl<H: Handlers> BalancesCsvDatasourceImpl<H> {
     }
 }
 
+#[async_trait]
 impl<H: Handlers> BalancesCsvDatasource<H> for BalancesCsvDatasourceImpl<H> {
     fn from_string(&self, s: &str) -> Result<Vec<AssertionSpec<H>>, ServerError> {
         csv::Reader::from_reader(s.as_bytes())
@@ -63,10 +66,14 @@ impl<H: Handlers> BalancesCsvDatasource<H> for BalancesCsvDatasourceImpl<H> {
             .collect()
     }
 
-    fn from_file<P>(&self, path: P) -> Result<Vec<AssertionSpec<H>>, ServerError>
+    async fn from_file<P>(&self, path: P) -> Result<Vec<AssertionSpec<H>>, ServerError>
     where
-        P: AsRef<std::path::Path>,
+        P: AsRef<std::path::Path> + Send,
     {
-        self.from_string(&fs::read_to_string(path).map_err(|e| ReadError::with_debug(&e))?)
+        self.from_string(
+            &tokio::fs::read_to_string(path)
+                .await
+                .map_err(|e| ReadError::with_debug(&e))?,
+        )
     }
 }

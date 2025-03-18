@@ -45,29 +45,31 @@ where
         }
     }
 
-    pub fn from_string(
+    pub async fn from_string(
         &self,
         transactions_csv: &str,
         balances_csv: &str,
     ) -> Result<(FinancialRecords, NotesToFinancialRecords, Ledger), ServerError> {
         let (financial_records, notes_to_financial_records) = self
             .process_usecase
-            .from_string(transactions_csv, balances_csv)?;
+            .from_string(transactions_csv, balances_csv)
+            .await?;
         let ledger = self.printer.print_ledger(&financial_records);
         Ok((financial_records, notes_to_financial_records, ledger))
     }
 
-    pub fn from_file<T>(
+    pub async fn from_file<T>(
         &self,
         transactions_csv: T,
         balances_csv: T,
     ) -> Result<(FinancialRecords, NotesToFinancialRecords, Ledger), ServerError>
     where
-        T: AsRef<std::path::Path>,
+        T: AsRef<std::path::Path> + Send,
     {
         let (financial_records, notes_to_financial_records) = self
             .process_usecase
-            .from_file(transactions_csv, balances_csv)?;
+            .from_file(transactions_csv, balances_csv)
+            .await?;
         let ledger = self.printer.print_ledger(&financial_records);
         Ok((financial_records, notes_to_financial_records, ledger))
     }

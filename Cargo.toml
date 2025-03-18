@@ -4,10 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-fractic-core = { git = "https://github.com/fractic-io/rust-core.git" }
-fractic-server-error = { git = "https://github.com/fractic-io/rust-server-error.git" }
+async-trait = "^0.1.88"
 chrono = "^0.4.40"
 csv = "^1.3.1"
+fractic-core = { git = "https://github.com/fractic-io/rust-core.git" }
+fractic-currency-conversion = { git = "https://github.com/fractic-io/rust-currency-conversion.git" }
+fractic-server-error = { git = "https://github.com/fractic-io/rust-server-error.git" }
+futures = "0.3.31"
 ron = "^0.8.1"
 serde = "^1.0.218"
 serde_derive = "^1.0.218"
+tokio = { version = "^1.43.0", features = ["fs"] }

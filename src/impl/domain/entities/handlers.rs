@@ -9,45 +9,61 @@ use super::{
 // Account handlers.
 // ---
 
-pub trait AssetHandler: for<'de> Deserialize<'de> + std::fmt::Debug + Clone {
+pub trait AssetHandler:
+    for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
+{
     fn account(&self) -> AssetAccount;
     fn while_prepaid(&self) -> AssetAccount;
     fn while_payable(&self) -> LiabilityAccount;
     fn upon_accrual(&self) -> Option<ExpenseAccount>;
 }
 
-pub trait IncomeHandler: for<'de> Deserialize<'de> + std::fmt::Debug + Clone {
+pub trait IncomeHandler:
+    for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
+{
     fn account(&self) -> IncomeAccount;
     fn while_prepaid(&self) -> LiabilityAccount;
     fn while_receivable(&self) -> AssetAccount;
 }
 
-pub trait ExpenseHandler: for<'de> Deserialize<'de> + std::fmt::Debug + Clone {
+pub trait ExpenseHandler:
+    for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
+{
     fn account(&self) -> ExpenseAccount;
     fn while_prepaid(&self) -> AssetAccount;
     fn while_payable(&self) -> LiabilityAccount;
 }
 
-pub trait CashHandler: for<'de> Deserialize<'de> + std::fmt::Debug + Clone {
+pub trait CashHandler:
+    for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
+{
     fn account(&self) -> CashAccount;
 }
 
 // Other.
 // ---
 
-pub trait PayeeHandler: for<'de> Deserialize<'de> + std::fmt::Debug + Clone {
+pub trait PayeeHandler:
+    for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
+{
     fn name(&self) -> String;
 }
 
-pub trait ReimbursableEntityHandler: for<'de> Deserialize<'de> + std::fmt::Debug + Clone {
+pub trait ReimbursableEntityHandler:
+    for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
+{
     fn account(&self) -> LiabilityAccount;
 }
 
-pub trait DecoratorHandler: for<'de> Deserialize<'de> + std::fmt::Debug + Clone {
+pub trait DecoratorHandler:
+    for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
+{
     fn logic<H: Handlers>(&self) -> Result<Box<dyn DecoratorLogic<H>>, ServerError>;
 }
 
-pub trait CommodityHandler: for<'de> Deserialize<'de> + std::fmt::Debug + Clone {
+pub trait CommodityHandler:
+    for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
+{
     fn iso_symbol(&self) -> String;
 }
 
@@ -55,7 +71,7 @@ pub trait CommodityHandler: for<'de> Deserialize<'de> + std::fmt::Debug + Clone 
 // shortening type parameters throughout the repo.
 // ---
 
-pub trait Handlers: std::fmt::Debug {
+pub trait Handlers: std::fmt::Debug + Send + Sync + 'static {
     type A: AssetHandler;
     type I: IncomeHandler;
     type E: ExpenseHandler;

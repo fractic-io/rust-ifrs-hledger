@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use fractic_server_error::ServerError;
 
 use crate::{
@@ -23,6 +24,7 @@ pub(crate) struct RecordsRepositoryImpl<
     _phantom: std::marker::PhantomData<H>,
 }
 
+#[async_trait]
 impl<H, DS1, DS2> RecordsRepository<H> for RecordsRepositoryImpl<H, DS1, DS2>
 where
     H: Handlers,
@@ -40,17 +42,20 @@ where
         })
     }
 
-    fn from_file<P>(
+    async fn from_file<P>(
         &self,
         transactions_csv: P,
         balances_csv: P,
     ) -> Result<FinancialRecordSpecs<H>, ServerError>
     where
-        P: AsRef<std::path::Path>,
+        P: AsRef<std::path::Path> + Send,
     {
         Ok(FinancialRecordSpecs {
-            transaction_specs: self.transactions_datasource.from_file(transactions_csv)?,
-            assertion_specs: self.balances_datasource.from_file(balances_csv)?,
+            transaction_specs: self
+                .transactions_datasource
+                .from_file(transactions_csv)
+                .await?,
+            assertion_specs: self.balances_datasource.from_file(balances_csv).await?,
         })
     }
 }
