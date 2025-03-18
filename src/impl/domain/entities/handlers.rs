@@ -65,6 +65,7 @@ pub trait CommodityHandler:
     for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
 {
     fn iso_symbol(&self) -> String;
+    fn default() -> Self;
 }
 
 // Some type-magic to combine all handlers into a single type, greatly
