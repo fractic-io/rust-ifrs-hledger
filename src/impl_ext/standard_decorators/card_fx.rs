@@ -109,7 +109,7 @@ impl<H: Handlers> DecoratorLogic<H> for StandardDecoratorCardFx {
                         currency: main_commodity.currency()?,
                     },
                 ],
-                comment: Some("VAT awaiting invoice".to_string()),
+                comment: Some("Correct FX discrepancy".to_string()),
             }]
         } else {
             vec![]
