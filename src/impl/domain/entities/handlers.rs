@@ -1,5 +1,8 @@
 use fractic_server_error::ServerError;
+use iso_currency::Currency;
 use serde::Deserialize;
+
+use crate::errors::InvalidIsoCurrencyCode;
 
 use super::{
     account::{AssetAccount, CashAccount, ExpenseAccount, IncomeAccount, LiabilityAccount},
@@ -65,6 +68,10 @@ pub trait CommodityHandler:
     for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
 {
     fn iso_symbol(&self) -> String;
+    fn currency(&self) -> Result<Currency, ServerError> {
+        let s = self.iso_symbol();
+        Currency::from_code(&s).ok_or_else(|| InvalidIsoCurrencyCode::new(&s))
+    }
     fn default() -> Self;
 }
 

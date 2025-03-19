@@ -97,7 +97,7 @@ impl<H: Handlers> DecoratorLogic<H> for StandardDecoratorCardFx {
                     TransactionPosting {
                         account: backing_account.account().into(),
                         amount: fx_discrepancy,
-                        currency: main_commodity.iso_symbol(),
+                        currency: main_commodity.currency()?,
                     },
                     TransactionPosting {
                         account: if fx_discrepancy > 0.0 {
@@ -106,7 +106,7 @@ impl<H: Handlers> DecoratorLogic<H> for StandardDecoratorCardFx {
                             FX_LOSS.clone().into()
                         },
                         amount: -fx_discrepancy,
-                        currency: main_commodity.iso_symbol(),
+                        currency: main_commodity.currency()?,
                     },
                 ],
                 comment: Some("VAT awaiting invoice".to_string()),

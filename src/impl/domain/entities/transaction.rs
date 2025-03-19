@@ -1,4 +1,5 @@
 use chrono::NaiveDate;
+use iso_currency::Currency;
 
 use super::{account::Account, transaction_spec::TransactionSpecId};
 
@@ -12,7 +13,7 @@ pub struct TransactionLabel {
 pub struct TransactionPosting {
     pub account: Account,
     pub amount: f64,
-    pub currency: String,
+    pub currency: Currency,
 }
 
 #[derive(Debug, Clone)]

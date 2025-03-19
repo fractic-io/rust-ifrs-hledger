@@ -33,12 +33,12 @@ impl<H: Handlers> DecoratorLogic<H> for StandardDecoratorPaymentFee {
                 TransactionPosting {
                     account: tx.backing_account.account().into(),
                     amount: -self.fee,
-                    currency: tx.commodity.iso_symbol(),
+                    currency: tx.commodity.currency()?,
                 },
                 TransactionPosting {
                     account: PAYMENT_FEES.clone().into(),
                     amount: self.fee,
-                    currency: tx.commodity.iso_symbol(),
+                    currency: tx.commodity.currency()?,
                 },
             ],
             comment: Some("Payment fee".to_string()),

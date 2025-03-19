@@ -168,12 +168,16 @@ impl<H: Handlers> SpecProcessor<H> {
 
         let assertions = assertion_specs
             .into_iter()
-            .map(|spec| Assertion {
-                date: spec.date,
-                account: spec.cash_handler.account().into(),
-                balance: spec.balance,
-                currency: spec.commodity.iso_symbol(),
+            .map(|spec| {
+                Ok(Assertion {
+                    date: spec.date,
+                    account: spec.cash_handler.account().into(),
+                    balance: spec.balance,
+                    currency: spec.commodity.currency()?,
+                })
             })
+            .collect::<Result<Vec<Assertion>, ServerError>>()?
+            .into_iter()
             .chain(transactions_fold_result.assertions.into_iter())
             .collect();
 
@@ -219,12 +223,12 @@ impl<H: Handlers> SpecProcessor<H> {
                     TransactionPosting {
                         account: backing_account.account(),
                         amount: -amount.abs(),
-                        currency: commodity.iso_symbol(),
+                        currency: commodity.currency()?,
                     },
                     TransactionPosting {
                         account: e_handler.account().into(),
                         amount: amount.abs(),
-                        currency: commodity.iso_symbol(),
+                        currency: commodity.currency()?,
                     },
                 ],
             }]
@@ -239,12 +243,12 @@ impl<H: Handlers> SpecProcessor<H> {
                         TransactionPosting {
                             account: backing_account.account(),
                             amount: -amount.abs(),
-                            currency: commodity.iso_symbol(),
+                            currency: commodity.currency()?,
                         },
                         TransactionPosting {
                             account: e_handler.while_prepaid().into(),
                             amount: amount.abs(),
-                            currency: commodity.iso_symbol(),
+                            currency: commodity.currency()?,
                         },
                     ],
                 },
@@ -256,12 +260,12 @@ impl<H: Handlers> SpecProcessor<H> {
                         TransactionPosting {
                             account: e_handler.while_prepaid().into(),
                             amount: -amount.abs(),
-                            currency: commodity.iso_symbol(),
+                            currency: commodity.currency()?,
                         },
                         TransactionPosting {
                             account: e_handler.account().into(),
                             amount: amount.abs(),
-                            currency: commodity.iso_symbol(),
+                            currency: commodity.currency()?,
                         },
                     ],
                 },
@@ -277,12 +281,12 @@ impl<H: Handlers> SpecProcessor<H> {
                         TransactionPosting {
                             account: e_handler.while_payable().into(),
                             amount: -amount.abs(),
-                            currency: commodity.iso_symbol(),
+                            currency: commodity.currency()?,
                         },
                         TransactionPosting {
                             account: e_handler.account().into(),
                             amount: amount.abs(),
-                            currency: commodity.iso_symbol(),
+                            currency: commodity.currency()?,
                         },
                     ],
                 },
@@ -294,12 +298,12 @@ impl<H: Handlers> SpecProcessor<H> {
                         TransactionPosting {
                             account: backing_account.account(),
                             amount: -amount.abs(),
-                            currency: commodity.iso_symbol(),
+                            currency: commodity.currency()?,
                         },
                         TransactionPosting {
                             account: e_handler.while_payable().into(),
                             amount: amount.abs(),
-                            currency: commodity.iso_symbol(),
+                            currency: commodity.currency()?,
                         },
                     ],
                 },
@@ -354,12 +358,12 @@ impl<H: Handlers> SpecProcessor<H> {
                     TransactionPosting {
                         account: backing_account.account(),
                         amount: -amount.abs(),
-                        currency: commodity.iso_symbol(),
+                        currency: commodity.currency()?,
                     },
                     TransactionPosting {
                         account: a_handler.account().into(),
                         amount: amount.abs(),
-                        currency: commodity.iso_symbol(),
+                        currency: commodity.currency()?,
                     },
                 ],
             }]
@@ -374,12 +378,12 @@ impl<H: Handlers> SpecProcessor<H> {
                         TransactionPosting {
                             account: backing_account.account(),
                             amount: -amount.abs(),
-                            currency: commodity.iso_symbol(),
+                            currency: commodity.currency()?,
                         },
                         TransactionPosting {
                             account: a_handler.while_prepaid().into(),
                             amount: amount.abs(),
-                            currency: commodity.iso_symbol(),
+                            currency: commodity.currency()?,
                         },
                     ],
                 },
@@ -391,12 +395,12 @@ impl<H: Handlers> SpecProcessor<H> {
                         TransactionPosting {
                             account: a_handler.while_prepaid().into(),
                             amount: -amount.abs(),
-                            currency: commodity.iso_symbol(),
+                            currency: commodity.currency()?,
                         },
                         TransactionPosting {
                             account: a_handler.account().into(),
                             amount: amount.abs(),
-                            currency: commodity.iso_symbol(),
+                            currency: commodity.currency()?,
                         },
                     ],
                 },
@@ -412,12 +416,12 @@ impl<H: Handlers> SpecProcessor<H> {
                         TransactionPosting {
                             account: a_handler.while_payable().into(),
                             amount: -amount.abs(),
-                            currency: commodity.iso_symbol(),
+                            currency: commodity.currency()?,
                         },
                         TransactionPosting {
                             account: a_handler.account().into(),
                             amount: amount.abs(),
-                            currency: commodity.iso_symbol(),
+                            currency: commodity.currency()?,
                         },
                     ],
                 },
@@ -429,12 +433,12 @@ impl<H: Handlers> SpecProcessor<H> {
                         TransactionPosting {
                             account: backing_account.account(),
                             amount: -amount.abs(),
-                            currency: commodity.iso_symbol(),
+                            currency: commodity.currency()?,
                         },
                         TransactionPosting {
                             account: a_handler.while_payable().into(),
                             amount: amount.abs(),
-                            currency: commodity.iso_symbol(),
+                            currency: commodity.currency()?,
                         },
                     ],
                 },
@@ -522,12 +526,12 @@ impl<H: Handlers> SpecProcessor<H> {
                     TransactionPosting {
                         account: a_handler.account().into(),
                         amount: -monthly_amort,
-                        currency: commodity.iso_symbol(),
+                        currency: commodity.currency()?,
                     },
                     TransactionPosting {
                         account: accrual_account.clone().into(),
                         amount: monthly_amort,
-                        currency: commodity.iso_symbol(),
+                        currency: commodity.currency()?,
                     },
                 ],
             });
@@ -597,12 +601,12 @@ impl<H: Handlers> SpecProcessor<H> {
                         TransactionPosting {
                             account: e_handler.while_payable().into(),
                             amount: -period_expense,
-                            currency: commodity.iso_symbol(),
+                            currency: commodity.currency()?,
                         },
                         TransactionPosting {
                             account: e_handler.account().into(),
                             amount: period_expense,
-                            currency: commodity.iso_symbol(),
+                            currency: commodity.currency()?,
                         },
                     ],
                 });
@@ -621,12 +625,12 @@ impl<H: Handlers> SpecProcessor<H> {
                         TransactionPosting {
                             account: e_handler.while_prepaid().into(),
                             amount: -period_expense,
-                            currency: commodity.iso_symbol(),
+                            currency: commodity.currency()?,
                         },
                         TransactionPosting {
                             account: e_handler.account().into(),
                             amount: period_expense,
-                            currency: commodity.iso_symbol(),
+                            currency: commodity.currency()?,
                         },
                     ],
                 });
@@ -650,17 +654,17 @@ impl<H: Handlers> SpecProcessor<H> {
                 TransactionPosting {
                     account: backing_account.account(),
                     amount: -amount.abs(),
-                    currency: commodity.iso_symbol(),
+                    currency: commodity.currency()?,
                 },
                 TransactionPosting {
                     account: e_handler.while_prepaid().into(),
                     amount: prepaid_sum,
-                    currency: commodity.iso_symbol(),
+                    currency: commodity.currency()?,
                 },
                 TransactionPosting {
                     account: e_handler.while_payable().into(),
                     amount: -payable_sum,
-                    currency: commodity.iso_symbol(),
+                    currency: commodity.currency()?,
                 },
             ],
         });
@@ -807,12 +811,12 @@ impl<H: Handlers> SpecProcessor<H> {
                     TransactionPosting {
                         account: e_handler.while_payable().into(),
                         amount: -period_estimate,
-                        currency: commodity.iso_symbol(),
+                        currency: commodity.currency()?,
                     },
                     TransactionPosting {
                         account: e_handler.account().into(),
                         amount: period_estimate,
-                        currency: commodity.iso_symbol(),
+                        currency: commodity.currency()?,
                     },
                 ],
             });
@@ -829,12 +833,12 @@ impl<H: Handlers> SpecProcessor<H> {
                     TransactionPosting {
                         account: e_handler.while_payable().into(),
                         amount: -discrepancy,
-                        currency: commodity.iso_symbol(),
+                        currency: commodity.currency()?,
                     },
                     TransactionPosting {
                         account: e_handler.account().into(),
                         amount: discrepancy,
-                        currency: commodity.iso_symbol(),
+                        currency: commodity.currency()?,
                     },
                 ],
             });
@@ -849,12 +853,12 @@ impl<H: Handlers> SpecProcessor<H> {
                 TransactionPosting {
                     account: backing_account.account(),
                     amount: -amount.abs(),
-                    currency: commodity.iso_symbol(),
+                    currency: commodity.currency()?,
                 },
                 TransactionPosting {
                     account: e_handler.while_payable().into(),
                     amount: amount.abs(),
-                    currency: commodity.iso_symbol(),
+                    currency: commodity.currency()?,
                 },
             ],
         });
@@ -919,12 +923,12 @@ impl<H: Handlers> SpecProcessor<H> {
                 TransactionPosting {
                     account: i_handler.account().into(),
                     amount: -amount.abs(),
-                    currency: commodity.iso_symbol(),
+                    currency: commodity.currency()?,
                 },
                 TransactionPosting {
                     account: backing_account.account(),
                     amount: amount.abs(),
-                    currency: commodity.iso_symbol(),
+                    currency: commodity.currency()?,
                 },
             ],
         };
@@ -978,12 +982,12 @@ impl<H: Handlers> SpecProcessor<H> {
                 TransactionPosting {
                     account: backing_account.account(),
                     amount: -amount.abs(),
-                    currency: commodity.iso_symbol(),
+                    currency: commodity.currency()?,
                 },
                 TransactionPosting {
                     account: e_handler.account().into(),
                     amount: amount.abs(),
-                    currency: commodity.iso_symbol(),
+                    currency: commodity.currency()?,
                 },
             ],
         };
@@ -1035,12 +1039,12 @@ impl<H: Handlers> SpecProcessor<H> {
                 TransactionPosting {
                     account: backing_account.account(),
                     amount: -amount.abs(),
-                    currency: commodity.iso_symbol(),
+                    currency: commodity.currency()?,
                 },
                 TransactionPosting {
                     account: r_handler.account().into(),
                     amount: amount.abs(),
-                    currency: commodity.iso_symbol(),
+                    currency: commodity.currency()?,
                 },
             ],
         };
@@ -1048,7 +1052,7 @@ impl<H: Handlers> SpecProcessor<H> {
             date: payment_date,
             account: r_handler.account().into(),
             balance: 0.0,
-            currency: commodity.iso_symbol(),
+            currency: commodity.currency()?,
         };
 
         Ok(Transformation {
@@ -1094,12 +1098,12 @@ impl<H: Handlers> SpecProcessor<H> {
                     TransactionPosting {
                         account: VAT_RECEIVABLE.clone().into(),
                         amount: -amount.abs(),
-                        currency: commodity.iso_symbol(),
+                        currency: commodity.currency()?,
                     },
                     TransactionPosting {
                         account: cash.account().into(),
                         amount: amount.abs(),
-                        currency: commodity.iso_symbol(),
+                        currency: commodity.currency()?,
                     },
                 ],
             }
@@ -1112,12 +1116,12 @@ impl<H: Handlers> SpecProcessor<H> {
                     TransactionPosting {
                         account: cash.account().into(),
                         amount: -amount.abs(),
-                        currency: commodity.iso_symbol(),
+                        currency: commodity.currency()?,
                     },
                     TransactionPosting {
                         account: VAT_PAYABLE.clone().into(),
                         amount: amount.abs(),
-                        currency: commodity.iso_symbol(),
+                        currency: commodity.currency()?,
                     },
                 ],
             }
@@ -1127,13 +1131,13 @@ impl<H: Handlers> SpecProcessor<H> {
                 date: accrual_date,
                 account: VAT_RECEIVABLE.clone().into(),
                 balance: 0.0,
-                currency: commodity.iso_symbol(),
+                currency: commodity.currency()?,
             },
             Assertion {
                 date: accrual_date,
                 account: VAT_PAYABLE.clone().into(),
                 balance: 0.0,
-                currency: commodity.iso_symbol(),
+                currency: commodity.currency()?,
             },
         ];
 

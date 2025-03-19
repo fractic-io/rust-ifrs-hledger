@@ -88,12 +88,12 @@ impl StandardDecoratorVatKorea {
                 TransactionPosting {
                     account: backing_account.account().into(),
                     amount: amount_vat,
-                    currency: commodity.iso_symbol(),
+                    currency: commodity.currency()?,
                 },
                 TransactionPosting {
                     account: VAT_PENDING_RECEIPT.clone().into(),
                     amount: -amount_vat,
-                    currency: commodity.iso_symbol(),
+                    currency: commodity.currency()?,
                 },
             ],
             comment: Some("VAT awaiting invoice".to_string()),
@@ -158,12 +158,12 @@ impl StandardDecoratorVatKorea {
                     TransactionPosting {
                         account: backing_account.account().into(),
                         amount: amount_vat,
-                        currency: commodity.iso_symbol(),
+                        currency: commodity.currency()?,
                     },
                     TransactionPosting {
                         account: VAT_PENDING_RECEIPT.clone().into(),
                         amount: -amount_vat,
-                        currency: commodity.iso_symbol(),
+                        currency: commodity.currency()?,
                     },
                 ],
                 comment: Some("VAT awaiting invoice".to_string()),
@@ -175,7 +175,7 @@ impl StandardDecoratorVatKorea {
                     TransactionPosting {
                         account: VAT_PENDING_RECEIPT.clone().into(),
                         amount: amount_vat,
-                        currency: commodity.iso_symbol(),
+                        currency: commodity.currency()?,
                     },
                     TransactionPosting {
                         account: if amount_vat > 0.0 {
@@ -184,7 +184,7 @@ impl StandardDecoratorVatKorea {
                             VAT_RECEIVABLE.clone().into()
                         },
                         amount: -amount_vat,
-                        currency: commodity.iso_symbol(),
+                        currency: commodity.currency()?,
                     },
                 ],
                 comment: Some("VAT invoice received".to_string()),
