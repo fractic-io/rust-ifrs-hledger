@@ -506,7 +506,7 @@ impl<H: Handlers> SpecProcessor<H> {
 
         // Record the monthly amortization adjustments.
         let total_days = (accrual_end - accrual_start).num_days() + 1;
-        let daily_amort = amount / (total_days as f64);
+        let daily_amort = amount.abs() / (total_days as f64);
         for MonthlyAccrualPeriod {
             period_start,
             period_end,
