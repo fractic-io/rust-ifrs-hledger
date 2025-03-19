@@ -729,7 +729,7 @@ impl<H: Handlers> SpecProcessor<H> {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
         };
 
-        // Use the last 90 days of history before (and including) the accrual_date.
+        // Use the last 90 days of history before the accrual_date.
         let expense_account = e_handler.account();
         let records = history_lookup
             .get(&expense_account)
@@ -743,7 +743,7 @@ impl<H: Handlers> SpecProcessor<H> {
         };
         let history_window_start =
             std::cmp::max(history_init_date, accrual_start - Duration::days(90));
-        let history_window_end = accrual_start;
+        let history_window_end = accrual_start - Duration::days(1);
 
         // Compute the average daily accrual rate over the 90-day window.
         let daily_rate = compute_daily_average(records, history_window_start, history_window_end)
@@ -756,7 +756,7 @@ impl<H: Handlers> SpecProcessor<H> {
     fn process_variable_expense_helper(
         spec: DecoratedTransactionSpec<H>,
         e_handler: H::E,
-        daily_rate: f64,
+        estimated_daily_rate: f64,
         is_init: bool,
     ) -> Result<Transformation, ServerError> {
         let DecoratedTransactionSpec {
@@ -788,7 +788,8 @@ impl<H: Handlers> SpecProcessor<H> {
         }
 
         let accrual_days = (accrual_end - accrual_start).num_days() + 1;
-        let estimated_total = daily_rate * (accrual_days as f64);
+        let estimated_total = estimated_daily_rate * (accrual_days as f64);
+        let actual_daily_rate = amount.abs() / (accrual_days as f64);
 
         // Break into monthly accrual periods.
         let mut transactions = Vec::new();
@@ -799,7 +800,7 @@ impl<H: Handlers> SpecProcessor<H> {
             adjustment_date,
         } in monthly_accrual_periods(accrual_start, accrual_end)?
         {
-            let period_estimate = daily_rate * (num_days as f64);
+            let period_estimate = estimated_daily_rate * (num_days as f64);
             transactions.push(Transaction {
                 spec_id: id,
                 date: adjustment_date,
@@ -828,7 +829,7 @@ impl<H: Handlers> SpecProcessor<H> {
             transactions.push(Transaction {
                 spec_id: id,
                 date: payment_date,
-                comment: Some("Correct estimatation discrepancy".into()),
+                comment: Some("Correct estimate discrepancy".into()),
                 postings: vec![
                     TransactionPosting {
                         account: e_handler.while_payable().into(),
@@ -869,7 +870,7 @@ impl<H: Handlers> SpecProcessor<H> {
             price_record: ExpenseHistoryPriceRecord {
                 start: accrual_start,
                 end: accrual_end,
-                daily_rate,
+                daily_rate: actual_daily_rate,
             },
             is_init,
         };
