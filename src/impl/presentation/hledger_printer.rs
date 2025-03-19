@@ -191,15 +191,16 @@ impl HledgerPrinter {
 
     fn format_amount(&self, amount: f64, currency: Currency) -> String {
         let decimal_places = currency.exponent().unwrap_or(0) as usize;
-        let amount_integer_part = (amount.trunc() as i64).to_formatted_string(&Locale::en);
-        let amount_fractional_part = format!("{:.decimal_places$}", amount.fract())
-            .split('.')
-            .nth(1)
-            .map(|f| f.to_string())
-            .unwrap_or_default();
         if decimal_places == 0 {
-            return format!("{} {}", amount_integer_part, currency.symbol());
+            let amount_rounded = (amount.round() as i64).to_formatted_string(&Locale::en);
+            return format!("{} {}", amount_rounded, currency.symbol());
         } else {
+            let amount_integer_part = (amount.trunc() as i64).to_formatted_string(&Locale::en);
+            let amount_fractional_part = format!("{:.decimal_places$}", amount.fract())
+                .split('.')
+                .nth(1)
+                .map(|f| f.to_string())
+                .unwrap_or_default();
             format!(
                 "{}.{:0decimal_places$} {}",
                 amount_integer_part,
