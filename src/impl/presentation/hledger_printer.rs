@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::entities::{Account, Assertion, FinancialRecords, Transaction};
 
 impl Account {
@@ -35,9 +37,14 @@ impl HledgerPrinter {
         ledger_output.push_str(
             "; --- Accounts -----------------------------------------------------------------\n\n",
         );
+        let accounts: HashSet<Account> = financial_records
+            .transactions
+            .iter()
+            .flat_map(|tx| tx.postings.iter().map(|p| &p.account))
+            .cloned()
+            .collect();
         let sorted_account_declarations = {
-            let mut v: Vec<String> = financial_records
-                .accounts
+            let mut v: Vec<String> = accounts
                 .iter()
                 .map(|account| {
                     format!(
@@ -90,10 +97,10 @@ impl HledgerPrinter {
             {
                 let s = annotation.to_string();
                 let wrapped = textwrap::wrap(&s, 74);
-                let prefix = "    ; ";
+                let prefix = "    ;";
                 ledger_output.push_str(&format!("{}\n", prefix));
                 for line in wrapped {
-                    ledger_output.push_str(&format!("{}{}\n", prefix, line));
+                    ledger_output.push_str(&format!("{} {}\n", prefix, line));
                 }
             }
             ledger_output.push('\n');
@@ -118,7 +125,6 @@ impl HledgerPrinter {
             ));
             ledger_output.push('\n');
         }
-        ledger_output.push_str("\n\n");
 
         ledger_output
     }

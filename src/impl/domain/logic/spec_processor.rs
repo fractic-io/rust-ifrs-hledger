@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    iter::once,
-};
+use std::{collections::HashMap, iter::once};
 
 use chrono::{Duration, NaiveDate};
 use fractic_server_error::ServerError;
@@ -9,7 +6,7 @@ use fractic_server_error::ServerError;
 use crate::{
     domain::logic::utils::{compute_daily_average, monthly_accrual_periods, MonthlyAccrualPeriod},
     entities::{
-        Account, AccountingLogic, Annotation, Assertion, AssetHandler, BackingAccount, CashHandler,
+        AccountingLogic, Annotation, Assertion, AssetHandler, BackingAccount, CashHandler,
         CommodityHandler, DecoratedFinancialRecordSpecs, DecoratedTransactionSpec, ExpenseAccount,
         ExpenseHandler, FinancialRecords, Handlers, IncomeHandler, PayeeHandler,
         ReimbursableEntityHandler, Transaction, TransactionLabel, TransactionPosting,
@@ -58,7 +55,6 @@ struct Transformation {
 }
 
 struct FoldState {
-    accounts: HashSet<Account>,
     transactions: Vec<Transaction>,
     assertions: Vec<Assertion>,
     expense_history_lookup: HashMap<ExpenseAccount, ExpenseHistory>,
@@ -69,7 +65,6 @@ struct FoldState {
 impl FoldState {
     fn new() -> Self {
         Self {
-            accounts: HashSet::new(),
             transactions: Vec::new(),
             assertions: Vec::new(),
             expense_history_lookup: HashMap::new(),
@@ -81,7 +76,6 @@ impl FoldState {
     /// Update current state with the given transformation.
     fn step(self, t: Transformation) -> Result<Self, ServerError> {
         let FoldState {
-            mut accounts,
             mut transactions,
             mut assertions,
             mut expense_history_lookup,
@@ -89,11 +83,6 @@ impl FoldState {
             mut annotations_lookup,
         } = self;
 
-        accounts.extend(
-            t.transactions
-                .iter()
-                .flat_map(|t| t.postings.iter().map(|p| p.account.clone())),
-        );
         transactions.extend(t.transactions);
         transactions.extend(t.ext_transactions);
         assertions.extend(t.ext_assertions);
@@ -114,7 +103,6 @@ impl FoldState {
             .extend(t.annotations);
 
         Ok(Self {
-            accounts,
             transactions,
             assertions,
             expense_history_lookup,
@@ -190,7 +178,6 @@ impl<H: Handlers> SpecProcessor<H> {
             .collect();
 
         Ok(FinancialRecords {
-            accounts: transactions_fold_result.accounts,
             transactions: transactions_fold_result.transactions,
             assertions,
             label_lookup: transactions_fold_result.label_lookup,
