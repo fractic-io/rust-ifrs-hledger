@@ -1129,13 +1129,13 @@ impl<H: Handlers> SpecProcessor<H> {
         };
         let assrt = vec![
             Assertion {
-                date: accrual_date,
+                date: to,
                 account: VAT_RECEIVABLE.clone().into(),
                 balance: 0.0,
                 currency: commodity.currency()?,
             },
             Assertion {
-                date: accrual_date,
+                date: to,
                 account: VAT_PAYABLE.clone().into(),
                 balance: 0.0,
                 currency: commodity.currency()?,
