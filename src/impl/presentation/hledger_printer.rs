@@ -194,9 +194,7 @@ impl HledgerPrinter {
     }
 
     fn format_amount(&self, amount: f64, currency: Currency) -> String {
-        // To improve accuracy of summing operations and balance checks, use 2
-        // decimal places more than the standard for the given currency.
-        let decimal_places = currency.exponent().unwrap_or(0) as usize + 2;
+        let decimal_places = currency.exponent().unwrap_or(0) as usize;
         if decimal_places == 0 {
             let amount_rounded = (amount.round() as i64).to_formatted_string(&Locale::en);
             return format!("{} {}", amount_rounded, currency.symbol());
