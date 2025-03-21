@@ -10,7 +10,10 @@ use crate::{
         Annotation, CommodityHandler as _, DecoratedTransactionSpec, DecoratorLogic, Handlers,
         Transaction, TransactionPosting,
     },
-    ext::standard_accounts::{VAT_PAYABLE, VAT_PENDING_RECEIPT, VAT_RECEIVABLE},
+    ext::standard_accounts::{
+        VAT_ADJUSTMENT_EXPENSE, VAT_ADJUSTMENT_INCOME, VAT_PAYABLE, VAT_PENDING_RECEIPT,
+        VAT_RECEIVABLE,
+    },
 };
 
 #[derive(Debug)]
@@ -19,6 +22,7 @@ enum LogicType {
     Recoverable { invoice_date: NaiveDate },
     Unrecoverable,
     ReverseChargeExempt,
+    RefundAdjustment { core_amount: f64 },
 }
 
 #[derive(Debug)]
@@ -50,6 +54,17 @@ impl StandardDecoratorVatKorea {
     pub fn reverse_charge_exempt() -> Result<Self, ServerError> {
         Ok(Self {
             logic: LogicType::ReverseChargeExempt,
+        })
+    }
+
+    /// Records an adjustment record to correct discrepancy between the VAT
+    /// refund expected during the accounting peroid and the actual refund.
+    ///
+    /// core_amount: The amount that had previously been set aside in accounting
+    /// records for a refund.
+    pub fn refund_adjustment(core_amount: f64) -> Result<Self, ServerError> {
+        Ok(Self {
+            logic: LogicType::RefundAdjustment { core_amount },
         })
     }
 
@@ -234,6 +249,83 @@ impl StandardDecoratorVatKorea {
         tx.annotations.push(Annotation::VatKoreaReverseChargeExempt);
         Ok(tx)
     }
+
+    fn apply_refund_adjustment<H: Handlers>(
+        &self,
+        tx: DecoratedTransactionSpec<H>,
+        core_amount: f64,
+    ) -> Result<DecoratedTransactionSpec<H>, ServerError> {
+        let DecoratedTransactionSpec {
+            id,
+            accrual_start,
+            accrual_end,
+            payment_date,
+            accounting_logic,
+            payee,
+            description,
+            amount: cleared_amount,
+            commodity,
+            backing_account,
+            annotations,
+            ext_transactions,
+            ext_assertions,
+        } = tx;
+
+        // Infer the sign of core_amount based on the sign of cleared_amount.
+        // This lets the accounting be written more easily and avoids
+        // accidentally double-inverting the amount.
+        let core_amount = if cleared_amount > 0.0 {
+            core_amount.abs()
+        } else {
+            -core_amount.abs()
+        };
+
+        let discrepancy = cleared_amount - core_amount;
+        let vat_transactions = if discrepancy.abs() > 0.01 {
+            vec![Transaction {
+                spec_id: id.clone(),
+                date: payment_date,
+                postings: vec![
+                    TransactionPosting {
+                        account: if discrepancy > 0.0 {
+                            VAT_ADJUSTMENT_INCOME.clone().into()
+                        } else {
+                            VAT_ADJUSTMENT_EXPENSE.clone().into()
+                        },
+                        amount: -discrepancy,
+                        currency: commodity.currency()?,
+                    },
+                    TransactionPosting {
+                        account: backing_account.account().into(),
+                        amount: discrepancy,
+                        currency: commodity.currency()?,
+                    },
+                ],
+                comment: Some("VAT refund adjustment".to_string()),
+            }]
+        } else {
+            vec![]
+        };
+
+        Ok(DecoratedTransactionSpec {
+            id,
+            accrual_start,
+            accrual_end,
+            payment_date,
+            accounting_logic,
+            payee,
+            description,
+            amount: core_amount,
+            commodity,
+            backing_account,
+            annotations,
+            ext_transactions: ext_transactions
+                .into_iter()
+                .chain(vat_transactions)
+                .collect(),
+            ext_assertions,
+        })
+    }
 }
 
 #[async_trait]
@@ -247,6 +339,9 @@ impl<H: Handlers> DecoratorLogic<H> for StandardDecoratorVatKorea {
             LogicType::Recoverable { invoice_date } => self.apply_recoverable(tx, *invoice_date),
             LogicType::Unrecoverable => self.apply_unrecoverable(tx),
             LogicType::ReverseChargeExempt => self.apply_reverse_charge_exempt(tx),
+            LogicType::RefundAdjustment { core_amount } => {
+                self.apply_refund_adjustment(tx, *core_amount)
+            }
         }
     }
 }
