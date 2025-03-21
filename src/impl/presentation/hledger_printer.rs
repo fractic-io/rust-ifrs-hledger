@@ -74,11 +74,11 @@ impl HledgerPrinter {
     }
 
     fn print_accounts(&self, ledger_output: &mut String, financial_records: &FinancialRecords) {
-        let accounts: HashSet<Account> = financial_records
+        let accounts: HashSet<&Account> = financial_records
             .transactions
             .iter()
             .flat_map(|tx| tx.postings.iter().map(|p| &p.account))
-            .cloned()
+            .chain(financial_records.assertions.iter().map(|a| &a.account))
             .collect();
         let sorted_account_declarations = {
             let mut v: Vec<String> = accounts
