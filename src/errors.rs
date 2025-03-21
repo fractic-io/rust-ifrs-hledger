@@ -8,6 +8,7 @@ define_client_error!(ReadError, "Error reading file.");
 
 // Parsing-related.
 define_client_error!(InvalidCsv, "Invalid CSV format.");
+define_client_error!(InvalidCsvContent, "Invalid CSV content: {details}.", { details: &str });
 define_client_error!(InvalidRon, "Invalid {ron_type} (invalid RON format).", { ron_type: &str });
 define_client_error!(InvalidIsoDate, "Invalid ISO date: {date}.", { date: &str });
 define_client_error!(InvalidIsoCurrencyCode, "Invalid ISO currency code: {code}.", { code: &str });

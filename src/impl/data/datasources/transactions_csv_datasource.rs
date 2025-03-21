@@ -11,7 +11,7 @@ use crate::{
         iso_date_model::ISODateModel,
     },
     entities::{Annotation, Handlers, TransactionSpec, TransactionSpecId},
-    errors::{InvalidCsv, InvalidRon, ReadError},
+    errors::{InvalidCsv, InvalidCsvContent, InvalidRon, ReadError},
 };
 
 #[async_trait]
@@ -89,7 +89,7 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                     };
 
                     // Build.
-                    Ok(TransactionSpec {
+                    let spec = TransactionSpec {
                         id: TransactionSpecId((i + 2) as u64),
                         accrual_start: accrual_start.into(),
                         accrual_end: accrual_end.map(Into::into),
@@ -102,7 +102,12 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                         commodity,
                         backing_account: backing_account.into(),
                         annotations: custom_notes,
-                    })
+                    };
+
+                    // Run assertions.
+                    self.validate(&spec)?;
+
+                    Ok(spec)
                 })
             })
             .collect()
@@ -117,5 +122,20 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                 .await
                 .map_err(|e| ReadError::with_debug(&e))?,
         )
+    }
+}
+
+impl<H: Handlers> TransactionsCsvDatasourceImpl<H> {
+    fn validate(&self, spec: &TransactionSpec<H>) -> Result<(), ServerError> {
+        if let Some(until) = spec.accrual_end {
+            if until < spec.accrual_start {
+                return Err(InvalidCsvContent::with_debug(
+                    "Until date must be after start date.",
+                    &spec,
+                )
+                .into());
+            }
+        }
+        Ok(())
     }
 }
