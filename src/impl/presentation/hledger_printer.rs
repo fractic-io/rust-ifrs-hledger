@@ -13,6 +13,8 @@ impl Account {
             Account::Liability(s) => format!("Liabilities:{}", s.0),
             Account::Income(s) => format!("Income:{}", s.0),
             Account::Expense(s) => format!("Expenses:{}", s.0),
+            Account::Equity(s) => format!("Equity:{}", s.0),
+            Account::CapitalStock(s) => format!("Equity:CapitalStock:{}", s.0),
         }
     }
 
@@ -23,6 +25,8 @@ impl Account {
             Account::Liability(_) => 'L',
             Account::Income(_) => 'R',
             Account::Expense(_) => 'X',
+            Account::Equity(_) => 'E',
+            Account::CapitalStock(_) => 'E',
         }
     }
 }

@@ -9,14 +9,16 @@ use crate::{
         AccountingLogic, Annotation, Assertion, AssetHandler, BackingAccount, CashHandler,
         CommodityHandler, DecoratedFinancialRecordSpecs, DecoratedTransactionSpec, ExpenseAccount,
         ExpenseHandler, FinancialRecords, Handlers, IncomeHandler, PayeeHandler,
-        ReimbursableEntityHandler, Transaction, TransactionLabel, TransactionPosting,
-        TransactionSpecId,
+        ReimbursableEntityHandler, ShareholderHandler, Transaction, TransactionLabel,
+        TransactionPosting, TransactionSpecId,
     },
     errors::{
-        InvalidArgumentsForAccountingLogic, NonAmortizableAsset, UnexpectedNegativeValue,
-        UnexpectedPositiveValue, VariableExpenseDoubleInit, VariableExpenseInvalidPaymentDate,
-        VariableExpenseNoInit, VariableExpenseNotEnoughHistoricalData,
+        CommonStockCannotBePrepaid, InvalidArgumentsForAccountingLogic, NonAmortizableAsset,
+        UnexpectedNegativeValue, UnexpectedPositiveValue, VariableExpenseDoubleInit,
+        VariableExpenseInvalidPaymentDate, VariableExpenseNoInit,
+        VariableExpenseNotEnoughHistoricalData,
     },
+    ext::standard_accounts::SHARE_CAPITAL_RECEIVABLE,
     impl_ext::standard_accounts::vat::{VAT_PAYABLE, VAT_RECEIVABLE},
 };
 
@@ -144,6 +146,7 @@ impl<H: Handlers> SpecProcessor<H> {
                 .into_iter()
                 .try_fold(FoldState::new(), |state, spec| {
                     let transformation = match &spec.accounting_logic {
+                        AccountingLogic::CommonStock(..) => Self::process_common_stock(spec)?,
                         AccountingLogic::SimpleExpense(..) => Self::process_simple_expense(spec)?,
                         AccountingLogic::Capitalize(..) => Self::process_capitalize(spec)?,
                         AccountingLogic::Amortize(..) => Self::process_amortize(spec)?,
@@ -186,6 +189,106 @@ impl<H: Handlers> SpecProcessor<H> {
             assertions,
             label_lookup: transactions_fold_result.label_lookup,
             annotations_lookup: transactions_fold_result.annotations_lookup,
+        })
+    }
+
+    fn process_common_stock(
+        spec: DecoratedTransactionSpec<H>,
+    ) -> Result<Transformation, ServerError> {
+        let DecoratedTransactionSpec {
+            id,
+            accrual_start: accrual_date,
+            accrual_end: None,
+            payment_date,
+            accounting_logic: AccountingLogic::CommonStock(s_handler),
+            payee,
+            description,
+            amount,
+            commodity,
+            backing_account,
+            annotations,
+            ext_transactions,
+            ext_assertions,
+        } = spec
+        else {
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+        };
+        amount_should_be_positive!(amount, "CommonStock", &id);
+
+        let transactions = if payment_date == accrual_date {
+            // Capital contribution was made on the same day, so record in a
+            // single journal entry.
+            vec![Transaction {
+                spec_id: id,
+                date: payment_date,
+                comment: None,
+                postings: vec![
+                    TransactionPosting {
+                        account: s_handler.account().into(),
+                        amount: -amount.abs(),
+                        currency: commodity.currency()?,
+                    },
+                    TransactionPosting {
+                        account: backing_account.account(),
+                        amount: amount.abs(),
+                        currency: commodity.currency()?,
+                    },
+                ],
+            }]
+        } else if payment_date > accrual_date {
+            // Capital contribution was made later, so record unpaid share
+            // capital as a temporary asset.
+            vec![
+                Transaction {
+                    spec_id: id,
+                    date: accrual_date,
+                    comment: Some("Unpaid share capital".into()),
+                    postings: vec![
+                        TransactionPosting {
+                            account: s_handler.account().into(),
+                            amount: -amount.abs(),
+                            currency: commodity.currency()?,
+                        },
+                        TransactionPosting {
+                            account: SHARE_CAPITAL_RECEIVABLE.clone().into(),
+                            amount: amount.abs(),
+                            currency: commodity.currency()?,
+                        },
+                    ],
+                },
+                Transaction {
+                    spec_id: id,
+                    date: payment_date,
+                    comment: Some("Share capital contribution".into()),
+                    postings: vec![
+                        TransactionPosting {
+                            account: SHARE_CAPITAL_RECEIVABLE.clone().into(),
+                            amount: -amount.abs(),
+                            currency: commodity.currency()?,
+                        },
+                        TransactionPosting {
+                            account: backing_account.account(),
+                            amount: amount.abs(),
+                            currency: commodity.currency()?,
+                        },
+                    ],
+                },
+            ]
+        } else {
+            return Err(CommonStockCannotBePrepaid::new(&description));
+        };
+
+        Ok(Transformation {
+            spec_id: id,
+            label: TransactionLabel {
+                payee: payee.name(),
+                description,
+            },
+            transactions,
+            ext_transactions,
+            ext_assertions,
+            expense_history_delta: None,
+            annotations,
         })
     }
 

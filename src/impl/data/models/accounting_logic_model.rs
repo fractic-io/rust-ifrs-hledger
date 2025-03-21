@@ -3,7 +3,8 @@ use crate::entities::AccountingLogic;
 use super::iso_date_model::ISODateModel;
 
 #[derive(Debug, serde_derive::Deserialize)]
-pub enum AccountingLogicModel<E, A, I, R> {
+pub enum AccountingLogicModel<E, A, I, R, S> {
+    CommonStock(S),
     SimpleExpense(E),
     Capitalize(A),
     Amortize(A),
@@ -22,9 +23,10 @@ pub enum AccountingLogicModel<E, A, I, R> {
     },
 }
 
-impl<E, A, I, R> Into<AccountingLogic<E, A, I, R>> for AccountingLogicModel<E, A, I, R> {
-    fn into(self) -> AccountingLogic<E, A, I, R> {
+impl<E, A, I, R, S> Into<AccountingLogic<E, A, I, R, S>> for AccountingLogicModel<E, A, I, R, S> {
+    fn into(self) -> AccountingLogic<E, A, I, R, S> {
         match self {
+            AccountingLogicModel::CommonStock(s) => AccountingLogic::CommonStock(s),
             AccountingLogicModel::SimpleExpense(e) => AccountingLogic::SimpleExpense(e),
             AccountingLogicModel::Capitalize(a) => AccountingLogic::Capitalize(a),
             AccountingLogicModel::Amortize(a) => AccountingLogic::Amortize(a),

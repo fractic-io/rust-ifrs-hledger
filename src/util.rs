@@ -5,34 +5,36 @@ use crate::{
     entities::{
         AssetHandler, CashHandler, CommodityHandler, DecoratorHandler, ExpenseHandler,
         FinancialRecords, HandlersImpl, IncomeHandler, NotesToFinancialRecords, PayeeHandler,
-        ReimbursableEntityHandler,
+        ReimbursableEntityHandler, ShareholderHandler,
     },
     presentation::hledger_printer::HledgerPrinter,
 };
 
 pub type Ledger = String;
 
-pub struct IfrsHledgerUtil<A, I, E, C, R, D, M, P>
+pub struct IfrsHledgerUtil<A, I, E, C, S, R, D, M, P>
 where
     A: AssetHandler,
     I: IncomeHandler,
     E: ExpenseHandler,
     R: ReimbursableEntityHandler,
     C: CashHandler,
+    S: ShareholderHandler,
     D: DecoratorHandler,
     M: CommodityHandler,
     P: PayeeHandler,
 {
-    process_usecase: ProcessUsecaseImpl<HandlersImpl<A, I, E, R, C, D, M, P>>,
+    process_usecase: ProcessUsecaseImpl<HandlersImpl<A, I, E, R, C, S, D, M, P>>,
     printer: HledgerPrinter,
 }
 
-impl<A, I, E, C, R, D, M, P> IfrsHledgerUtil<A, I, E, C, R, D, M, P>
+impl<A, I, E, C, S, R, D, M, P> IfrsHledgerUtil<A, I, E, C, S, R, D, M, P>
 where
     A: AssetHandler,
     I: IncomeHandler,
     E: ExpenseHandler,
     C: CashHandler,
+    S: ShareholderHandler,
     R: ReimbursableEntityHandler,
     D: DecoratorHandler,
     M: CommodityHandler,

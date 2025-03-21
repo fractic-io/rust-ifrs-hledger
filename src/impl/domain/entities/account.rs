@@ -5,6 +5,8 @@ pub enum Account {
     Liability(LiabilityAccount),
     Income(IncomeAccount),
     Expense(ExpenseAccount),
+    Equity(EquityAccount),
+    CapitalStock(CapitalStockAccount),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -21,6 +23,12 @@ pub struct IncomeAccount(pub(crate) String);
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct ExpenseAccount(pub(crate) String);
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct EquityAccount(pub(crate) String);
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct CapitalStockAccount(pub(crate) String);
 
 // Shorthand constructors.
 
@@ -44,6 +52,14 @@ pub fn expense(name: impl Into<String>) -> ExpenseAccount {
     ExpenseAccount(name.into())
 }
 
+pub fn equity(name: impl Into<String>) -> EquityAccount {
+    EquityAccount(name.into())
+}
+
+pub fn shareholder(name: impl Into<String>) -> CapitalStockAccount {
+    CapitalStockAccount(name.into())
+}
+
 // Easy conversion.
 
 macro_rules! impl_into_account {
@@ -61,3 +77,5 @@ impl_into_account!(CashAccount, Cash);
 impl_into_account!(LiabilityAccount, Liability);
 impl_into_account!(IncomeAccount, Income);
 impl_into_account!(ExpenseAccount, Expense);
+impl_into_account!(EquityAccount, Equity);
+impl_into_account!(CapitalStockAccount, CapitalStock);

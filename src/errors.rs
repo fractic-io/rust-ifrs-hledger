@@ -19,6 +19,11 @@ define_client_error!(
 
 // Accounting-related.
 define_client_error!(
+    CommonStockCannotBePrepaid,
+    "CommonStock: '{description}' cannot have a payment date before accrual, since this would indicate prepayment for stock.",
+    { description: &str }
+);
+define_client_error!(
     NonAmortizableAsset,
     "Asset '{name}' does not have any value defined for 'upon_accrual()'. Provide a non-None value to support amortization.",
     { name: &str }

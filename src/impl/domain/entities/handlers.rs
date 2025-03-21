@@ -5,7 +5,10 @@ use serde::Deserialize;
 use crate::errors::InvalidIsoCurrencyCode;
 
 use super::{
-    account::{AssetAccount, CashAccount, ExpenseAccount, IncomeAccount, LiabilityAccount},
+    account::{
+        AssetAccount, CapitalStockAccount, CashAccount, ExpenseAccount, IncomeAccount,
+        LiabilityAccount,
+    },
     decorator_logic::DecoratorLogic,
 };
 
@@ -41,6 +44,12 @@ pub trait CashHandler:
     for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
 {
     fn account(&self) -> CashAccount;
+}
+
+pub trait ShareholderHandler:
+    for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
+{
+    fn account(&self) -> CapitalStockAccount;
 }
 
 // Other.
@@ -85,23 +94,25 @@ pub trait Handlers: std::fmt::Debug + Send + Sync + 'static {
     type E: ExpenseHandler;
     type R: ReimbursableEntityHandler;
     type C: CashHandler;
+    type S: ShareholderHandler;
     type D: DecoratorHandler;
     type M: CommodityHandler;
     type P: PayeeHandler;
 }
 
 #[derive(Debug)]
-pub(crate) struct HandlersImpl<A, I, E, R, C, D, M, P> {
-    pub _phantom: std::marker::PhantomData<(A, I, E, R, C, D, M, P)>,
+pub(crate) struct HandlersImpl<A, I, E, R, C, S, D, M, P> {
+    pub _phantom: std::marker::PhantomData<(A, I, E, R, C, S, D, M, P)>,
 }
 
-impl<A, I, E, R, C, D, M, P> Handlers for HandlersImpl<A, I, E, R, C, D, M, P>
+impl<A, I, E, R, C, S, D, M, P> Handlers for HandlersImpl<A, I, E, R, C, S, D, M, P>
 where
     A: AssetHandler,
     I: IncomeHandler,
     E: ExpenseHandler,
     R: ReimbursableEntityHandler,
     C: CashHandler,
+    S: ShareholderHandler,
     D: DecoratorHandler,
     M: CommodityHandler,
     P: PayeeHandler,
@@ -111,6 +122,7 @@ where
     type E = E;
     type R = R;
     type C = C;
+    type S = S;
     type D = D;
     type M = M;
     type P = P;

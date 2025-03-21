@@ -11,7 +11,8 @@ use super::{
 pub struct TransactionSpecId(pub(crate) u64);
 
 #[derive(Debug)]
-pub enum AccountingLogic<E, A, I, R> {
+pub enum AccountingLogic<E, A, I, R, S> {
+    CommonStock(S),
     SimpleExpense(E),
     Capitalize(A),
     Amortize(A),
@@ -36,7 +37,7 @@ pub(crate) struct TransactionSpec<H: Handlers> {
     pub accrual_start: NaiveDate,
     pub accrual_end: Option<NaiveDate>,
     pub payment_date: NaiveDate,
-    pub accounting_logic: AccountingLogic<H::E, H::A, H::I, H::R>,
+    pub accounting_logic: AccountingLogic<H::E, H::A, H::I, H::R, H::S>,
     pub decorators: Vec<H::D>,
     pub payee: H::P,
     pub description: String,
@@ -52,7 +53,7 @@ pub struct DecoratedTransactionSpec<H: Handlers> {
     pub accrual_start: NaiveDate,
     pub accrual_end: Option<NaiveDate>,
     pub payment_date: NaiveDate,
-    pub accounting_logic: AccountingLogic<H::E, H::A, H::I, H::R>,
+    pub accounting_logic: AccountingLogic<H::E, H::A, H::I, H::R, H::S>,
     pub payee: H::P,
     pub description: String,
     pub amount: f64,
