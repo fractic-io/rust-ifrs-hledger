@@ -1230,20 +1230,37 @@ impl<H: Handlers> SpecProcessor<H> {
                 ],
             }
         };
-        let assrt = vec![
-            Assertion {
-                date: to,
-                account: VAT_RECEIVABLE.clone().into(),
-                balance: 0.0,
-                currency: commodity.currency()?,
-            },
-            Assertion {
-                date: to,
-                account: VAT_PAYABLE.clone().into(),
-                balance: 0.0,
-                currency: commodity.currency()?,
-            },
-        ];
+        let assrt = if amount > 0.0 {
+            vec![
+                Assertion {
+                    date: to,
+                    account: VAT_RECEIVABLE.clone().into(),
+                    balance: amount.abs(),
+                    currency: commodity.currency()?,
+                },
+                Assertion {
+                    date: to,
+                    account: VAT_PAYABLE.clone().into(),
+                    balance: 0.0,
+                    currency: commodity.currency()?,
+                },
+            ]
+        } else {
+            vec![
+                Assertion {
+                    date: to,
+                    account: VAT_RECEIVABLE.clone().into(),
+                    balance: 0.0,
+                    currency: commodity.currency()?,
+                },
+                Assertion {
+                    date: to,
+                    account: VAT_PAYABLE.clone().into(),
+                    balance: -amount.abs(),
+                    currency: commodity.currency()?,
+                },
+            ]
+        };
 
         Ok(Transformation {
             spec_id: id,
