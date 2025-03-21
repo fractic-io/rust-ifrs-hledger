@@ -805,7 +805,7 @@ impl<H: Handlers> SpecProcessor<H> {
         };
 
         let accrual_days = (accrual_end - accrual_start).num_days() + 1;
-        let init_daily = (estimate as f64) / (accrual_days as f64);
+        let init_daily = (estimate.abs() as f64) / (accrual_days as f64);
 
         let e_handler = e_handler.clone();
         Self::process_variable_expense_helper(spec, e_handler, init_daily, true)
