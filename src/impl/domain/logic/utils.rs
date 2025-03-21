@@ -89,9 +89,12 @@ pub(crate) struct MonthlyAccrualAdjustment {
 pub(crate) fn monthly_accrual_adjustments(
     start: NaiveDate,
     end: NaiveDate,
-    daily_rate: f64,
+    total: f64,
     currency: Currency,
 ) -> Result<Vec<MonthlyAccrualAdjustment>, ServerError> {
+    let accrual_days = (end - start).num_days() + 1;
+    let daily_rate = total.abs() / (accrual_days as f64);
+
     // Determine the number of decimal places from the currency.
     let decimal_places = currency.exponent().unwrap_or(0) as i32;
     let factor = 10_f64.powi(decimal_places);
@@ -99,6 +102,7 @@ pub(crate) fn monthly_accrual_adjustments(
     if periods.is_empty() {
         return Ok(vec![]);
     }
+
     // Use scan to propagate the accumulated rounding error.
     Ok(periods
         .iter()

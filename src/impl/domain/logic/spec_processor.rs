@@ -613,8 +613,6 @@ impl<H: Handlers> SpecProcessor<H> {
             .ok_or_else(|| NonAmortizableAsset::new(&description))?;
 
         // Record the monthly amortization adjustments.
-        let total_days = (accrual_end - accrual_start).num_days() + 1;
-        let daily_amort = amount.abs() / (total_days as f64);
         for MonthlyAccrualAdjustment {
             period_start,
             period_end,
@@ -623,7 +621,7 @@ impl<H: Handlers> SpecProcessor<H> {
         } in monthly_accrual_adjustments(
             accrual_start,
             accrual_end,
-            daily_amort,
+            amount.abs(),
             commodity.currency()?,
         )? {
             transactions.push(Transaction {
@@ -685,8 +683,6 @@ impl<H: Handlers> SpecProcessor<H> {
         };
         amount_should_be_negative!(amount, "FixedExpense", &id);
 
-        let total_days = (accrual_end - accrual_start).num_days() + 1;
-        let daily_expense = amount.abs() / (total_days as f64);
         let mut transactions = Vec::new();
         let mut payable_sum = 0.0;
         let mut prepaid_sum = 0.0;
@@ -698,7 +694,7 @@ impl<H: Handlers> SpecProcessor<H> {
         } in monthly_accrual_adjustments(
             accrual_start,
             accrual_end,
-            daily_expense,
+            amount.abs(),
             commodity.currency()?,
         )? {
             if adjustment_date <= payment_date {
@@ -915,7 +911,7 @@ impl<H: Handlers> SpecProcessor<H> {
         } in monthly_accrual_adjustments(
             accrual_start,
             accrual_end,
-            estimated_daily_rate,
+            estimated_total,
             commodity.currency()?,
         )? {
             transactions.push(Transaction {
