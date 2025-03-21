@@ -8,7 +8,7 @@ use crate::{
     entities::{
         AccountingLogic, Annotation, Assertion, AssetHandler, BackingAccount, CashHandler,
         CommodityHandler, DecoratedFinancialRecordSpecs, DecoratedTransactionSpec, ExpenseAccount,
-        ExpenseHandler, FinancialRecords, Handlers, IncomeHandler, PayeeHandler,
+        ExpenseHandler, FinancialRecords, Handlers, IncomeHandler, LiabilityAccount, PayeeHandler,
         ReimbursableEntityHandler, ShareholderHandler, Transaction, TransactionLabel,
         TransactionPosting, TransactionSpecId,
     },
@@ -164,6 +164,9 @@ impl<H: Handlers> SpecProcessor<H> {
                             Self::process_immaterial_expense(spec)?
                         }
                         AccountingLogic::Reimburse(..) => Self::process_reimburse(spec)?,
+                        AccountingLogic::ReimbursePartial { .. } => {
+                            Self::process_reimburse_partial(spec)?
+                        }
                         AccountingLogic::ClearVat { .. } => Self::process_clear_vat(spec)?,
                     };
                     state.step(transformation)
@@ -1115,12 +1118,34 @@ impl<H: Handlers> SpecProcessor<H> {
     }
 
     fn process_reimburse(spec: DecoratedTransactionSpec<H>) -> Result<Transformation, ServerError> {
+        let AccountingLogic::Reimburse(ref r_handler) = spec.accounting_logic else {
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+        };
+        let r_account = r_handler.account();
+        Self::process_reimburse_helper(spec, r_account, 0.0)
+    }
+
+    fn process_reimburse_partial(
+        spec: DecoratedTransactionSpec<H>,
+    ) -> Result<Transformation, ServerError> {
+        let AccountingLogic::ReimbursePartial { ref to, remaining } = spec.accounting_logic else {
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+        };
+        let r_account = to.account();
+        Self::process_reimburse_helper(spec, r_account, remaining)
+    }
+
+    fn process_reimburse_helper(
+        spec: DecoratedTransactionSpec<H>,
+        r_account: LiabilityAccount,
+        expect_remaining: f64,
+    ) -> Result<Transformation, ServerError> {
         let DecoratedTransactionSpec {
             id,
             accrual_start: _,
             accrual_end: None,
             payment_date,
-            accounting_logic: AccountingLogic::Reimburse(r_handler),
+            accounting_logic: _,
             payee,
             description,
             amount,
@@ -1146,7 +1171,7 @@ impl<H: Handlers> SpecProcessor<H> {
                     currency: commodity.currency()?,
                 },
                 TransactionPosting {
-                    account: r_handler.account().into(),
+                    account: r_account.clone().into(),
                     amount: amount.abs(),
                     currency: commodity.currency()?,
                 },
@@ -1154,8 +1179,8 @@ impl<H: Handlers> SpecProcessor<H> {
         };
         let assrt = Assertion {
             date: payment_date,
-            account: r_handler.account().into(),
-            balance: 0.0,
+            account: r_account.into(),
+            balance: -expect_remaining,
             currency: commodity.currency()?,
         };
 

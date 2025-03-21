@@ -22,6 +22,7 @@ pub enum AccountingLogic<E, A, I, R, S> {
     ImmaterialIncome(I),
     ImmaterialExpense(E),
     Reimburse(R),
+    ReimbursePartial { to: R, remaining: f64 },
     ClearVat { from: NaiveDate, to: NaiveDate },
 }
 
