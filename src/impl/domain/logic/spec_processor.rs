@@ -4,7 +4,9 @@ use chrono::{Duration, NaiveDate};
 use fractic_server_error::ServerError;
 
 use crate::{
-    domain::logic::utils::{compute_daily_average, monthly_accrual_periods, MonthlyAccrualPeriod},
+    domain::logic::utils::{
+        compute_daily_average, monthly_accrual_adjustments, MonthlyAccrualAdjustment,
+    },
     entities::{
         AccountingLogic, Annotation, Assertion, AssetHandler, BackingAccount, CashHandler,
         CommodityHandler, DecoratedFinancialRecordSpecs, DecoratedTransactionSpec, ExpenseAccount,
@@ -613,14 +615,17 @@ impl<H: Handlers> SpecProcessor<H> {
         // Record the monthly amortization adjustments.
         let total_days = (accrual_end - accrual_start).num_days() + 1;
         let daily_amort = amount.abs() / (total_days as f64);
-        for MonthlyAccrualPeriod {
+        for MonthlyAccrualAdjustment {
             period_start,
             period_end,
-            num_days,
+            adjustment_amount: monthly_amort,
             adjustment_date,
-        } in monthly_accrual_periods(accrual_start, accrual_end)?
-        {
-            let monthly_amort = daily_amort * (num_days as f64);
+        } in monthly_accrual_adjustments(
+            accrual_start,
+            accrual_end,
+            daily_amort,
+            commodity.currency()?,
+        )? {
             transactions.push(Transaction {
                 spec_id: id,
                 date: adjustment_date,
@@ -685,14 +690,17 @@ impl<H: Handlers> SpecProcessor<H> {
         let mut transactions = Vec::new();
         let mut payable_sum = 0.0;
         let mut prepaid_sum = 0.0;
-        for MonthlyAccrualPeriod {
+        for MonthlyAccrualAdjustment {
             period_start,
             period_end,
-            num_days,
+            adjustment_amount: period_expense,
             adjustment_date,
-        } in monthly_accrual_periods(accrual_start, accrual_end)?
-        {
-            let period_expense = daily_expense * (num_days as f64);
+        } in monthly_accrual_adjustments(
+            accrual_start,
+            accrual_end,
+            daily_expense,
+            commodity.currency()?,
+        )? {
             if adjustment_date <= payment_date {
                 // Record accrual adjustment as payable, since the clearing
                 // transaction will occur in the future.
@@ -899,14 +907,17 @@ impl<H: Handlers> SpecProcessor<H> {
 
         // Break into monthly accrual periods.
         let mut transactions = Vec::new();
-        for MonthlyAccrualPeriod {
+        for MonthlyAccrualAdjustment {
             period_start,
             period_end,
-            num_days,
+            adjustment_amount: period_estimate,
             adjustment_date,
-        } in monthly_accrual_periods(accrual_start, accrual_end)?
-        {
-            let period_estimate = estimated_daily_rate * (num_days as f64);
+        } in monthly_accrual_adjustments(
+            accrual_start,
+            accrual_end,
+            estimated_daily_rate,
+            commodity.currency()?,
+        )? {
             transactions.push(Transaction {
                 spec_id: id,
                 date: adjustment_date,

@@ -1,5 +1,6 @@
 use chrono::{Datelike, Duration, NaiveDate};
 use fractic_server_error::{CriticalError, ServerError};
+use iso_currency::Currency;
 
 use super::spec_processor::ExpenseHistoryPriceRecord;
 
@@ -72,6 +73,59 @@ pub(crate) fn monthly_accrual_periods(
             })
         })
         .collect()
+}
+
+/// Similar to `monthly_accrual_periods`, but returns the end-of-period adjust
+/// amounts, and date on which the adjustment should be recorded.
+///
+/// Adjustment amounts are rounded to the currency's decimal places, and any
+/// remaining rounding error is corrected on the last period.
+pub(crate) struct MonthlyAccrualAdjustment {
+    pub(crate) period_start: NaiveDate,
+    pub(crate) period_end: NaiveDate,
+    pub(crate) adjustment_amount: f64,
+    pub(crate) adjustment_date: NaiveDate,
+}
+pub(crate) fn monthly_accrual_adjustments(
+    start: NaiveDate,
+    end: NaiveDate,
+    daily_rate: f64,
+    currency: Currency,
+) -> Result<Vec<MonthlyAccrualAdjustment>, ServerError> {
+    // Determine the number of decimal places from the currency.
+    let decimal_places = currency.exponent().unwrap_or(0) as i32;
+    let factor = 10_f64.powi(decimal_places);
+    let periods = monthly_accrual_periods(start, end)?;
+    if periods.is_empty() {
+        return Ok(vec![]);
+    }
+    // Use scan to propagate the accumulated rounding error.
+    Ok(periods
+        .iter()
+        .enumerate()
+        .scan(0f64, |acc, (i, period)| {
+            let unrounded = daily_rate * (period.num_days as f64);
+            if i < periods.len() - 1 {
+                let rounded = (unrounded * factor).round() / factor;
+                *acc += unrounded - rounded;
+                Some(MonthlyAccrualAdjustment {
+                    period_start: period.period_start,
+                    period_end: period.period_end,
+                    adjustment_amount: rounded,
+                    adjustment_date: period.adjustment_date,
+                })
+            } else {
+                // Add the accumulated rounding error in the final period.
+                let last_adjustment = ((unrounded + *acc) * factor).round() / factor;
+                Some(MonthlyAccrualAdjustment {
+                    period_start: period.period_start,
+                    period_end: period.period_end,
+                    adjustment_amount: last_adjustment,
+                    adjustment_date: period.adjustment_date,
+                })
+            }
+        })
+        .collect())
 }
 
 /// Given a slice of variable expense records and a window defined by
