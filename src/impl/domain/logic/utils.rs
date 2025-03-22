@@ -93,7 +93,7 @@ pub(crate) fn monthly_accrual_adjustments(
     currency: Currency,
 ) -> Result<Vec<MonthlyAccrualAdjustment>, ServerError> {
     let accrual_days = (end - start).num_days() + 1;
-    let daily_rate = total.abs() / (accrual_days as f64);
+    let daily_rate = total / (accrual_days as f64);
 
     // Determine the number of decimal places from the currency.
     let decimal_places = currency.exponent().unwrap_or(0) as i32;
@@ -103,33 +103,32 @@ pub(crate) fn monthly_accrual_adjustments(
         return Ok(vec![]);
     }
 
-    // Use scan to propagate the accumulated rounding error.
-    Ok(periods
-        .iter()
-        .enumerate()
-        .scan(0f64, |acc, (i, period)| {
-            let unrounded = daily_rate * (period.num_days as f64);
-            if i < periods.len() - 1 {
-                let rounded = (unrounded * factor).round() / factor;
-                *acc += unrounded - rounded;
-                Some(MonthlyAccrualAdjustment {
-                    period_start: period.period_start,
-                    period_end: period.period_end,
-                    adjustment_amount: rounded,
-                    adjustment_date: period.adjustment_date,
-                })
-            } else {
-                // Add the accumulated rounding error in the final period.
-                let last_adjustment = ((unrounded + *acc) * factor).round() / factor;
-                Some(MonthlyAccrualAdjustment {
-                    period_start: period.period_start,
-                    period_end: period.period_end,
-                    adjustment_amount: last_adjustment,
-                    adjustment_date: period.adjustment_date,
-                })
-            }
-        })
-        .collect())
+    // Compute the rounded accrual amounts for each period.
+    let mut adjustments = Vec::with_capacity(periods.len());
+    let mut running_total = 0f64;
+    for (i, period) in periods.iter().enumerate() {
+        let unrounded = daily_rate * (period.num_days as f64);
+        if i < periods.len() - 1 {
+            let rounded = (unrounded * factor).round() / factor;
+            adjustments.push(MonthlyAccrualAdjustment {
+                period_start: period.period_start,
+                period_end: period.period_end,
+                adjustment_amount: rounded,
+                adjustment_date: period.adjustment_date,
+            });
+            running_total += rounded;
+        } else {
+            // Compute the final adjustment directly so that the sum is exact.
+            let final_adjustment = total - running_total;
+            adjustments.push(MonthlyAccrualAdjustment {
+                period_start: period.period_start,
+                period_end: period.period_end,
+                adjustment_amount: final_adjustment,
+                adjustment_date: period.adjustment_date,
+            });
+        }
+    }
+    Ok(adjustments)
 }
 
 /// Given a slice of variable expense records and a window defined by
