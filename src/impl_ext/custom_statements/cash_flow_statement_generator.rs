@@ -7,7 +7,10 @@ use crate::entities::{
     asset_tl, equity_tl, expense_tl, income_tl, liability_tl, Account, AssetClassification,
     EquityClassification, ExpenseClassification, IncomeClassification, LiabilityClassification,
 };
-use crate::errors::{HledgerBalanceInvalidTotal, HledgerCommandFailed, HledgerInvalidPath};
+use crate::errors::{
+    CashFlowStatementUnexpectedNegativeValue, CashFlowStatementUnexpectedPositiveValue,
+    HledgerBalanceInvalidTotal, HledgerCommandFailed, HledgerInvalidPath,
+};
 
 pub struct CashFlowStatementGenerator {
     ledger_path: PathBuf,
@@ -36,43 +39,47 @@ impl CashFlowStatementGenerator {
         // OPERATING ACTIVITIES
         // -------------------------------------
 
-        // Net Income: computed as Income minus Expenses from the income statement.
-        let income_total = self.total_income()?;
-        let expense_total = self.total_expenses()?;
-        let net_income = income_total - expense_total;
+        let net_income = self.total_income()? - self.total_expenses()?;
 
         // Adjustments for Non-Cash Items.
-        let depreciation = self.expense_diff(ExpenseClassification::DepreciationExpense)?;
-        let amortization = self.expense_diff(ExpenseClassification::AmortizationExpense)?;
+        let depreciation = self.expense_sum(ExpenseClassification::DepreciationExpense)?;
+        let amortization = self.expense_sum(ExpenseClassification::AmortizationExpense)?;
 
         // Adjustments for Non-Operating (Non-Cash) Gains/Losses.
-        let gain_on_sale = self.income_diff(IncomeClassification::GainOnSaleOfAssets)?;
-        let loss_on_sale = self.expense_diff(ExpenseClassification::LossOnSaleOfAssets)?;
-        // Non-cash gains reduce cash so subtract; non-cash losses add back.
+        let gain_on_sale = self.income_sum(IncomeClassification::GainOnSaleOfAssets)?;
+        let loss_on_sale = self.expense_sum(ExpenseClassification::LossOnSaleOfAssets)?;
+        // Non-cash gains reduce cash so subtract; non-cash losses add back:
         let sale_adjustment = -gain_on_sale + loss_on_sale;
 
-        let fx_gain = self.income_diff(IncomeClassification::FxGain)?;
-        let fx_loss = self.expense_diff(ExpenseClassification::FxLoss)?;
+        let fx_gain = self.income_sum(IncomeClassification::FxGain)?;
+        let fx_loss = self.expense_sum(ExpenseClassification::FxLoss)?;
+        // Non-cash gains reduce cash so subtract; non-cash losses add back:
         let fx_adjustment = -fx_gain + fx_loss;
 
-        let vat_income = self.income_diff(IncomeClassification::VatAdjustmentIncome)?;
-        let vat_expense = self.expense_diff(ExpenseClassification::VatAdjustmentExpense)?;
+        let vat_income = self.income_sum(IncomeClassification::VatAdjustmentIncome)?;
+        let vat_expense = self.expense_sum(ExpenseClassification::VatAdjustmentExpense)?;
+        // Non-cash gains reduce cash so subtract; non-cash losses add back:
         let vat_adjustment = -vat_income + vat_expense;
 
         // Changes in Working Capital.
-        // For asset accounts, an increase uses cash (so we subtract the change);
-        // for liabilities, an increase provides cash (so we add the change).
-        let ar = self.asset_diff(AssetClassification::AccountsReceivable)?;
-        let inventory = self.asset_diff(AssetClassification::Inventory)?;
-        let prepaid = self.asset_diff(AssetClassification::PrepaidExpenses)?;
-        let other_current_assets = self.asset_diff(AssetClassification::OtherCurrentAssets)?;
+        //
+        // For asset accounts, an increase uses cash (so we subtract the
+        // change). For liabilities, an increase provides cash (so we add the
+        // change).
+        let ar = self.change_in_asset(AssetClassification::AccountsReceivable)?;
+        let inventory = self.change_in_asset(AssetClassification::Inventory)?;
+        let prepaid = self.change_in_asset(AssetClassification::PrepaidExpenses)?;
+        let other_current_assets = self.change_in_asset(AssetClassification::OtherCurrentAssets)?;
         let wc_assets = -(ar + inventory + prepaid + other_current_assets);
 
-        let accounts_payable = self.liability_diff(LiabilityClassification::AccountsPayable)?;
-        let accrued_expenses = self.liability_diff(LiabilityClassification::AccruedExpenses)?;
-        let deferred_revenue = self.liability_diff(LiabilityClassification::DeferredRevenue)?;
+        let accounts_payable =
+            self.change_in_liability(LiabilityClassification::AccountsPayable)?;
+        let accrued_expenses =
+            self.change_in_liability(LiabilityClassification::AccruedExpenses)?;
+        let deferred_revenue =
+            self.change_in_liability(LiabilityClassification::DeferredRevenue)?;
         let other_current_liabilities =
-            self.liability_diff(LiabilityClassification::OtherCurrentLiabilities)?;
+            self.change_in_liability(LiabilityClassification::OtherCurrentLiabilities)?;
         let wc_liabilities =
             accounts_payable + accrued_expenses + deferred_revenue + other_current_liabilities;
 
@@ -93,11 +100,11 @@ impl CashFlowStatementGenerator {
 
         // Cash Outflows for Acquisitions of Long-Term Assets.
         // Sum of purchases for PPE, intangible assets, long-term investments/deposits, and other non-current assets.
-        let ppe = self.asset_diff(AssetClassification::PropertyPlantEquipment)?;
-        let intangible = self.asset_diff(AssetClassification::IntangibleAssets)?;
-        let lt_investments = self.asset_diff(AssetClassification::LongTermInvestments)?;
-        let lt_deposits = self.asset_diff(AssetClassification::LongTermDeposits)?;
-        let other_noncurrent = self.asset_diff(AssetClassification::OtherNonCurrentAssets)?;
+        let ppe = self.change_in_asset(AssetClassification::PropertyPlantEquipment)?;
+        let intangible = self.change_in_asset(AssetClassification::IntangibleAssets)?;
+        let lt_investments = self.change_in_asset(AssetClassification::LongTermInvestments)?;
+        let lt_deposits = self.change_in_asset(AssetClassification::LongTermDeposits)?;
+        let other_noncurrent = self.change_in_asset(AssetClassification::OtherNonCurrentAssets)?;
         let asset_acquisitions = ppe + intangible + lt_investments + lt_deposits + other_noncurrent;
         // Cash outflow (a purchase uses cash) is recorded as negative.
         let investing_outflow = -asset_acquisitions;
@@ -112,13 +119,13 @@ impl CashFlowStatementGenerator {
         // -------------------------------------
 
         // Cash Flows from Debt Transactions.
-        let short_term_debt = self.liability_diff(LiabilityClassification::ShortTermDebt)?;
-        let long_term_debt = self.liability_diff(LiabilityClassification::LongTermDebt)?;
+        let short_term_debt = self.change_in_liability(LiabilityClassification::ShortTermDebt)?;
+        let long_term_debt = self.change_in_liability(LiabilityClassification::LongTermDebt)?;
         let debt_flow = short_term_debt + long_term_debt;
 
         // Cash Flows from Equity Transactions.
-        let common_stock = self.equity_diff(EquityClassification::CommonStock)?;
-        let preferred_stock = self.equity_diff(EquityClassification::PreferredStock)?;
+        let common_stock = self.change_in_equity(EquityClassification::CommonStock)?;
+        let preferred_stock = self.change_in_equity(EquityClassification::PreferredStock)?;
         let equity_flow = common_stock + preferred_stock;
 
         // Other Financing Activities are not explicitly tracked (assumed zero).
@@ -217,13 +224,14 @@ impl CashFlowStatementGenerator {
     }
 
     fn run_hledger_sum(&self, account: &str) -> Result<f64, ServerError> {
+        let account_query = format!("^{}($|:)", account);
         let output = Command::new("hledger")
             .arg("-f")
             .arg(&self.ledger_path)
             .arg("-p")
             .arg(&self.period)
             .arg("balance")
-            .arg(account)
+            .arg(account_query)
             .arg("--output-format=csv")
             .arg("--layout=bare")
             .output()
@@ -258,30 +266,55 @@ impl CashFlowStatementGenerator {
     }
 
     fn total_income(&self) -> Result<f64, ServerError> {
-        self.run_hledger_sum("Income")
+        let s = self.run_hledger_sum("Income")?;
+        if s > 0.0 {
+            return Err(CashFlowStatementUnexpectedPositiveValue::new("Income", s));
+        }
+        Ok(s.abs())
     }
 
     fn total_expenses(&self) -> Result<f64, ServerError> {
-        self.run_hledger_sum("Expenses")
+        let s = self.run_hledger_sum("Expenses")?;
+        if s < 0.0 {
+            return Err(CashFlowStatementUnexpectedNegativeValue::new("Expenses", s));
+        }
+        Ok(s.abs())
     }
 
-    fn expense_diff(&self, classification: ExpenseClassification) -> Result<f64, ServerError> {
-        self.run_hledger_sum(&Into::<Account>::into(expense_tl(classification)).ledger())
+    fn income_sum(&self, classification: IncomeClassification) -> Result<f64, ServerError> {
+        let l = Into::<Account>::into(income_tl(classification)).ledger();
+        let s = self.run_hledger_sum(&l)?;
+        if s > 0.0 {
+            return Err(CashFlowStatementUnexpectedPositiveValue::new(&l, s));
+        }
+        Ok(s.abs())
     }
 
-    fn income_diff(&self, classification: IncomeClassification) -> Result<f64, ServerError> {
-        self.run_hledger_sum(&Into::<Account>::into(income_tl(classification)).ledger())
+    fn expense_sum(&self, classification: ExpenseClassification) -> Result<f64, ServerError> {
+        let l = Into::<Account>::into(expense_tl(classification)).ledger();
+        let s = self.run_hledger_sum(&l)?;
+        if s < 0.0 {
+            return Err(CashFlowStatementUnexpectedNegativeValue::new(&l, s));
+        }
+        Ok(s.abs())
     }
 
-    fn asset_diff(&self, classification: AssetClassification) -> Result<f64, ServerError> {
-        self.run_hledger_sum(&Into::<Account>::into(asset_tl(classification)).ledger())
+    fn change_in_asset(&self, classification: AssetClassification) -> Result<f64, ServerError> {
+        let s = self.run_hledger_sum(&Into::<Account>::into(asset_tl(classification)).ledger())?;
+        Ok(s)
     }
 
-    fn liability_diff(&self, classification: LiabilityClassification) -> Result<f64, ServerError> {
-        self.run_hledger_sum(&Into::<Account>::into(liability_tl(classification)).ledger())
+    fn change_in_liability(
+        &self,
+        classification: LiabilityClassification,
+    ) -> Result<f64, ServerError> {
+        let s =
+            self.run_hledger_sum(&Into::<Account>::into(liability_tl(classification)).ledger())?;
+        Ok(-s)
     }
 
-    fn equity_diff(&self, classification: EquityClassification) -> Result<f64, ServerError> {
-        self.run_hledger_sum(&Into::<Account>::into(equity_tl(classification)).ledger())
+    fn change_in_equity(&self, classification: EquityClassification) -> Result<f64, ServerError> {
+        let s = self.run_hledger_sum(&Into::<Account>::into(equity_tl(classification)).ledger())?;
+        Ok(-s)
     }
 }

@@ -85,3 +85,13 @@ define_client_error!(
     "Invalid path to hledger ledger file: '{ledger}'.",
     { ledger: &str }
 );
+define_client_error!(
+    CashFlowStatementUnexpectedNegativeValue,
+    "Unexpected negative value encountered cash flow statement: '{account}' = '{value}'.",
+    { account: &str, value: f64 }
+);
+define_client_error!(
+    CashFlowStatementUnexpectedPositiveValue,
+    "Unexpected positive value encountered cash flow statement: '{account}' = '{value}'.",
+    { account: &str, value: f64 }
+);
