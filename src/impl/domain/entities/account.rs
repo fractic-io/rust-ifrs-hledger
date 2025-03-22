@@ -1,10 +1,10 @@
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Account {
-    Asset(AssetAccount, AssetClassification),
-    Liability(LiabilityAccount, LiabilityClassification),
-    Income(IncomeAccount, IncomeClassification),
-    Expense(ExpenseAccount, ExpenseClassification),
-    Equity(EquityAccount, EquityClassification),
+    Asset(AssetAccount),
+    Liability(LiabilityAccount),
+    Income(IncomeAccount),
+    Expense(ExpenseAccount),
+    Equity(EquityAccount),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
@@ -77,6 +77,8 @@ pub enum IncomeClassification {
     GainOnSaleOfAssets,
     /// Gains from foreign exchange transactions.
     FxGain,
+    /// VAT adjustments (discounts, rounding gains).
+    VatAdjustmentIncome,
 
     OtherIncome,
 }
@@ -94,14 +96,14 @@ pub enum ExpenseClassification {
     //
     /// Expenses related to selling, such as marketing, advertising, and sales
     /// commissions.
-    SalesExpense,
+    SellingExpenses,
     /// Overhead costs, including office expenses, rent, utilities, and salaries
     /// of non-sales staff.
-    GeneralAdministrativeExpense,
+    GeneralAdministrativeExpenses,
     /// Costs incurred for R&D activities.
-    ResearchAndDevelopmentExpense,
+    ResearchAndDevelopmentExpenses,
     /// Costs incurred for cloud services (ex. AWS).
-    CloudServicesExpense,
+    CloudServicesExpenses,
 
     // Depreciation & Amortization.
     // =========================================================================
@@ -118,6 +120,8 @@ pub enum ExpenseClassification {
     InterestExpense,
     /// Income tax expense.
     IncomeTaxExpense,
+    /// Other tax expenses.
+    OtherTaxExpense,
 
     // Losses from non-core activities.
     // =========================================================================
@@ -126,6 +130,8 @@ pub enum ExpenseClassification {
     LossOnSaleOfAssets,
     /// Losses from foreign exchange transactions.
     FxLoss,
+    /// VAT adjustments (rounding losses)
+    VatAdjustmentExpense,
 
     OtherExpense,
 }
@@ -146,54 +152,61 @@ pub enum EquityClassification {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct AssetAccount(pub(crate) String);
+pub struct AssetAccount(pub(crate) Option<String>, pub(crate) AssetClassification);
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct CashAccount(pub(crate) String);
+pub struct LiabilityAccount(
+    pub(crate) Option<String>,
+    pub(crate) LiabilityClassification,
+);
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct LiabilityAccount(pub(crate) String);
+pub struct IncomeAccount(pub(crate) Option<String>, pub(crate) IncomeClassification);
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct IncomeAccount(pub(crate) String);
+pub struct ExpenseAccount(pub(crate) Option<String>, pub(crate) ExpenseClassification);
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct ExpenseAccount(pub(crate) String);
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct EquityAccount(pub(crate) String);
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct CapitalStockAccount(pub(crate) String);
+pub struct EquityAccount(pub(crate) Option<String>, pub(crate) EquityClassification);
 
 // Shorthand constructors.
 
-pub fn asset(name: impl Into<String>) -> AssetAccount {
-    AssetAccount(name.into())
+pub fn asset(name: impl Into<String>, classification: AssetClassification) -> AssetAccount {
+    AssetAccount(Some(name.into()), classification)
+}
+pub fn asset_tl(classification: AssetClassification) -> AssetAccount {
+    AssetAccount(None, classification)
 }
 
-pub fn cash(name: impl Into<String>) -> CashAccount {
-    CashAccount(name.into())
+pub fn liability(
+    name: impl Into<String>,
+    classification: LiabilityClassification,
+) -> LiabilityAccount {
+    LiabilityAccount(Some(name.into()), classification)
+}
+pub fn liability_tl(classification: LiabilityClassification) -> LiabilityAccount {
+    LiabilityAccount(None, classification)
 }
 
-pub fn liability(name: impl Into<String>) -> LiabilityAccount {
-    LiabilityAccount(name.into())
+pub fn income(name: impl Into<String>, classification: IncomeClassification) -> IncomeAccount {
+    IncomeAccount(Some(name.into()), classification)
+}
+pub fn income_tl(classification: IncomeClassification) -> IncomeAccount {
+    IncomeAccount(None, classification)
 }
 
-pub fn income(name: impl Into<String>) -> IncomeAccount {
-    IncomeAccount(name.into())
+pub fn expense(name: impl Into<String>, classification: ExpenseClassification) -> ExpenseAccount {
+    ExpenseAccount(Some(name.into()), classification)
+}
+pub fn expense_tl(classification: ExpenseClassification) -> ExpenseAccount {
+    ExpenseAccount(None, classification)
 }
 
-pub fn expense(name: impl Into<String>) -> ExpenseAccount {
-    ExpenseAccount(name.into())
+pub fn equity(name: impl Into<String>, classification: EquityClassification) -> EquityAccount {
+    EquityAccount(Some(name.into()), classification)
 }
-
-pub fn equity(name: impl Into<String>) -> EquityAccount {
-    EquityAccount(name.into())
-}
-
-pub fn shareholder(name: impl Into<String>) -> CapitalStockAccount {
-    CapitalStockAccount(name.into())
+pub fn equity_tl(classification: EquityClassification) -> EquityAccount {
+    EquityAccount(None, classification)
 }
 
 // Easy conversion.
@@ -209,9 +222,7 @@ macro_rules! impl_into_account {
 }
 
 impl_into_account!(AssetAccount, Asset);
-impl_into_account!(CashAccount, Cash);
 impl_into_account!(LiabilityAccount, Liability);
 impl_into_account!(IncomeAccount, Income);
 impl_into_account!(ExpenseAccount, Expense);
 impl_into_account!(EquityAccount, Equity);
-impl_into_account!(CapitalStockAccount, CapitalStock);

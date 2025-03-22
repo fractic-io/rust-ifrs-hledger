@@ -6,8 +6,8 @@ use crate::errors::InvalidIsoCurrencyCode;
 
 use super::{
     account::{
-        AssetAccount, CapitalStockAccount, CashAccount, ExpenseAccount, IncomeAccount,
-        LiabilityAccount,
+        asset, asset_tl, liability, liability_tl, AssetAccount, AssetClassification, EquityAccount,
+        ExpenseAccount, IncomeAccount, LiabilityAccount, LiabilityClassification,
     },
     decorator_logic::DecoratorLogic,
 };
@@ -19,37 +19,69 @@ pub trait AssetHandler:
     for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
 {
     fn account(&self) -> AssetAccount;
-    fn while_prepaid(&self) -> AssetAccount;
-    fn while_payable(&self) -> LiabilityAccount;
-    fn upon_accrual(&self) -> Option<ExpenseAccount>;
+    fn while_prepaid(&self) -> AssetAccount {
+        match self.account().0 {
+            Some(name) => asset(name, AssetClassification::PrepaidExpenses),
+            None => asset_tl(AssetClassification::PrepaidExpenses),
+        }
+    }
+    fn while_payable(&self) -> LiabilityAccount {
+        match self.account().0 {
+            Some(name) => liability(name, LiabilityClassification::AccountsPayable),
+            None => liability_tl(LiabilityClassification::AccountsPayable),
+        }
+    }
+    fn upon_accrual(&self) -> Option<ExpenseAccount> {
+        None
+    }
 }
 
 pub trait IncomeHandler:
     for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
 {
     fn account(&self) -> IncomeAccount;
-    fn while_prepaid(&self) -> LiabilityAccount;
-    fn while_receivable(&self) -> AssetAccount;
+    fn while_prepaid(&self) -> LiabilityAccount {
+        match self.account().0 {
+            Some(name) => liability(name, LiabilityClassification::DeferredRevenue),
+            None => liability_tl(LiabilityClassification::DeferredRevenue),
+        }
+    }
+    fn while_receivable(&self) -> AssetAccount {
+        match self.account().0 {
+            Some(name) => asset(name, AssetClassification::AccountsReceivable),
+            None => asset_tl(AssetClassification::AccountsReceivable),
+        }
+    }
 }
 
 pub trait ExpenseHandler:
     for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
 {
     fn account(&self) -> ExpenseAccount;
-    fn while_prepaid(&self) -> AssetAccount;
-    fn while_payable(&self) -> LiabilityAccount;
+    fn while_prepaid(&self) -> AssetAccount {
+        match self.account().0 {
+            Some(name) => asset(name, AssetClassification::PrepaidExpenses),
+            None => asset_tl(AssetClassification::PrepaidExpenses),
+        }
+    }
+    fn while_payable(&self) -> LiabilityAccount {
+        match self.account().0 {
+            Some(name) => liability(name, LiabilityClassification::AccountsPayable),
+            None => liability_tl(LiabilityClassification::AccountsPayable),
+        }
+    }
 }
 
 pub trait CashHandler:
     for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
 {
-    fn account(&self) -> CashAccount;
+    fn account(&self) -> AssetAccount;
 }
 
 pub trait ShareholderHandler:
     for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
 {
-    fn account(&self) -> CapitalStockAccount;
+    fn account(&self) -> EquityAccount;
 }
 
 // Other.
