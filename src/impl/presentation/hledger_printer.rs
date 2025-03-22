@@ -164,31 +164,31 @@ impl HledgerPrinter {
         let mut ledger_output = String::new();
 
         ledger_output.push_str(
-            "; --- Accounts -----------------------------------------------------------------\n\n",
+            "; --- Accounts -------------------------------------------------------------------------------------\n\n",
         );
         self.print_accounts(&mut ledger_output, financial_records);
         ledger_output.push_str("\n\n");
 
         ledger_output.push_str(
-            "; --- Commodities --------------------------------------------------------------\n\n",
+            "; --- Commodities ----------------------------------------------------------------------------------\n\n",
         );
         self.print_commodities(&mut ledger_output, financial_records);
         ledger_output.push_str("\n\n");
 
         ledger_output.push_str(
-            "; --- Payees -------------------------------------------------------------------\n\n",
+            "; --- Payees ---------------------------------------------------------------------------------------\n\n",
         );
         self.print_payees(&mut ledger_output, financial_records);
         ledger_output.push_str("\n\n");
 
         ledger_output.push_str(
-            "; --- Transactions -------------------------------------------------------------\n\n",
+            "; --- Transactions ---------------------------------------------------------------------------------\n\n",
         );
         self.print_transactions(&mut ledger_output, financial_records);
         ledger_output.push_str("\n\n");
 
         ledger_output.push_str(
-            "; --- Assertions ---------------------------------------------------------------\n\n",
+            "; --- Assertions -----------------------------------------------------------------------------------\n\n",
         );
         self.print_assertions(&mut ledger_output, financial_records);
 
@@ -207,7 +207,7 @@ impl HledgerPrinter {
                 .iter()
                 .map(|account| {
                     format!(
-                        "account {:61}  ; type: {}\n",
+                        "account {:81}  ; type: {}\n",
                         account.ledger(),
                         account.type_tag()
                     )
@@ -283,7 +283,7 @@ impl HledgerPrinter {
             ledger_output.push_str(&format!("{} ({}) {}\n", tx.date, tx.spec_id, label));
             for posting in &tx.postings {
                 ledger_output.push_str(&format!(
-                    "    {:55} {:>20}\n",
+                    "    {:75} {:>20}\n",
                     posting.account.ledger(),
                     self.format_amount(posting.amount, posting.currency, false),
                 ));
@@ -294,7 +294,7 @@ impl HledgerPrinter {
                 .unwrap_or(&vec![])
             {
                 let s = annotation.to_string();
-                let wrapped = textwrap::wrap(&s, 74);
+                let wrapped = textwrap::wrap(&s, 94);
                 let prefix = "    ;";
                 ledger_output.push_str(&format!("{}\n", prefix));
                 for line in wrapped {
@@ -314,7 +314,7 @@ impl HledgerPrinter {
         for assertion in sorted_assertions {
             ledger_output.push_str(&format!("{} <assertion>\n", assertion.date));
             ledger_output.push_str(&format!(
-                "    {:50} 0 == {:>20}\n",
+                "    {:70} 0 == {:>20}\n",
                 assertion.account.ledger(),
                 self.format_amount(assertion.balance, assertion.currency, false),
             ));
