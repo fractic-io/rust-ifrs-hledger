@@ -1,5 +1,5 @@
 use chrono::NaiveDate;
-use fractic_server_error::define_client_error;
+use fractic_server_error::{define_client_error, define_internal_error};
 
 use crate::entities::TransactionSpecId;
 
@@ -67,4 +67,21 @@ define_client_error!(
     UnexpectedPositiveValue,
     "Unexpected positive amount ({amount}) for '{accounting_logic}' accounting logic (id: {spec_id:?}).",
     { amount: f64, accounting_logic: &str, spec_id: &TransactionSpecId }
+);
+
+// Generating statement of cash flows.
+define_internal_error!(
+    HledgerCommandFailed,
+    "hledger command failed for ledger '{ledger}'.",
+    { ledger: &str }
+);
+define_internal_error!(
+    HledgerBalanceInvalidTotal,
+    "Running 'balance' command for account '{account}' returned an invalid response. Could not parse total change during the given period.",
+    { account: &str }
+);
+define_client_error!(
+    HledgerInvalidPath,
+    "Invalid path to hledger ledger file: '{ledger}'.",
+    { ledger: &str }
 );
