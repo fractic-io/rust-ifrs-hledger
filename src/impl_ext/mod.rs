@@ -1,8 +1,8 @@
 // Crate-internal.
 // ---
 
-pub(crate) mod cash_flow_statement {
-    pub(crate) mod generator;
+pub(crate) mod custom_statements {
+    pub(crate) mod cash_flow_statement_generator;
 }
 
 pub(crate) mod standard_accounts {
@@ -25,8 +25,8 @@ pub mod exports {
     //
     // The contents of this mod are re-exported in the root of the crate.
 
-    pub mod cash_flow_statement {
-        pub use crate::impl_ext::cash_flow_statement::generator::*;
+    pub mod custom_statements {
+        pub use crate::impl_ext::custom_statements::cash_flow_statement_generator::*;
     }
 
     pub mod standard_accounts {
