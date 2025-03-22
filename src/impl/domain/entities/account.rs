@@ -18,7 +18,7 @@ pub enum AssetClassification {
     PrepaidExpenses,
     ShortTermInvestments,
     ShortTermDeposits,
-    OtherCurrent,
+    OtherCurrentAssets,
 
     // Non-current.
     // =========================================================================
@@ -28,7 +28,7 @@ pub enum AssetClassification {
     LongTermInvestments,
     LongTermDeposits,
     DeferredIncomeTax,
-    OtherNonCurrent,
+    OtherNonCurrentAssets,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
@@ -40,14 +40,14 @@ pub enum LiabilityClassification {
     AccruedExpenses,
     DeferredRevenue,
     ShortTermDebt,
-    OtherCurrent,
+    OtherCurrentLiabilities,
 
     // Non-current.
     // =========================================================================
     //
     LongTermDebt,
     DeferredIncomeTax,
-    OtherNonCurrent,
+    OtherNonCurrentLiabilities,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
@@ -78,7 +78,7 @@ pub enum IncomeClassification {
     /// Gains from foreign exchange transactions.
     FxGain,
 
-    Other,
+    OtherIncome,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
@@ -94,22 +94,22 @@ pub enum ExpenseClassification {
     //
     /// Expenses related to selling, such as marketing, advertising, and sales
     /// commissions.
-    Sales,
+    SalesExpense,
     /// Overhead costs, including office expenses, rent, utilities, and salaries
     /// of non-sales staff.
-    GeneralAdministrative,
+    GeneralAdministrativeExpense,
     /// Costs incurred for R&D activities.
-    ResearchAndDevelopment,
+    ResearchAndDevelopmentExpense,
     /// Costs incurred for cloud services (ex. AWS).
-    CloudServices,
+    CloudServicesExpense,
 
     // Depreciation & Amortization.
     // =========================================================================
     //
     /// Allocation of cost for tangible assets.
-    Depreciation,
+    DepreciationExpense,
     /// Allocation of cost for intangible assets.
-    Amortization,
+    AmortizationExpense,
 
     // Financing and non-operating expenses.
     // =========================================================================
@@ -127,7 +127,7 @@ pub enum ExpenseClassification {
     /// Losses from foreign exchange transactions.
     FxLoss,
 
-    Other,
+    OtherExpense,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
