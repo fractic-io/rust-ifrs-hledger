@@ -11,11 +11,11 @@ pub enum Direction {
 }
 
 impl From<f64> for Direction {
-    fn from(cash_amount: f64) -> Self {
-        if cash_amount >= 0.0 {
-            Direction::Inflow
-        } else {
+    fn from(posting_amount: f64) -> Self {
+        if posting_amount >= 0.0 {
             Direction::Outflow
+        } else {
+            Direction::Inflow
         }
     }
 }
