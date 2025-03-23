@@ -39,24 +39,24 @@ impl CashFlowStatementGenerator {
         let net_income = self.total_income()? - self.total_expenses()?;
 
         // Adjustments for Non-Cash Items.
-        let depreciation = self.expense_sum(ExpenseClassification::DepreciationExpense)?;
-        let amortization = self.expense_sum(ExpenseClassification::AmortizationExpense)?;
+        let depreciation_adj = self.expense(ExpenseClassification::DepreciationExpense)?;
+        let amortization_adj = self.expense(ExpenseClassification::AmortizationExpense)?;
 
         // Adjustments for Non-Operating (Non-Cash) Gains/Losses.
-        let gain_on_sale = self.income_sum(IncomeClassification::GainOnSaleOfAssets)?;
-        let loss_on_sale = self.expense_sum(ExpenseClassification::LossOnSaleOfAssets)?;
+        let gain_on_sale = self.income(IncomeClassification::GainOnSaleOfAssets)?;
+        let loss_on_sale = self.expense(ExpenseClassification::LossOnSaleOfAssets)?;
+        let sale_adj = loss_on_sale - gain_on_sale;
 
-        let fx_gain = self.income_sum(IncomeClassification::FxGain)?;
-        let fx_loss = self.expense_sum(ExpenseClassification::FxLoss)?;
+        let fx_gain = self.income(IncomeClassification::FxGain)?;
+        let fx_loss = self.expense(ExpenseClassification::FxLoss)?;
+        let fx_adj = fx_loss - fx_gain;
 
-        let vat_income = self.income_sum(IncomeClassification::VatAdjustmentIncome)?;
-        let vat_expense = self.expense_sum(ExpenseClassification::VatAdjustmentExpense)?;
+        let vat_income = self.income(IncomeClassification::VatAdjustmentIncome)?;
+        let vat_expense = self.expense(ExpenseClassification::VatAdjustmentExpense)?;
+        let vat_adj = vat_expense - vat_income;
 
         let non_cash_adjustments =
-            depreciation + amortization + loss_on_sale + fx_loss + vat_expense
-                - gain_on_sale
-                - fx_gain
-                - vat_income;
+            depreciation_adj + amortization_adj + sale_adj + fx_adj + vat_adj;
 
         // Changes in Working Capital.
         //
@@ -156,23 +156,20 @@ impl CashFlowStatementGenerator {
         output.push_str(&format!("Operating Activities:\n"));
         output.push_str(&format!("  1. Net Income: {:.2}\n", net_income));
         output.push_str(&format!("  2. Adjustments for Non-Cash Items:\n"));
-        output.push_str(&format!("       Depreciation: {:.2}\n", depreciation));
-        output.push_str(&format!("       Amortization: {:.2}\n", amortization));
+        output.push_str(&format!("       Depreciation: {:.2}\n", depreciation_adj));
+        output.push_str(&format!("       Amortization: {:.2}\n", amortization_adj));
         output.push_str(&format!(
             "  3. Adjustments for Non-Operating (Non-Cash) Gains/Losses:\n"
         ));
         output.push_str(&format!(
             "       Gain/Loss on Sale of Assets: {:.2}\n",
-            gain_on_sale - loss_on_sale
+            sale_adj
         ));
         output.push_str(&format!(
             "       Foreign Exchange Adjustments: {:.2}\n",
-            fx_gain - fx_loss
+            fx_adj
         ));
-        output.push_str(&format!(
-            "       VAT Adjustments: {:.2}\n",
-            vat_income - vat_expense
-        ));
+        output.push_str(&format!("       VAT Adjustments: {:.2}\n", vat_adj));
         output.push_str(&format!("  4. Changes in Working Capital:\n"));
         output.push_str(&format!("       Accounts Receivable: {:.2}\n", -ar));
         output.push_str(&format!("       Inventory: {:.2}\n", -inventory));
@@ -287,11 +284,11 @@ impl CashFlowStatementGenerator {
         self.run_hledger_sum("Expenses")
     }
 
-    fn income_sum(&self, classification: IncomeClassification) -> Result<f64, ServerError> {
+    fn income(&self, classification: IncomeClassification) -> Result<f64, ServerError> {
         Ok(-self.run_hledger_sum(&Into::<Account>::into(income_tl(classification)).ledger())?)
     }
 
-    fn expense_sum(&self, classification: ExpenseClassification) -> Result<f64, ServerError> {
+    fn expense(&self, classification: ExpenseClassification) -> Result<f64, ServerError> {
         self.run_hledger_sum(&Into::<Account>::into(expense_tl(classification)).ledger())
     }
 
