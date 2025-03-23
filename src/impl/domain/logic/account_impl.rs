@@ -1,6 +1,6 @@
 use crate::entities::{
-    Account, AssetAccount, AssetClassification, CashflowTag, EquityAccount, EquityClassification,
-    LiabilityAccount, LiabilityClassification,
+    Account, AssetAccount, AssetClassification, CashflowTracingTag, EquityAccount,
+    EquityClassification, LiabilityAccount, LiabilityClassification,
 };
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -20,7 +20,10 @@ impl From<f64> for Direction {
 }
 
 impl Account {
-    pub(crate) fn cashflow_tag(&self, direction: impl Into<Direction>) -> Option<CashflowTag> {
+    pub(crate) fn cashflow_tag(
+        &self,
+        direction: impl Into<Direction>,
+    ) -> Option<CashflowTracingTag> {
         match self {
             Account::Asset(AssetAccount(_, classification)) => match classification {
                 AssetClassification::CashAndCashEquivalents
@@ -33,24 +36,24 @@ impl Account {
                 | AssetClassification::DeferredIncomeTax => None,
 
                 AssetClassification::PropertyPlantEquipment => match direction.into() {
-                    Direction::Inflow => Some(CashflowTag::CashInflowPpe),
-                    Direction::Outflow => Some(CashflowTag::CashOutflowPpe),
+                    Direction::Inflow => Some(CashflowTracingTag::CashInflowPpe),
+                    Direction::Outflow => Some(CashflowTracingTag::CashOutflowPpe),
                 },
                 AssetClassification::IntangibleAssets => match direction.into() {
-                    Direction::Inflow => Some(CashflowTag::CashInflowIntangibleAssets),
-                    Direction::Outflow => Some(CashflowTag::CashOutflowIntangibleAssets),
+                    Direction::Inflow => Some(CashflowTracingTag::CashInflowIntangibleAssets),
+                    Direction::Outflow => Some(CashflowTracingTag::CashOutflowIntangibleAssets),
                 },
                 AssetClassification::LongTermInvestments => match direction.into() {
-                    Direction::Inflow => Some(CashflowTag::CashInflowInvestmentSecurities),
-                    Direction::Outflow => Some(CashflowTag::CashOutflowInvestmentSecurities),
+                    Direction::Inflow => Some(CashflowTracingTag::CashInflowInvestmentSecurities),
+                    Direction::Outflow => Some(CashflowTracingTag::CashOutflowInvestmentSecurities),
                 },
                 AssetClassification::LongTermDeposits => match direction.into() {
-                    Direction::Inflow => Some(CashflowTag::CashInflowLongTermDeposits),
-                    Direction::Outflow => Some(CashflowTag::CashOutflowLongTermDeposits),
+                    Direction::Inflow => Some(CashflowTracingTag::CashInflowLongTermDeposits),
+                    Direction::Outflow => Some(CashflowTracingTag::CashOutflowLongTermDeposits),
                 },
                 AssetClassification::OtherNonCurrentAssets => match direction.into() {
-                    Direction::Inflow => Some(CashflowTag::CashInflowOtherInvesting),
-                    Direction::Outflow => Some(CashflowTag::CashOutflowOtherInvesting),
+                    Direction::Inflow => Some(CashflowTracingTag::CashInflowOtherInvesting),
+                    Direction::Outflow => Some(CashflowTracingTag::CashOutflowOtherInvesting),
                 },
             },
             Account::Liability(LiabilityAccount(_, classification)) => match classification {
@@ -62,27 +65,27 @@ impl Account {
                 | LiabilityClassification::DeferredIncomeTax => None,
 
                 LiabilityClassification::LongTermDebt => match direction.into() {
-                    Direction::Inflow => Some(CashflowTag::CashInflowBorrowings),
-                    Direction::Outflow => Some(CashflowTag::CashOutflowBorrowings),
+                    Direction::Inflow => Some(CashflowTracingTag::CashInflowBorrowings),
+                    Direction::Outflow => Some(CashflowTracingTag::CashOutflowBorrowings),
                 },
                 LiabilityClassification::OtherNonCurrentLiabilities => {
-                    Some(CashflowTag::CashInOutflowOtherFinancing)
+                    Some(CashflowTracingTag::CashInOutflowOtherFinancing)
                 }
             },
             Account::Income(_) => None,
             Account::Expense(_) => None,
             Account::Equity(EquityAccount(_, classification)) => match classification {
                 EquityClassification::CommonStock => match direction.into() {
-                    Direction::Inflow => Some(CashflowTag::CashInflowIssuanceShares),
+                    Direction::Inflow => Some(CashflowTracingTag::CashInflowIssuanceShares),
                     Direction::Outflow => None,
                 },
                 EquityClassification::PreferredStock => match direction.into() {
-                    Direction::Inflow => Some(CashflowTag::CashInflowIssuanceShares),
+                    Direction::Inflow => Some(CashflowTracingTag::CashInflowIssuanceShares),
                     Direction::Outflow => None,
                 },
                 EquityClassification::TreasuryStock => match direction.into() {
                     Direction::Inflow => None,
-                    Direction::Outflow => Some(CashflowTag::CashOutflowShareBuybacks),
+                    Direction::Outflow => Some(CashflowTracingTag::CashOutflowShareBuybacks),
                 },
                 EquityClassification::RetainedEarnings => None,
             },

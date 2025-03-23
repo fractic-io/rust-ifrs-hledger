@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use iso_currency::Currency;
 
-use crate::entities::{Account, Assertion, CashflowTag, FinancialRecords, Transaction};
+use crate::entities::{Account, Assertion, CashflowTracingTag, FinancialRecords, Transaction};
 
 use super::utils::format_amount;
 
@@ -136,7 +136,7 @@ impl HledgerPrinter {
                     .unwrap_or(&posting.account)
                     .cashflow_tag(posting.amount)
                     .map_or("".to_string(), |tag| {
-                        format!("       ; {}: {}", CashflowTag::key(), tag.value())
+                        format!("       ; {}: {}", CashflowTracingTag::key(), tag.value())
                     });
                 ledger_output.push_str(&format!(
                     "    {:75} {:>20}{}\n",

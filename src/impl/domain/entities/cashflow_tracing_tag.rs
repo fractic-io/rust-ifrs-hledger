@@ -1,4 +1,4 @@
-pub enum CashflowTag {
+pub enum CashflowTracingTag {
     // Operating activities.
     // =========================================================================
     //

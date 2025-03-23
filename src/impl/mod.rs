@@ -23,7 +23,7 @@ pub(crate) mod domain {
         pub(crate) mod annotation;
         pub(crate) mod assertion;
         pub(crate) mod assertion_spec;
-        pub(crate) mod cashflow_tag;
+        pub(crate) mod cashflow_tracing_tag;
         pub(crate) mod decorator_logic;
         pub(crate) mod financial_records;
         pub(crate) mod handlers;
@@ -47,7 +47,7 @@ pub(crate) mod domain {
 
 pub(crate) mod presentation {
     pub(crate) mod account_fmt;
-    pub(crate) mod cashflow_tag_fmt;
+    pub(crate) mod cashflow_tracing_tag_fmt;
     pub(crate) mod hledger_printer;
     pub(crate) mod utils;
 }
@@ -68,7 +68,7 @@ pub mod exports {
         pub use crate::domain::entities::annotation::*;
         pub use crate::domain::entities::assertion::*;
         pub use crate::domain::entities::assertion_spec::*;
-        pub use crate::domain::entities::cashflow_tag::*;
+        pub use crate::domain::entities::cashflow_tracing_tag::*;
         pub use crate::domain::entities::decorator_logic::*;
         pub use crate::domain::entities::financial_records::*;
         pub use crate::domain::entities::handlers::*;
