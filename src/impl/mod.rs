@@ -44,7 +44,7 @@ pub(crate) mod domain {
 }
 
 pub(crate) mod presentation {
-    pub(crate) mod accounts;
+    pub(crate) mod account_impl;
     pub(crate) mod hledger_printer;
 }
 
