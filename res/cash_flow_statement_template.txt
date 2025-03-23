@@ -1,67 +1,65 @@
 Cash Flow Statement (Period: X)
--------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------
 
-Operating Activities
-1.	Net Income:                                                     X
-2.	Adjustments for Non-Cash Items:
-	•	Depreciation:                                               X
-	•	Amortization:                                               X
-	•	Other Non-Cash Expenses:                                    X
-3.	Adjustments for Non-Operating (Non-Cash) Gains/Losses:
-	•	Gain/Loss on Sale of Assets:                                X
-	•	Foreign Exchange Adjustments:                               X
-	•	VAT/Other Adjustments:                                      X
-4.	Working Capital Adjustments:
-	•	Increase/(Decrease) in Accounts Receivable:                 X
-	•	Increase/(Decrease) in Inventory:                           X
-	•	Increase/(Decrease) in Prepaid Expenses:                    X
-	•	Increase/(Decrease) in Other Current Assets:                X
-	•	Increase/(Decrease) in Accounts Payable:                    X
-	•	Increase/(Decrease) in Accrued Expenses:                    X
-	•	Increase/(Decrease) in Deferred Revenue:                    X
-	•	Increase/(Decrease) in Other Current Liabilities:           X
-5.	Interest and Dividend Items:
-	•	Interest Received:                                          X
-	•	Interest Paid:                                              X
-	•	Dividends Received:                                         X
-	•	Dividends Paid (if classified in operating):                X
-6.	Net Cash Provided by (Used in) Operating Activities:            X
+Operaing Activities
+1. Net Income:                                                                X
+2. Adjustments for Non-Cash Items:
+    • Depreciation:                                                           X
+    • Amortization:                                                           X
+    • Other Non-Cash Expenses:                                                X
+3. Adjustments for Non-Operating (Non-Cash) Gains/Losses:
+    • Gain/(Loss) on Sale of Assets:                                          X
+    • Other Adjustments:                                                      X
+4. Working Capital Adjustments:
+    • Increase/(Decrease) in Accounts Receivable:                             X
+    • Increase/(Decrease) in Inventory:                                       X
+    • Increase/(Decrease) in Prepaid Expenses:                                X
+    • Increase/(Decrease) in Other Current Assets:                            X
+    • Increase/(Decrease) in Accounts Payable:                                X
+    • Increase/(Decrease) in Accrued Expenses:                                X
+    • Increase/(Decrease) in Deferred Revenue:                                X
+    • Increase/(Decrease) in Other Current Liabilities:                       X
+5. Interest and Dividend Items:
+    • Interest Received:                                                      X
+    • Interest Paid:                                                          X
+    • Dividends Received:                                                     X
+6. Net Cash Provided by (Used in) Operating Activities:                       X
 
 
 Investing Activities
-1.	Cash Outflows:
-	•	Acquisition of Property, Plant, and Equipment:              X
-	•	Acquisition of Intangible Assets:                           X
-	•	Acquisition of Investment Securities:                       X
-2.	Cash Inflows:
-	•	Proceeds from Disposal of Property, Plant, and Equipment:   X
-	•	Proceeds from Disposal of Intangible Assets:                X
-	•	Proceeds from Disposal of Investment Securities:            X
-3.	Net Cash Provided by (Used in) Investing Activities:            X
+1. Cash Outflows:
+    • Acquisition of Property, Plant, and Equipment:                          X
+    • Acquisition of Intangible Assets:                                       X
+    • Acquisition of Investment Securities:                                   X
+2. Cash Inflows:
+    • Proceeds from Disposal of Property, Plant, and Equipment:               X
+    • Proceeds from Disposal of Intangible Assets:                            X
+    • Proceeds from Disposal of Investment Securities:                        X
+3. Net Cash Provided by (Used in) Investing Activities:                       X
 
 
 Financing Activities
-1.	Debt-Related Cash Flows:
-	•	Proceeds from Borrowings:                                   X
-	•	Repayment of Borrowings:                                    X
-2.	Equity-Related Cash Flows:
-	•	Proceeds from Issuance of Shares:                           X
-	•	Payment for Share Buybacks / Repayment of Equity:           X
-	•	Dividends Paid (if not in operating):                       X
-3.	Other Financing Activities:
-	•	Other Financing Inflows/Outflows:                           X
-4.	Net Cash Provided by (Used in) Financing Activities:            X
+1. Debt-Related Cash Flows:
+    • Proceeds from Borrowings:                                               X
+    • Repayment of Borrowings:                                                X
+2. Equity-Related Cash Flows:
+    • Proceeds from Issuance of Shares:                                       X
+    • Payment for Share Buybacks / Repayment of Equity:                       X
+    • Dividends Paid:                                                         X
+3. Other Financing Activities:
+    • Other Financing Inflows/Outflows:                                       X
+4. Net Cash Provided by (Used in) Financing Activities:                       X
 
 
 Net Increase (Decrease) in Cash and Cash Equivalents
-•   Net Change in Cash:                                             X
+•   Net Change in Cash:                                                       X
 
 
 Reconciliation of Cash and Cash Equivalents
--------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------
 
-Opening Balance of Cash and Cash Equivalents                        X
-+ Net Increase (Decrease) in Cash:                                  X
-= Cash and Cash Equivalents Before Exchange Rate Effects	        X
-+ Exchange Rate Effects (if applicable)                             X
-= Closing Balance of Cash and Cash Equivalents                      X
+Opening Balance of Cash and Cash Equivalents                                  X
++ Net Increase (Decrease) in Cash:                                            X
+= Cash and Cash Equivalents Before Exchange Rate Effects                      X
++ Exchange Rate Effects (if applicable)                                       X
+= Closing Balance of Cash and Cash Equivalents                                X
