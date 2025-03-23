@@ -3,14 +3,14 @@ Cash Flow Statement (Period: X)
 
 Operating Activities
 1. Net Income:                                                                X
-2. Adjustments for Non-Cash Items:
+2. Adjustments for Non-Cash Expenses:
     • Depreciation:                                                           X
     • Amortization:                                                           X
     • Other Non-Cash Expenses:                                                X
-3. Adjustments for Non-Operating (Non-Cash) Gains/Losses:
+3. Adjustments for Non-Operating Gains/Losses:
     • Gain/(Loss) on Sale of Assets:                                          X
     • Other Adjustments:                                                      X
-4. Working Capital Adjustments:
+4. Adjustments for Changes in Working Capital:
     • Increase/(Decrease) in Accounts Receivable:                             X
     • Increase/(Decrease) in Inventory:                                       X
     • Increase/(Decrease) in Prepaid Expenses:                                X
@@ -19,11 +19,7 @@ Operating Activities
     • Increase/(Decrease) in Accrued Expenses:                                X
     • Increase/(Decrease) in Deferred Revenue:                                X
     • Increase/(Decrease) in Other Current Liabilities:                       X
-5. Reclassification of Interest and Dividend Items:
-    • Interest Paid:                                                          X
-    • Interest Received:                                                      X
-    • Dividends Received:                                                     X
-6. Net Cash Provided by (Used in) Operating Activities:                       X
+5. Net Cash Provided by (Used in) Operating Activities:                       X
 
 
 Investing Activities
@@ -38,8 +34,6 @@ Investing Activities
     • Proceeds from Disposal of Intangible Assets:                            X
     • Proceeds from Disposal of Investment Securities:                        X
     • Refund of Long-Term Deposits:                                           X
-    • Interest Received:                                                      X
-    • Dividends Received:                                                     X
     • Other Investing Inflows:                                                X
 3. Net Cash Provided by (Used in) Investing Activities:                       X
 
@@ -48,7 +42,6 @@ Financing Activities
 1. Debt-Related Cash Flows:
     • Proceeds from Borrowings:                                               X
     • Repayment of Borrowings:                                                X
-    • Interest Paid:                                                          X
 2. Equity-Related Cash Flows:
     • Proceeds from Issuance of Shares:                                       X
     • Payment for Share Buybacks / Repayment of Equity:                       X
