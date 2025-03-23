@@ -64,3 +64,11 @@ Non-Cash Investing Activities
 ----------------------------------------------------------------------------------------------------
 
 • ...                                                                         X
+
+
+Notes
+----------------------------------------------------------------------------------------------------
+
+• Operating activities are prepared using the indirect method.
+• Receipt of dividends, receipt of interest, and payment of interest are classified as operating
+  activities.
