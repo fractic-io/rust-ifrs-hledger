@@ -7,10 +7,7 @@ Operating Activities
     + Depreciation                                                            X
     + Amortization                                                            X
     + Other Non-Cash Expenses                                                 X
-3. Adjustments for Non-Operating Gains/Losses:
-    - Gain/(Loss) on Sale of Assets                                           X
-    - Other Non-Operating Gain/(Loss)                                         X
-4. Adjustments for Changes in Working Capital:
+3. Adjustments for Changes in Working Capital:
     - Increase/(Decrease) in Accounts Receivable                              X
     - Increase/(Decrease) in Inventory                                        X
     - Increase/(Decrease) in Prepaid Expenses                                 X
@@ -19,6 +16,8 @@ Operating Activities
     + Increase/(Decrease) in Accrued Expenses                                 X
     + Increase/(Decrease) in Deferred Revenue                                 X
     + Increase/(Decrease) in Other Current Liabilities                        X
+4. Exclude Cash Flows Included in Investing or Financing Activities:
+    - Gain/(Loss) on Sale of Assets                                           X
 5. Net Cash Provided by (Used in) Operating Activities                        X
 
 

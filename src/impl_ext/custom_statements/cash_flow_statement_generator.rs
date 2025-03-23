@@ -47,8 +47,8 @@ impl CashFlowStatementGenerator {
         let loss_on_sale = self.expense(ExpenseClassification::LossOnSaleOfAssets)?;
         let sale_adj = loss_on_sale - gain_on_sale;
 
-        let fx_gain = self.income(IncomeClassification::FxGain)?;
-        let fx_loss = self.expense(ExpenseClassification::FxLoss)?;
+        let fx_gain = self.income(IncomeClassification::RealizedFxGain)?;
+        let fx_loss = self.expense(ExpenseClassification::RealizedFxLoss)?;
         let fx_adj = fx_loss - fx_gain;
 
         let vat_income = self.income(IncomeClassification::VatAdjustmentIncome)?;

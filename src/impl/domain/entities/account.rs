@@ -76,10 +76,13 @@ pub enum IncomeClassification {
     /// Gains from the sale of long-term assets.
     GainOnSaleOfAssets,
     /// Gains from foreign exchange transactions.
-    FxGain,
+    RealizedFxGain,
     /// VAT adjustments (discounts, rounding gains).
     VatAdjustmentIncome,
 
+    // Other.
+    // =========================================================================
+    //
     OtherIncome,
 }
 
@@ -105,14 +108,6 @@ pub enum ExpenseClassification {
     /// Costs incurred for cloud services (ex. AWS).
     CloudServicesExpenses,
 
-    // Depreciation & Amortization.
-    // =========================================================================
-    //
-    /// Allocation of cost for tangible assets.
-    DepreciationExpense,
-    /// Allocation of cost for intangible assets.
-    AmortizationExpense,
-
     // Financing and non-operating expenses.
     // =========================================================================
     //
@@ -129,10 +124,21 @@ pub enum ExpenseClassification {
     /// Losses from the sale of long-term assets.
     LossOnSaleOfAssets,
     /// Losses from foreign exchange transactions.
-    FxLoss,
+    RealizedFxLoss,
     /// VAT adjustments (rounding losses)
     VatAdjustmentExpense,
 
+    // Non-cash expenses.
+    // =========================================================================
+    //
+    /// Allocation of cost for tangible assets.
+    DepreciationExpense,
+    /// Allocation of cost for intangible assets.
+    AmortizationExpense,
+
+    // Other.
+    // =========================================================================
+    //
     OtherCashExpense,
     OtherNonCashExpense,
 }

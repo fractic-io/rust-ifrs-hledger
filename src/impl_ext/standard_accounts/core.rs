@@ -20,7 +20,7 @@ pub static PAYMENT_FEES: LazyLock<ExpenseAccount> = LazyLock::new(|| {
         ExpenseClassification::GeneralAdministrativeExpenses,
     )
 });
-pub static FX_GAIN: LazyLock<IncomeAccount> =
-    LazyLock::new(|| income_tl(IncomeClassification::FxGain));
-pub static FX_LOSS: LazyLock<ExpenseAccount> =
-    LazyLock::new(|| expense_tl(ExpenseClassification::FxLoss));
+pub static REALIZED_FX_GAIN: LazyLock<IncomeAccount> =
+    LazyLock::new(|| income_tl(IncomeClassification::RealizedFxGain));
+pub static REALIZED_FX_LOSS: LazyLock<ExpenseAccount> =
+    LazyLock::new(|| expense_tl(ExpenseClassification::RealizedFxLoss));

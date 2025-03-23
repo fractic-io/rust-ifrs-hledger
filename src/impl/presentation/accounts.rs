@@ -69,9 +69,10 @@ impl Account {
 
                     // Gains from non-core activities.
                     IncomeClassification::GainOnSaleOfAssets => "NonOperating:GainOnSaleOfAssets",
-                    IncomeClassification::FxGain => "NonOperating:FxGain",
+                    IncomeClassification::RealizedFxGain => "NonOperating:RealizedFxGain",
                     IncomeClassification::VatAdjustmentIncome => "NonOperating:VatAdjustmentIncome",
 
+                    // Other.
                     IncomeClassification::OtherIncome => "Other",
                 },
                 match &s.0 {
@@ -94,10 +95,6 @@ impl Account {
                     ExpenseClassification::CloudServicesExpenses =>
                         "Operating:CloudServicesExpenses",
 
-                    // Depreciation & Amortization.
-                    ExpenseClassification::DepreciationExpense => "Operating:Depreciation",
-                    ExpenseClassification::AmortizationExpense => "Operating:Amortization",
-
                     // Financing and non-operating expenses.
                     ExpenseClassification::InterestExpense => "Financing:InterestExpense",
                     ExpenseClassification::IncomeTaxExpense => "Tax:IncomeTaxExpense",
@@ -105,10 +102,15 @@ impl Account {
 
                     // Losses from non-core activities.
                     ExpenseClassification::LossOnSaleOfAssets => "NonOperating:LossOnSaleOfAssets",
-                    ExpenseClassification::FxLoss => "NonOperating:FxLoss",
+                    ExpenseClassification::RealizedFxLoss => "NonOperating:RealizedFxLoss",
                     ExpenseClassification::VatAdjustmentExpense =>
                         "NonOperating:VatAdjustmentExpense",
 
+                    // Non-cash expenses.
+                    ExpenseClassification::DepreciationExpense => "Operating:Depreciation",
+                    ExpenseClassification::AmortizationExpense => "Operating:Amortization",
+
+                    // Other.
                     ExpenseClassification::OtherCashExpense
                     | ExpenseClassification::OtherNonCashExpense => "Other",
                 },

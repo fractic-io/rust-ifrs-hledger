@@ -11,7 +11,7 @@ use crate::{
         Annotation, CommodityHandler, DecoratedTransactionSpec, DecoratorLogic, Handlers,
         Transaction, TransactionPosting,
     },
-    ext::standard_accounts::{FX_GAIN, FX_LOSS},
+    ext::standard_accounts::{REALIZED_FX_GAIN, REALIZED_FX_LOSS},
 };
 
 #[derive(Debug)]
@@ -101,9 +101,9 @@ impl<H: Handlers> DecoratorLogic<H> for StandardDecoratorCardFx {
                     },
                     TransactionPosting {
                         account: if fx_discrepancy > 0.0 {
-                            FX_GAIN.clone().into()
+                            REALIZED_FX_GAIN.clone().into()
                         } else {
-                            FX_LOSS.clone().into()
+                            REALIZED_FX_LOSS.clone().into()
                         },
                         amount: -fx_discrepancy,
                         currency: main_commodity.currency()?,
