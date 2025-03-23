@@ -30,6 +30,7 @@ pub(crate) mod domain {
         pub(crate) mod transaction_spec;
     }
     pub(crate) mod logic {
+        pub(crate) mod account_impl;
         pub(crate) mod annotation_processor;
         pub(crate) mod decorator_processor;
         pub(crate) mod spec_processor;
@@ -44,8 +45,10 @@ pub(crate) mod domain {
 }
 
 pub(crate) mod presentation {
-    pub(crate) mod account_impl;
+    pub(crate) mod account_fmt;
+    pub(crate) mod cashflow_tag_fmt;
     pub(crate) mod hledger_printer;
+    pub(crate) mod utils;
 }
 
 // Public exports.
