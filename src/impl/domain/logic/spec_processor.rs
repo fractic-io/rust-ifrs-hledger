@@ -266,8 +266,9 @@ impl<H: Handlers> SpecProcessor<H> {
                     date: payment_date,
                     comment: Some("Share capital contribution".into()),
                     postings: vec![
-                        TransactionPosting::new(
+                        TransactionPosting::linked(
                             SHARE_CAPITAL_RECEIVABLE.clone().into(),
+                            s_handler.account().into(),
                             -amount.abs(),
                             commodity.currency()?,
                         ),
@@ -353,8 +354,9 @@ impl<H: Handlers> SpecProcessor<H> {
                             -amount.abs(),
                             commodity.currency()?,
                         ),
-                        TransactionPosting::new(
+                        TransactionPosting::linked(
                             e_handler.while_prepaid().into(),
+                            e_handler.account().into(),
                             amount.abs(),
                             commodity.currency()?,
                         ),
@@ -408,8 +410,9 @@ impl<H: Handlers> SpecProcessor<H> {
                             -amount.abs(),
                             commodity.currency()?,
                         ),
-                        TransactionPosting::new(
+                        TransactionPosting::linked(
                             e_handler.while_payable().into(),
+                            e_handler.account().into(),
                             amount.abs(),
                             commodity.currency()?,
                         ),
@@ -488,8 +491,9 @@ impl<H: Handlers> SpecProcessor<H> {
                             -amount.abs(),
                             commodity.currency()?,
                         ),
-                        TransactionPosting::new(
+                        TransactionPosting::linked(
                             a_handler.while_prepaid().into(),
+                            a_handler.account().into(),
                             amount.abs(),
                             commodity.currency()?,
                         ),
@@ -543,8 +547,9 @@ impl<H: Handlers> SpecProcessor<H> {
                             -amount.abs(),
                             commodity.currency()?,
                         ),
-                        TransactionPosting::new(
+                        TransactionPosting::linked(
                             a_handler.while_payable().into(),
+                            a_handler.account().into(),
                             amount.abs(),
                             commodity.currency()?,
                         ),
@@ -766,13 +771,15 @@ impl<H: Handlers> SpecProcessor<H> {
                     -amount.abs(),
                     commodity.currency()?,
                 ),
-                TransactionPosting::new(
+                TransactionPosting::linked(
                     e_handler.while_prepaid().into(),
+                    e_handler.account().into(),
                     prepaid_sum,
                     commodity.currency()?,
                 ),
-                TransactionPosting::new(
+                TransactionPosting::linked(
                     e_handler.while_payable().into(),
+                    e_handler.account().into(),
                     -payable_sum,
                     commodity.currency()?,
                 ),
@@ -969,8 +976,9 @@ impl<H: Handlers> SpecProcessor<H> {
                     -amount.abs(),
                     commodity.currency()?,
                 ),
-                TransactionPosting::new(
+                TransactionPosting::linked(
                     e_handler.while_payable().into(),
+                    e_handler.account().into(),
                     amount.abs(),
                     commodity.currency()?,
                 ),
