@@ -23,41 +23,41 @@ Operating Activities
 
 Investing Activities
 1. Cash Outflows:
-    - Acquisition of Property, Plant, and Equipment                           {{cash_out_ppe}}
-    - Acquisition of Intangible Assets                                        {{cash_out_intangible_assets}}
-    - Acquisition of Investment Securities                                    {{cash_out_investment_securities}}
-    - Increase in Long-Term Deposits                                          {{cash_out_long_term_deposits}}
-    - Other Investing Outflows                                                {{cash_out_other_investing}}
+    - Acquisition of Property, Plant, and Equipment                           {{out_ppe}}
+    - Acquisition of Intangible Assets                                        {{out_intangible_assets}}
+    - Acquisition of Investment Securities                                    {{out_investment_securities}}
+    - Increase in Long-Term Deposits                                          {{out_long_term_deposits}}
+    - Other Investing Outflows                                                {{out_other_investing}}
 2. Cash Inflows:
-    + Proceeds from Disposal of Property, Plant, and Equipment                {{cash_in_ppe}}
-    + Proceeds from Disposal of Intangible Assets                             {{cash_in_intangible_assets}}
-    + Proceeds from Disposal of Investment Securities                         {{cash_in_investment_securities}}
-    + Refund of Long-Term Deposits                                            {{cash_in_long_term_deposits}}
-    + Other Investing Inflows                                                 {{cash_in_other_investing}}
+    + Proceeds from Disposal of Property, Plant, and Equipment                {{in_ppe}}
+    + Proceeds from Disposal of Intangible Assets                             {{in_intangible_assets}}
+    + Proceeds from Disposal of Investment Securities                         {{in_investment_securities}}
+    + Refund of Long-Term Deposits                                            {{in_long_term_deposits}}
+    + Other Investing Inflows                                                 {{in_other_investing}}
 3. Net Cash Provided by (Used in) Investing Activities                        {{net_cash_investing}}
 
 
 Financing Activities
 1. Debt-Related Cash Flows:
-    + Proceeds from Borrowings                                                {{cash_in_borrowings}}
-    - Repayment of Borrowings                                                 {{cash_out_borrowings}}
+    + Proceeds from Borrowings                                                {{in_borrowings}}
+    - Repayment of Borrowings                                                 {{out_borrowings}}
 2. Equity-Related Cash Flows:
-    + Proceeds from Issuance of Shares                                        {{cash_in_issuance_shares}}
-    - Payment for Share Buybacks / Repayment of Equity                        {{cash_out_share_buybacks}}
-    - Dividends Paid                                                          {{cash_out_dividends}}
+    + Proceeds from Issuance of Shares                                        {{in_issuance_shares}}
+    - Payment for Share Buybacks / Repayment of Equity                        {{out_share_buybacks}}
+    - Dividends Paid                                                          {{out_dividends}}
 3. Other Financing Activities:
-    + Other Financing Inflows/Outflows                                        {{cash_in_out_other_financing}}
+    + Other Financing Inflows/Outflows                                        {{in_out_other_financing}}
 4. Net Cash Provided by (Used in) Financing Activities                        {{net_cash_financing}}
 
 
 Reconciliation of Cash and Cash Equivalents
 ----------------------------------------------------------------------------------------------------
 
-Opening Balance of Cash and Cash Equivalents                                  {{cash_equivalents_opening}}
-+ Net Increase (Decrease) in Cash:                                            {{net_total}}
-= Cash and Cash Equivalents Before Exchange Rate Effects                      {{cash_equivalents_before_exchange}}
+Opening Balance of Cash and Cash Equivalents                                  {{balance_opening}}
++ Net Increase (Decrease) in Cash:                                            {{balance_change}}
+= Cash and Cash Equivalents Before Exchange Rate Effects                      {{balance_before_exchange}}
 + Exchange Rate Effects (if applicable)                                       {{exchange_rate_effects}}
-= Closing Balance of Cash and Cash Equivalents                                {{cash_equivalents_closing}}
+= Closing Balance of Cash and Cash Equivalents                                {{balance_closing}}
 
 
 Non-Cash Investing Activities
