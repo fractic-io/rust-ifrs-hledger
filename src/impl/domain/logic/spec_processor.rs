@@ -1157,7 +1157,7 @@ impl<H: Handlers> SpecProcessor<H> {
             description,
             amount,
             commodity,
-            backing_account,
+            backing_account: BackingAccount::Cash(c_handler),
             annotations,
             ext_transactions,
             ext_assertions,
@@ -1173,7 +1173,7 @@ impl<H: Handlers> SpecProcessor<H> {
             comment: None,
             postings: vec![
                 TransactionPosting {
-                    account: backing_account.account(),
+                    account: c_handler.account().into(),
                     amount: -amount.abs(),
                     currency: commodity.currency()?,
                 },
