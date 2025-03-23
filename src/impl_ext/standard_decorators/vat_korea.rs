@@ -11,8 +11,7 @@ use crate::{
         Transaction, TransactionPosting,
     },
     ext::standard_accounts::{
-        VAT_ADJUSTMENT_EXPENSE, VAT_ADJUSTMENT_INCOME, VAT_PAYABLE, VAT_PENDING_RECEIPT,
-        VAT_RECEIVABLE,
+        VAT_PAYABLE, VAT_PENDING_RECEIPT, VAT_RECEIVABLE, VAT_REFUND_GAIN, VAT_REFUND_LOSS,
     },
 };
 
@@ -288,9 +287,9 @@ impl StandardDecoratorVatKorea {
                 postings: vec![
                     TransactionPosting {
                         account: if discrepancy > 0.0 {
-                            VAT_ADJUSTMENT_INCOME.clone().into()
+                            VAT_REFUND_GAIN.clone().into()
                         } else {
-                            VAT_ADJUSTMENT_EXPENSE.clone().into()
+                            VAT_REFUND_LOSS.clone().into()
                         },
                         amount: -discrepancy,
                         currency: commodity.currency()?,

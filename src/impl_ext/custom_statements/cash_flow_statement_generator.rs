@@ -51,8 +51,8 @@ impl CashFlowStatementGenerator {
         let fx_loss = self.expense(ExpenseClassification::RealizedFxLoss)?;
         let fx_adj = fx_loss - fx_gain;
 
-        let vat_income = self.income(IncomeClassification::VatAdjustmentIncome)?;
-        let vat_expense = self.expense(ExpenseClassification::VatAdjustmentExpense)?;
+        let vat_income = self.income(IncomeClassification::VatRefundGain)?;
+        let vat_expense = self.expense(ExpenseClassification::VatRefundLoss)?;
         let vat_adj = vat_expense - vat_income;
 
         let non_cash_adjustments =

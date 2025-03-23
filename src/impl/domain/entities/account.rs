@@ -60,42 +60,46 @@ pub enum IncomeClassification {
     /// Revenue from providing services.
     ServiceRevenue,
 
-    // Financing and non-operating revenues.
+    // Financing revenues.
     // =========================================================================
     //
-    /// Interest earned on deposits or investments.
+    /// Interest earned on loans or other interest-bearing assets part of the
+    /// core business operations.
     InterestIncome,
-    /// Dividends received from investments.
+    /// Earnings from investments in other companies part of the core business
+    /// operations.
     DividendIncome,
-    /// Income from rental properties.
+    /// Income from rental properties part of the core business operations.
     RentalIncome,
 
-    // Gains from non-core activities.
+    // Non-operating income.
     // =========================================================================
+    //
+    /// Bank interest earned on cash, or from non-core financing activities.
+    NonCoreInterestIncome,
+    /// Earnings from investments in other companies not part of the core
+    /// business operations.
+    NonCoreDividendIncome,
+    /// Income from rental properties not part of the core business operations.
+    NonCoreRentalIncome,
     //
     /// Gains from the sale of long-term assets.
     GainOnSaleOfAssets,
     /// Gains from foreign exchange transactions.
     RealizedFxGain,
-    /// VAT adjustments (discounts, rounding gains).
-    VatAdjustmentIncome,
-
-    // Other.
-    // =========================================================================
+    /// Gains from VAT filing (ex. discounts, rounding gains).
+    VatRefundGain,
     //
-    OtherIncome,
+    OtherNonOperatingIncome,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum ExpenseClassification {
-    // Direct costs for production.
+    // Operating expenses.
     // =========================================================================
     //
     /// Direct costs associated with production or purchase of goods.
     CostOfGoodsSold,
-
-    // Operating expenses.
-    // =========================================================================
     //
     /// Expenses related to selling, such as marketing, advertising, and sales
     /// commissions.
@@ -107,40 +111,41 @@ pub enum ExpenseClassification {
     ResearchAndDevelopmentExpenses,
     /// Costs incurred for cloud services (ex. AWS).
     CloudServicesExpenses,
-
-    // Financing and non-operating expenses.
-    // =========================================================================
-    //
-    /// Costs incurred on borrowings.
-    InterestExpense,
-    /// Income tax expense.
-    IncomeTaxExpense,
-    /// Other tax expenses.
-    OtherTaxExpense,
-
-    // Losses from non-core activities.
-    // =========================================================================
-    //
-    /// Losses from the sale of long-term assets.
-    LossOnSaleOfAssets,
-    /// Losses from foreign exchange transactions.
-    RealizedFxLoss,
-    /// VAT adjustments (rounding losses)
-    VatAdjustmentExpense,
-
-    // Non-cash expenses.
-    // =========================================================================
     //
     /// Allocation of cost for tangible assets.
     DepreciationExpense,
     /// Allocation of cost for intangible assets.
     AmortizationExpense,
 
-    // Other.
+    // Financing expenses.
     // =========================================================================
     //
-    OtherCashExpense,
-    OtherNonCashExpense,
+    /// Interest paid on borrowings part of the core business operations.
+    InterestExpense,
+
+    // Tax expenses.
+    // =========================================================================
+    //
+    /// Income tax expense.
+    IncomeTaxExpense,
+    /// Other tax expenses (ex. residence tax, incorporation tax).
+    OtherTaxExpense,
+
+    // Non-operating expenses.
+    // =========================================================================
+    //
+    /// Costs incurred on borrowings not part of the core business operations.
+    NonCoreInterestExpense,
+    //
+    /// Losses from the sale of long-term assets.
+    LossOnSaleOfAssets,
+    /// Losses from foreign exchange transactions.
+    RealizedFxLoss,
+    /// Losses from VAT filing (ex. rounding losses).
+    VatRefundLoss,
+    //
+    OtherNonOperatingCashExpense,
+    OtherNonOperatingNonCashExpense,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]

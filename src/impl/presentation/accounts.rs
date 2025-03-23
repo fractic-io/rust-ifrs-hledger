@@ -62,18 +62,19 @@ impl Account {
                     IncomeClassification::SalesRevenue => "Operating:SalesRevenue",
                     IncomeClassification::ServiceRevenue => "Operating:ServiceRevenue",
 
-                    // Financing and non-operating revenues.
+                    // Financing revenues.
                     IncomeClassification::InterestIncome => "Financing:InterestIncome",
                     IncomeClassification::DividendIncome => "Financing:DividendIncome",
                     IncomeClassification::RentalIncome => "Financing:RentalIncome",
 
-                    // Gains from non-core activities.
+                    // Non-operating income.
+                    IncomeClassification::NonCoreInterestIncome => "NonOperating:InterestIncome",
+                    IncomeClassification::NonCoreDividendIncome => "NonOperating:DividendIncome",
+                    IncomeClassification::NonCoreRentalIncome => "NonOperating:RentalIncome",
                     IncomeClassification::GainOnSaleOfAssets => "NonOperating:GainOnSaleOfAssets",
                     IncomeClassification::RealizedFxGain => "NonOperating:RealizedFxGain",
-                    IncomeClassification::VatAdjustmentIncome => "NonOperating:VatAdjustmentIncome",
-
-                    // Other.
-                    IncomeClassification::OtherIncome => "Other",
+                    IncomeClassification::VatRefundGain => "NonOperating:VatRefundGain",
+                    IncomeClassification::OtherNonOperatingIncome => "NonOperating:Other",
                 },
                 match &s.0 {
                     Some(name) => format!(":{}", name),
@@ -83,10 +84,8 @@ impl Account {
             Account::Expense(s) => format!(
                 "Expenses:{}{}",
                 match &s.1 {
-                    // Direct costs for production.
-                    ExpenseClassification::CostOfGoodsSold => "Operating:CostOfGoodsSold",
-
                     // Operating expenses.
+                    ExpenseClassification::CostOfGoodsSold => "Operating:CostOfGoodsSold",
                     ExpenseClassification::SellingExpenses => "Operating:SellingExpenses",
                     ExpenseClassification::GeneralAdministrativeExpenses =>
                         "Operating:GeneralAdministrativeExpenses",
@@ -94,25 +93,24 @@ impl Account {
                         "Operating:ResearchAndDevelopmentExpenses",
                     ExpenseClassification::CloudServicesExpenses =>
                         "Operating:CloudServicesExpenses",
-
-                    // Financing and non-operating expenses.
-                    ExpenseClassification::InterestExpense => "Financing:InterestExpense",
-                    ExpenseClassification::IncomeTaxExpense => "Tax:IncomeTaxExpense",
-                    ExpenseClassification::OtherTaxExpense => "Tax:OtherTaxExpense",
-
-                    // Losses from non-core activities.
-                    ExpenseClassification::LossOnSaleOfAssets => "NonOperating:LossOnSaleOfAssets",
-                    ExpenseClassification::RealizedFxLoss => "NonOperating:RealizedFxLoss",
-                    ExpenseClassification::VatAdjustmentExpense =>
-                        "NonOperating:VatAdjustmentExpense",
-
-                    // Non-cash expenses.
                     ExpenseClassification::DepreciationExpense => "Operating:Depreciation",
                     ExpenseClassification::AmortizationExpense => "Operating:Amortization",
 
-                    // Other.
-                    ExpenseClassification::OtherCashExpense
-                    | ExpenseClassification::OtherNonCashExpense => "Other",
+                    // Financing expenses.
+                    ExpenseClassification::InterestExpense => "Financing:InterestExpense",
+
+                    // Tax expenses.
+                    ExpenseClassification::IncomeTaxExpense => "Tax:IncomeTaxExpense",
+                    ExpenseClassification::OtherTaxExpense => "Tax:OtherTaxExpense",
+
+                    // Non-operating expenses.
+                    ExpenseClassification::NonCoreInterestExpense => "NonOperating:InterestExpense",
+                    ExpenseClassification::LossOnSaleOfAssets => "NonOperating:LossOnSaleOfAssets",
+                    ExpenseClassification::RealizedFxLoss => "NonOperating:RealizedFxLoss",
+                    ExpenseClassification::VatRefundLoss => "NonOperating:VatRefundLoss",
+                    ExpenseClassification::OtherNonOperatingCashExpense
+                    | ExpenseClassification::OtherNonOperatingNonCashExpense =>
+                        "NonOperating:Other",
                 },
                 match &s.0 {
                     Some(name) => format!(":{}", name),
