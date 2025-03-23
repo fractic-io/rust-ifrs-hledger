@@ -94,20 +94,20 @@ impl<H: Handlers> DecoratorLogic<H> for StandardDecoratorCardFx {
                 spec_id: id.clone(),
                 date: self.settle_date,
                 postings: vec![
-                    TransactionPosting {
-                        account: backing_account.account().into(),
-                        amount: fx_discrepancy,
-                        currency: main_commodity.currency()?,
-                    },
-                    TransactionPosting {
-                        account: if fx_discrepancy > 0.0 {
+                    TransactionPosting::new(
+                        backing_account.account().into(),
+                        fx_discrepancy,
+                        main_commodity.currency()?,
+                    ),
+                    TransactionPosting::new(
+                        if fx_discrepancy > 0.0 {
                             REALIZED_FX_GAIN.clone().into()
                         } else {
                             REALIZED_FX_LOSS.clone().into()
                         },
-                        amount: -fx_discrepancy,
-                        currency: main_commodity.currency()?,
-                    },
+                        -fx_discrepancy,
+                        main_commodity.currency()?,
+                    ),
                 ],
                 comment: Some("Correct FX discrepancy".to_string()),
             }]

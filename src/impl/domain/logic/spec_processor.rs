@@ -228,16 +228,16 @@ impl<H: Handlers> SpecProcessor<H> {
                 date: payment_date,
                 comment: None,
                 postings: vec![
-                    TransactionPosting {
-                        account: s_handler.account().into(),
-                        amount: -amount.abs(),
-                        currency: commodity.currency()?,
-                    },
-                    TransactionPosting {
-                        account: backing_account.account(),
-                        amount: amount.abs(),
-                        currency: commodity.currency()?,
-                    },
+                    TransactionPosting::new(
+                        s_handler.account().into(),
+                        -amount.abs(),
+                        commodity.currency()?,
+                    ),
+                    TransactionPosting::new(
+                        backing_account.account(),
+                        amount.abs(),
+                        commodity.currency()?,
+                    ),
                 ],
             }]
         } else if payment_date > accrual_date {
@@ -249,16 +249,16 @@ impl<H: Handlers> SpecProcessor<H> {
                     date: accrual_date,
                     comment: Some("Unpaid share capital".into()),
                     postings: vec![
-                        TransactionPosting {
-                            account: s_handler.account().into(),
-                            amount: -amount.abs(),
-                            currency: commodity.currency()?,
-                        },
-                        TransactionPosting {
-                            account: SHARE_CAPITAL_RECEIVABLE.clone().into(),
-                            amount: amount.abs(),
-                            currency: commodity.currency()?,
-                        },
+                        TransactionPosting::new(
+                            s_handler.account().into(),
+                            -amount.abs(),
+                            commodity.currency()?,
+                        ),
+                        TransactionPosting::new(
+                            SHARE_CAPITAL_RECEIVABLE.clone().into(),
+                            amount.abs(),
+                            commodity.currency()?,
+                        ),
                     ],
                 },
                 Transaction {
@@ -266,16 +266,16 @@ impl<H: Handlers> SpecProcessor<H> {
                     date: payment_date,
                     comment: Some("Share capital contribution".into()),
                     postings: vec![
-                        TransactionPosting {
-                            account: SHARE_CAPITAL_RECEIVABLE.clone().into(),
-                            amount: -amount.abs(),
-                            currency: commodity.currency()?,
-                        },
-                        TransactionPosting {
-                            account: backing_account.account(),
-                            amount: amount.abs(),
-                            currency: commodity.currency()?,
-                        },
+                        TransactionPosting::new(
+                            SHARE_CAPITAL_RECEIVABLE.clone().into(),
+                            -amount.abs(),
+                            commodity.currency()?,
+                        ),
+                        TransactionPosting::new(
+                            backing_account.account(),
+                            amount.abs(),
+                            commodity.currency()?,
+                        ),
                     ],
                 },
             ]
@@ -328,16 +328,16 @@ impl<H: Handlers> SpecProcessor<H> {
                 date: payment_date,
                 comment: None,
                 postings: vec![
-                    TransactionPosting {
-                        account: backing_account.account(),
-                        amount: -amount.abs(),
-                        currency: commodity.currency()?,
-                    },
-                    TransactionPosting {
-                        account: e_handler.account().into(),
-                        amount: amount.abs(),
-                        currency: commodity.currency()?,
-                    },
+                    TransactionPosting::new(
+                        backing_account.account(),
+                        -amount.abs(),
+                        commodity.currency()?,
+                    ),
+                    TransactionPosting::new(
+                        e_handler.account().into(),
+                        amount.abs(),
+                        commodity.currency()?,
+                    ),
                 ],
             }]
         } else if payment_date < accrual_date {
@@ -348,16 +348,16 @@ impl<H: Handlers> SpecProcessor<H> {
                     date: payment_date,
                     comment: Some("Pre-paid expense".into()),
                     postings: vec![
-                        TransactionPosting {
-                            account: backing_account.account(),
-                            amount: -amount.abs(),
-                            currency: commodity.currency()?,
-                        },
-                        TransactionPosting {
-                            account: e_handler.while_prepaid().into(),
-                            amount: amount.abs(),
-                            currency: commodity.currency()?,
-                        },
+                        TransactionPosting::new(
+                            backing_account.account(),
+                            -amount.abs(),
+                            commodity.currency()?,
+                        ),
+                        TransactionPosting::new(
+                            e_handler.while_prepaid().into(),
+                            amount.abs(),
+                            commodity.currency()?,
+                        ),
                     ],
                 },
                 Transaction {
@@ -365,16 +365,16 @@ impl<H: Handlers> SpecProcessor<H> {
                     date: accrual_date,
                     comment: Some("Accrue pre-paid expense".into()),
                     postings: vec![
-                        TransactionPosting {
-                            account: e_handler.while_prepaid().into(),
-                            amount: -amount.abs(),
-                            currency: commodity.currency()?,
-                        },
-                        TransactionPosting {
-                            account: e_handler.account().into(),
-                            amount: amount.abs(),
-                            currency: commodity.currency()?,
-                        },
+                        TransactionPosting::new(
+                            e_handler.while_prepaid().into(),
+                            -amount.abs(),
+                            commodity.currency()?,
+                        ),
+                        TransactionPosting::new(
+                            e_handler.account().into(),
+                            amount.abs(),
+                            commodity.currency()?,
+                        ),
                     ],
                 },
             ]
@@ -386,16 +386,16 @@ impl<H: Handlers> SpecProcessor<H> {
                     date: accrual_date,
                     comment: Some("Accrue payable expense".into()),
                     postings: vec![
-                        TransactionPosting {
-                            account: e_handler.while_payable().into(),
-                            amount: -amount.abs(),
-                            currency: commodity.currency()?,
-                        },
-                        TransactionPosting {
-                            account: e_handler.account().into(),
-                            amount: amount.abs(),
-                            currency: commodity.currency()?,
-                        },
+                        TransactionPosting::new(
+                            e_handler.while_payable().into(),
+                            -amount.abs(),
+                            commodity.currency()?,
+                        ),
+                        TransactionPosting::new(
+                            e_handler.account().into(),
+                            amount.abs(),
+                            commodity.currency()?,
+                        ),
                     ],
                 },
                 Transaction {
@@ -403,16 +403,16 @@ impl<H: Handlers> SpecProcessor<H> {
                     date: payment_date,
                     comment: Some("Clear payable expense".into()),
                     postings: vec![
-                        TransactionPosting {
-                            account: backing_account.account(),
-                            amount: -amount.abs(),
-                            currency: commodity.currency()?,
-                        },
-                        TransactionPosting {
-                            account: e_handler.while_payable().into(),
-                            amount: amount.abs(),
-                            currency: commodity.currency()?,
-                        },
+                        TransactionPosting::new(
+                            backing_account.account(),
+                            -amount.abs(),
+                            commodity.currency()?,
+                        ),
+                        TransactionPosting::new(
+                            e_handler.while_payable().into(),
+                            amount.abs(),
+                            commodity.currency()?,
+                        ),
                     ],
                 },
             ]
@@ -463,16 +463,16 @@ impl<H: Handlers> SpecProcessor<H> {
                 date: payment_date,
                 comment: None,
                 postings: vec![
-                    TransactionPosting {
-                        account: backing_account.account(),
-                        amount: -amount.abs(),
-                        currency: commodity.currency()?,
-                    },
-                    TransactionPosting {
-                        account: a_handler.account().into(),
-                        amount: amount.abs(),
-                        currency: commodity.currency()?,
-                    },
+                    TransactionPosting::new(
+                        backing_account.account(),
+                        -amount.abs(),
+                        commodity.currency()?,
+                    ),
+                    TransactionPosting::new(
+                        a_handler.account().into(),
+                        amount.abs(),
+                        commodity.currency()?,
+                    ),
                 ],
             }]
         } else if payment_date < accrual_date {
@@ -483,16 +483,16 @@ impl<H: Handlers> SpecProcessor<H> {
                     date: payment_date,
                     comment: Some("Pre-paid asset".into()),
                     postings: vec![
-                        TransactionPosting {
-                            account: backing_account.account(),
-                            amount: -amount.abs(),
-                            currency: commodity.currency()?,
-                        },
-                        TransactionPosting {
-                            account: a_handler.while_prepaid().into(),
-                            amount: amount.abs(),
-                            currency: commodity.currency()?,
-                        },
+                        TransactionPosting::new(
+                            backing_account.account(),
+                            -amount.abs(),
+                            commodity.currency()?,
+                        ),
+                        TransactionPosting::new(
+                            a_handler.while_prepaid().into(),
+                            amount.abs(),
+                            commodity.currency()?,
+                        ),
                     ],
                 },
                 Transaction {
@@ -500,16 +500,16 @@ impl<H: Handlers> SpecProcessor<H> {
                     date: accrual_date,
                     comment: Some("Accrue pre-paid asset".into()),
                     postings: vec![
-                        TransactionPosting {
-                            account: a_handler.while_prepaid().into(),
-                            amount: -amount.abs(),
-                            currency: commodity.currency()?,
-                        },
-                        TransactionPosting {
-                            account: a_handler.account().into(),
-                            amount: amount.abs(),
-                            currency: commodity.currency()?,
-                        },
+                        TransactionPosting::new(
+                            a_handler.while_prepaid().into(),
+                            -amount.abs(),
+                            commodity.currency()?,
+                        ),
+                        TransactionPosting::new(
+                            a_handler.account().into(),
+                            amount.abs(),
+                            commodity.currency()?,
+                        ),
                     ],
                 },
             ]
@@ -521,16 +521,16 @@ impl<H: Handlers> SpecProcessor<H> {
                     date: accrual_date,
                     comment: Some("Accrue payable asset".into()),
                     postings: vec![
-                        TransactionPosting {
-                            account: a_handler.while_payable().into(),
-                            amount: -amount.abs(),
-                            currency: commodity.currency()?,
-                        },
-                        TransactionPosting {
-                            account: a_handler.account().into(),
-                            amount: amount.abs(),
-                            currency: commodity.currency()?,
-                        },
+                        TransactionPosting::new(
+                            a_handler.while_payable().into(),
+                            -amount.abs(),
+                            commodity.currency()?,
+                        ),
+                        TransactionPosting::new(
+                            a_handler.account().into(),
+                            amount.abs(),
+                            commodity.currency()?,
+                        ),
                     ],
                 },
                 Transaction {
@@ -538,16 +538,16 @@ impl<H: Handlers> SpecProcessor<H> {
                     date: payment_date,
                     comment: Some("Clear payable asset".into()),
                     postings: vec![
-                        TransactionPosting {
-                            account: backing_account.account(),
-                            amount: -amount.abs(),
-                            currency: commodity.currency()?,
-                        },
-                        TransactionPosting {
-                            account: a_handler.while_payable().into(),
-                            amount: amount.abs(),
-                            currency: commodity.currency()?,
-                        },
+                        TransactionPosting::new(
+                            backing_account.account(),
+                            -amount.abs(),
+                            commodity.currency()?,
+                        ),
+                        TransactionPosting::new(
+                            a_handler.while_payable().into(),
+                            amount.abs(),
+                            commodity.currency()?,
+                        ),
                     ],
                 },
             ]
@@ -632,16 +632,16 @@ impl<H: Handlers> SpecProcessor<H> {
                     period_start, period_end
                 )),
                 postings: vec![
-                    TransactionPosting {
-                        account: a_handler.account().into(),
-                        amount: -monthly_amort,
-                        currency: commodity.currency()?,
-                    },
-                    TransactionPosting {
-                        account: accrual_account.clone().into(),
-                        amount: monthly_amort,
-                        currency: commodity.currency()?,
-                    },
+                    TransactionPosting::new(
+                        a_handler.account().into(),
+                        -monthly_amort,
+                        commodity.currency()?,
+                    ),
+                    TransactionPosting::new(
+                        accrual_account.clone().into(),
+                        monthly_amort,
+                        commodity.currency()?,
+                    ),
                 ],
             });
         }
@@ -708,16 +708,16 @@ impl<H: Handlers> SpecProcessor<H> {
                         period_start, period_end
                     )),
                     postings: vec![
-                        TransactionPosting {
-                            account: e_handler.while_payable().into(),
-                            amount: -period_expense,
-                            currency: commodity.currency()?,
-                        },
-                        TransactionPosting {
-                            account: e_handler.account().into(),
-                            amount: period_expense,
-                            currency: commodity.currency()?,
-                        },
+                        TransactionPosting::new(
+                            e_handler.while_payable().into(),
+                            -period_expense,
+                            commodity.currency()?,
+                        ),
+                        TransactionPosting::new(
+                            e_handler.account().into(),
+                            period_expense,
+                            commodity.currency()?,
+                        ),
                     ],
                 });
                 payable_sum += period_expense;
@@ -732,16 +732,16 @@ impl<H: Handlers> SpecProcessor<H> {
                         period_start, period_end
                     )),
                     postings: vec![
-                        TransactionPosting {
-                            account: e_handler.while_prepaid().into(),
-                            amount: -period_expense,
-                            currency: commodity.currency()?,
-                        },
-                        TransactionPosting {
-                            account: e_handler.account().into(),
-                            amount: period_expense,
-                            currency: commodity.currency()?,
-                        },
+                        TransactionPosting::new(
+                            e_handler.while_prepaid().into(),
+                            -period_expense,
+                            commodity.currency()?,
+                        ),
+                        TransactionPosting::new(
+                            e_handler.account().into(),
+                            period_expense,
+                            commodity.currency()?,
+                        ),
                     ],
                 });
                 prepaid_sum += period_expense;
@@ -761,21 +761,21 @@ impl<H: Handlers> SpecProcessor<H> {
             date: payment_date,
             comment: Some("Clear / pre-pay fixed expense".into()),
             postings: vec![
-                TransactionPosting {
-                    account: backing_account.account(),
-                    amount: -amount.abs(),
-                    currency: commodity.currency()?,
-                },
-                TransactionPosting {
-                    account: e_handler.while_prepaid().into(),
-                    amount: prepaid_sum,
-                    currency: commodity.currency()?,
-                },
-                TransactionPosting {
-                    account: e_handler.while_payable().into(),
-                    amount: -payable_sum,
-                    currency: commodity.currency()?,
-                },
+                TransactionPosting::new(
+                    backing_account.account(),
+                    -amount.abs(),
+                    commodity.currency()?,
+                ),
+                TransactionPosting::new(
+                    e_handler.while_prepaid().into(),
+                    prepaid_sum,
+                    commodity.currency()?,
+                ),
+                TransactionPosting::new(
+                    e_handler.while_payable().into(),
+                    -payable_sum,
+                    commodity.currency()?,
+                ),
             ],
         });
 
@@ -922,16 +922,16 @@ impl<H: Handlers> SpecProcessor<H> {
                     period_start, period_end
                 )),
                 postings: vec![
-                    TransactionPosting {
-                        account: e_handler.while_payable().into(),
-                        amount: -period_estimate,
-                        currency: commodity.currency()?,
-                    },
-                    TransactionPosting {
-                        account: e_handler.account().into(),
-                        amount: period_estimate,
-                        currency: commodity.currency()?,
-                    },
+                    TransactionPosting::new(
+                        e_handler.while_payable().into(),
+                        -period_estimate,
+                        commodity.currency()?,
+                    ),
+                    TransactionPosting::new(
+                        e_handler.account().into(),
+                        period_estimate,
+                        commodity.currency()?,
+                    ),
                 ],
             });
         }
@@ -944,16 +944,16 @@ impl<H: Handlers> SpecProcessor<H> {
                 date: payment_date,
                 comment: Some("Correct estimate discrepancy".into()),
                 postings: vec![
-                    TransactionPosting {
-                        account: e_handler.while_payable().into(),
-                        amount: -discrepancy,
-                        currency: commodity.currency()?,
-                    },
-                    TransactionPosting {
-                        account: e_handler.account().into(),
-                        amount: discrepancy,
-                        currency: commodity.currency()?,
-                    },
+                    TransactionPosting::new(
+                        e_handler.while_payable().into(),
+                        -discrepancy,
+                        commodity.currency()?,
+                    ),
+                    TransactionPosting::new(
+                        e_handler.account().into(),
+                        discrepancy,
+                        commodity.currency()?,
+                    ),
                 ],
             });
         }
@@ -964,16 +964,16 @@ impl<H: Handlers> SpecProcessor<H> {
             date: payment_date,
             comment: Some("Clear payable expense".into()),
             postings: vec![
-                TransactionPosting {
-                    account: backing_account.account(),
-                    amount: -amount.abs(),
-                    currency: commodity.currency()?,
-                },
-                TransactionPosting {
-                    account: e_handler.while_payable().into(),
-                    amount: amount.abs(),
-                    currency: commodity.currency()?,
-                },
+                TransactionPosting::new(
+                    backing_account.account(),
+                    -amount.abs(),
+                    commodity.currency()?,
+                ),
+                TransactionPosting::new(
+                    e_handler.while_payable().into(),
+                    amount.abs(),
+                    commodity.currency()?,
+                ),
             ],
         });
 
@@ -1034,16 +1034,16 @@ impl<H: Handlers> SpecProcessor<H> {
             date: payment_date,
             comment: None,
             postings: vec![
-                TransactionPosting {
-                    account: i_handler.account().into(),
-                    amount: -amount.abs(),
-                    currency: commodity.currency()?,
-                },
-                TransactionPosting {
-                    account: backing_account.account(),
-                    amount: amount.abs(),
-                    currency: commodity.currency()?,
-                },
+                TransactionPosting::new(
+                    i_handler.account().into(),
+                    -amount.abs(),
+                    commodity.currency()?,
+                ),
+                TransactionPosting::new(
+                    backing_account.account(),
+                    amount.abs(),
+                    commodity.currency()?,
+                ),
             ],
         };
 
@@ -1093,16 +1093,16 @@ impl<H: Handlers> SpecProcessor<H> {
             date: payment_date,
             comment: None,
             postings: vec![
-                TransactionPosting {
-                    account: backing_account.account(),
-                    amount: -amount.abs(),
-                    currency: commodity.currency()?,
-                },
-                TransactionPosting {
-                    account: e_handler.account().into(),
-                    amount: amount.abs(),
-                    currency: commodity.currency()?,
-                },
+                TransactionPosting::new(
+                    backing_account.account(),
+                    -amount.abs(),
+                    commodity.currency()?,
+                ),
+                TransactionPosting::new(
+                    e_handler.account().into(),
+                    amount.abs(),
+                    commodity.currency()?,
+                ),
             ],
         };
 
@@ -1172,16 +1172,16 @@ impl<H: Handlers> SpecProcessor<H> {
             date: payment_date,
             comment: None,
             postings: vec![
-                TransactionPosting {
-                    account: c_handler.account().into(),
-                    amount: -amount.abs(),
-                    currency: commodity.currency()?,
-                },
-                TransactionPosting {
-                    account: r_account.clone().into(),
-                    amount: amount.abs(),
-                    currency: commodity.currency()?,
-                },
+                TransactionPosting::new(
+                    c_handler.account().into(),
+                    -amount.abs(),
+                    commodity.currency()?,
+                ),
+                TransactionPosting::new(
+                    r_account.clone().into(),
+                    amount.abs(),
+                    commodity.currency()?,
+                ),
             ],
         };
         let assrt = Assertion {
@@ -1231,16 +1231,16 @@ impl<H: Handlers> SpecProcessor<H> {
                 date: accrual_date,
                 comment: Some(format!("Clear VAT receivable for {} - {}", from, to)),
                 postings: vec![
-                    TransactionPosting {
-                        account: VAT_RECEIVABLE.clone().into(),
-                        amount: -amount.abs(),
-                        currency: commodity.currency()?,
-                    },
-                    TransactionPosting {
-                        account: cash.account().into(),
-                        amount: amount.abs(),
-                        currency: commodity.currency()?,
-                    },
+                    TransactionPosting::new(
+                        VAT_RECEIVABLE.clone().into(),
+                        -amount.abs(),
+                        commodity.currency()?,
+                    ),
+                    TransactionPosting::new(
+                        cash.account().into(),
+                        amount.abs(),
+                        commodity.currency()?,
+                    ),
                 ],
             }
         } else {
@@ -1249,16 +1249,16 @@ impl<H: Handlers> SpecProcessor<H> {
                 date: accrual_date,
                 comment: Some(format!("Clear VAT payable for {} - {}", from, to)),
                 postings: vec![
-                    TransactionPosting {
-                        account: cash.account().into(),
-                        amount: -amount.abs(),
-                        currency: commodity.currency()?,
-                    },
-                    TransactionPosting {
-                        account: VAT_PAYABLE.clone().into(),
-                        amount: amount.abs(),
-                        currency: commodity.currency()?,
-                    },
+                    TransactionPosting::new(
+                        cash.account().into(),
+                        -amount.abs(),
+                        commodity.currency()?,
+                    ),
+                    TransactionPosting::new(
+                        VAT_PAYABLE.clone().into(),
+                        amount.abs(),
+                        commodity.currency()?,
+                    ),
                 ],
             }
         };

@@ -30,16 +30,16 @@ impl<H: Handlers> DecoratorLogic<H> for StandardDecoratorPaymentFee {
             spec_id: tx.id.clone(),
             date: tx.payment_date,
             postings: vec![
-                TransactionPosting {
-                    account: tx.backing_account.account().into(),
-                    amount: -self.fee,
-                    currency: tx.commodity.currency()?,
-                },
-                TransactionPosting {
-                    account: PAYMENT_FEES.clone().into(),
-                    amount: self.fee,
-                    currency: tx.commodity.currency()?,
-                },
+                TransactionPosting::new(
+                    tx.backing_account.account().into(),
+                    -self.fee,
+                    tx.commodity.currency()?,
+                ),
+                TransactionPosting::new(
+                    PAYMENT_FEES.clone().into(),
+                    self.fee,
+                    tx.commodity.currency()?,
+                ),
             ],
             comment: Some("Payment fee".to_string()),
         });

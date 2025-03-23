@@ -99,16 +99,16 @@ impl StandardDecoratorVatKorea {
             spec_id: id.clone(),
             date: payment_date,
             postings: vec![
-                TransactionPosting {
-                    account: backing_account.account().into(),
-                    amount: amount_vat,
-                    currency: commodity.currency()?,
-                },
-                TransactionPosting {
-                    account: VAT_PENDING_RECEIPT.clone().into(),
-                    amount: -amount_vat,
-                    currency: commodity.currency()?,
-                },
+                TransactionPosting::new(
+                    backing_account.account().into(),
+                    amount_vat,
+                    commodity.currency()?,
+                ),
+                TransactionPosting::new(
+                    VAT_PENDING_RECEIPT.clone().into(),
+                    -amount_vat,
+                    commodity.currency()?,
+                ),
             ],
             comment: Some("VAT awaiting invoice".to_string()),
         }];
@@ -169,16 +169,16 @@ impl StandardDecoratorVatKorea {
                 spec_id: id.clone(),
                 date: payment_date,
                 postings: vec![
-                    TransactionPosting {
-                        account: backing_account.account().into(),
-                        amount: amount_vat,
-                        currency: commodity.currency()?,
-                    },
-                    TransactionPosting {
-                        account: VAT_PENDING_RECEIPT.clone().into(),
-                        amount: -amount_vat,
-                        currency: commodity.currency()?,
-                    },
+                    TransactionPosting::new(
+                        backing_account.account().into(),
+                        amount_vat,
+                        commodity.currency()?,
+                    ),
+                    TransactionPosting::new(
+                        VAT_PENDING_RECEIPT.clone().into(),
+                        -amount_vat,
+                        commodity.currency()?,
+                    ),
                 ],
                 comment: Some("VAT awaiting invoice".to_string()),
             },
@@ -186,20 +186,20 @@ impl StandardDecoratorVatKorea {
                 spec_id: id.clone(),
                 date: invoice_date,
                 postings: vec![
-                    TransactionPosting {
-                        account: VAT_PENDING_RECEIPT.clone().into(),
-                        amount: amount_vat,
-                        currency: commodity.currency()?,
-                    },
-                    TransactionPosting {
-                        account: if amount_vat > 0.0 {
+                    TransactionPosting::new(
+                        VAT_PENDING_RECEIPT.clone().into(),
+                        amount_vat,
+                        commodity.currency()?,
+                    ),
+                    TransactionPosting::new(
+                        if amount_vat > 0.0 {
                             VAT_PAYABLE.clone().into()
                         } else {
                             VAT_RECEIVABLE.clone().into()
                         },
-                        amount: -amount_vat,
-                        currency: commodity.currency()?,
-                    },
+                        -amount_vat,
+                        commodity.currency()?,
+                    ),
                 ],
                 comment: Some("VAT invoice received".to_string()),
             },
@@ -285,20 +285,20 @@ impl StandardDecoratorVatKorea {
                 spec_id: id.clone(),
                 date: payment_date,
                 postings: vec![
-                    TransactionPosting {
-                        account: if discrepancy > 0.0 {
+                    TransactionPosting::new(
+                        if discrepancy > 0.0 {
                             VAT_REFUND_GAIN.clone().into()
                         } else {
                             VAT_REFUND_LOSS.clone().into()
                         },
-                        amount: -discrepancy,
-                        currency: commodity.currency()?,
-                    },
-                    TransactionPosting {
-                        account: backing_account.account().into(),
-                        amount: discrepancy,
-                        currency: commodity.currency()?,
-                    },
+                        -discrepancy,
+                        commodity.currency()?,
+                    ),
+                    TransactionPosting::new(
+                        backing_account.account().into(),
+                        discrepancy,
+                        commodity.currency()?,
+                    ),
                 ],
                 comment: Some("VAT refund adjustment".to_string()),
             }]
