@@ -2,23 +2,9 @@ pub enum CashflowTag {
     // Operating activities.
     // =========================================================================
     //
-    // Non-cash expenses.
-    Depreciation,
-    Amortization,
-    OtherNonCashExpense,
+    // Values for operating activities should be pulled from the income
+    // statement; don't need to be tagged.
     //
-    // Changes in working capital.
-    DiffAccountsReceivable,
-    DiffInventory,
-    DiffPrepaidExpenses,
-    DiffOtherCurrentAssets,
-    DiffAccountsPayable,
-    DiffAccruedExpenses,
-    DiffDeferredRevenue,
-    DiffOtherCurrentLiabilities,
-
-    // Cash flows to reclassify.
-    GainLossOnSaleOfAssets,
 
     // Investing activities.
     // =========================================================================

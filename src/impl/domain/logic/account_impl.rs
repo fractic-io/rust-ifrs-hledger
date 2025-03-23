@@ -1,7 +1,6 @@
 use crate::entities::{
     Account, AssetAccount, AssetClassification, CashflowTag, EquityAccount, EquityClassification,
-    ExpenseAccount, ExpenseClassification, IncomeAccount, IncomeClassification, LiabilityAccount,
-    LiabilityClassification,
+    LiabilityAccount, LiabilityClassification,
 };
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -24,19 +23,15 @@ impl Account {
     pub(crate) fn cashflow_tag(&self, direction: impl Into<Direction>) -> Option<CashflowTag> {
         match self {
             Account::Asset(AssetAccount(_, classification)) => match classification {
-                AssetClassification::CashAndCashEquivalents => None,
-                AssetClassification::AccountsReceivable => {
-                    Some(CashflowTag::DiffAccountsReceivable)
-                }
-                AssetClassification::Inventory => Some(CashflowTag::DiffInventory),
-                AssetClassification::PrepaidExpenses => Some(CashflowTag::DiffPrepaidExpenses),
-                AssetClassification::ShortTermInvestments => {
-                    Some(CashflowTag::DiffOtherCurrentAssets)
-                }
-                AssetClassification::ShortTermDeposits => Some(CashflowTag::DiffOtherCurrentAssets),
-                AssetClassification::OtherCurrentAssets => {
-                    Some(CashflowTag::DiffOtherCurrentAssets)
-                }
+                AssetClassification::CashAndCashEquivalents
+                | AssetClassification::AccountsReceivable
+                | AssetClassification::Inventory
+                | AssetClassification::PrepaidExpenses
+                | AssetClassification::ShortTermInvestments
+                | AssetClassification::ShortTermDeposits
+                | AssetClassification::OtherCurrentAssets
+                | AssetClassification::DeferredIncomeTax => None,
+
                 AssetClassification::PropertyPlantEquipment => match direction.into() {
                     Direction::Inflow => Some(CashflowTag::CashInflowPpe),
                     Direction::Outflow => Some(CashflowTag::CashOutflowPpe),
@@ -53,69 +48,29 @@ impl Account {
                     Direction::Inflow => Some(CashflowTag::CashInflowLongTermDeposits),
                     Direction::Outflow => Some(CashflowTag::CashOutflowLongTermDeposits),
                 },
-                AssetClassification::DeferredIncomeTax => None,
                 AssetClassification::OtherNonCurrentAssets => match direction.into() {
                     Direction::Inflow => Some(CashflowTag::CashInflowOtherInvesting),
                     Direction::Outflow => Some(CashflowTag::CashOutflowOtherInvesting),
                 },
             },
             Account::Liability(LiabilityAccount(_, classification)) => match classification {
-                LiabilityClassification::AccountsPayable => Some(CashflowTag::DiffAccountsPayable),
-                LiabilityClassification::AccruedExpenses => Some(CashflowTag::DiffAccruedExpenses),
-                LiabilityClassification::DeferredRevenue => Some(CashflowTag::DiffDeferredRevenue),
-                LiabilityClassification::ShortTermDebt => {
-                    Some(CashflowTag::DiffOtherCurrentLiabilities)
-                }
-                LiabilityClassification::OtherCurrentLiabilities => {
-                    Some(CashflowTag::DiffOtherCurrentLiabilities)
-                }
+                LiabilityClassification::AccountsPayable
+                | LiabilityClassification::AccruedExpenses
+                | LiabilityClassification::DeferredRevenue
+                | LiabilityClassification::ShortTermDebt
+                | LiabilityClassification::OtherCurrentLiabilities
+                | LiabilityClassification::DeferredIncomeTax => None,
+
                 LiabilityClassification::LongTermDebt => match direction.into() {
                     Direction::Inflow => Some(CashflowTag::CashInflowBorrowings),
                     Direction::Outflow => Some(CashflowTag::CashOutflowBorrowings),
                 },
-                LiabilityClassification::DeferredIncomeTax => None,
                 LiabilityClassification::OtherNonCurrentLiabilities => {
                     Some(CashflowTag::CashInOutflowOtherFinancing)
                 }
             },
-            Account::Income(IncomeAccount(_, classification)) => match classification {
-                IncomeClassification::SalesRevenue => None,
-                IncomeClassification::ServiceRevenue => None,
-                IncomeClassification::InterestIncome => None,
-                IncomeClassification::DividendIncome => None,
-                IncomeClassification::RentalIncome => None,
-                IncomeClassification::NonCoreInterestIncome => None,
-                IncomeClassification::NonCoreDividendIncome => None,
-                IncomeClassification::NonCoreRentalIncome => None,
-                IncomeClassification::GainOnSaleOfAssets => {
-                    Some(CashflowTag::GainLossOnSaleOfAssets)
-                }
-                IncomeClassification::RealizedFxGain => None,
-                IncomeClassification::VatRefundGain => None,
-                IncomeClassification::OtherNonOperatingIncome => None,
-            },
-            Account::Expense(ExpenseAccount(_, classification)) => match classification {
-                ExpenseClassification::CostOfGoodsSold => None,
-                ExpenseClassification::SellingExpenses => None,
-                ExpenseClassification::GeneralAdministrativeExpenses => None,
-                ExpenseClassification::ResearchAndDevelopmentExpenses => None,
-                ExpenseClassification::CloudServicesExpenses => None,
-                ExpenseClassification::DepreciationExpense => Some(CashflowTag::Depreciation),
-                ExpenseClassification::AmortizationExpense => Some(CashflowTag::Amortization),
-                ExpenseClassification::InterestExpense => None,
-                ExpenseClassification::IncomeTaxExpense => None,
-                ExpenseClassification::OtherTaxExpense => None,
-                ExpenseClassification::NonCoreInterestExpense => None,
-                ExpenseClassification::LossOnSaleOfAssets => {
-                    Some(CashflowTag::GainLossOnSaleOfAssets)
-                }
-                ExpenseClassification::RealizedFxLoss => None,
-                ExpenseClassification::VatRefundLoss => None,
-                ExpenseClassification::OtherNonOperatingCashExpense => None,
-                ExpenseClassification::OtherNonOperatingNonCashExpense => {
-                    Some(CashflowTag::OtherNonCashExpense)
-                }
-            },
+            Account::Income(_) => None,
+            Account::Expense(_) => None,
             Account::Equity(EquityAccount(_, classification)) => match classification {
                 EquityClassification::CommonStock => match direction.into() {
                     Direction::Inflow => Some(CashflowTag::CashInflowIssuanceShares),
