@@ -109,7 +109,8 @@ impl Account {
                     ExpenseClassification::VatAdjustmentExpense =>
                         "NonOperating:VatAdjustmentExpense",
 
-                    ExpenseClassification::OtherExpense => "Other",
+                    ExpenseClassification::OtherCashExpense
+                    | ExpenseClassification::OtherNonCashExpense => "Other",
                 },
                 match &s.0 {
                     Some(name) => format!(":{}", name),

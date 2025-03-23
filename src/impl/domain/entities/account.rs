@@ -133,7 +133,8 @@ pub enum ExpenseClassification {
     /// VAT adjustments (rounding losses)
     VatAdjustmentExpense,
 
-    OtherExpense,
+    OtherCashExpense,
+    OtherNonCashExpense,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
