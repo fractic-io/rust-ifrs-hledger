@@ -199,145 +199,58 @@ impl CashFlowStatementGenerator {
 
         let placeholders: HashMap<String, String> = vec![
             ("period", self.period.clone()),
-            (
-                "net_income",
-                format_amount(net_income, self.currency, false),
-            ),
-            (
-                "nce_depreciation",
-                format_amount(nce_depreciation, self.currency, false),
-            ),
-            (
-                "nce_amortization",
-                format_amount(nce_amortization, self.currency, false),
-            ),
-            ("nce_other", format_amount(nce_other, self.currency, false)),
+            ("net_income", self.fmt(net_income)),
+            ("nce_depreciation", self.fmt(nce_depreciation)),
+            ("nce_amortization", self.fmt(nce_amortization)),
+            ("nce_other", self.fmt(nce_other)),
             (
                 "diff_accounts_receivable",
-                format_amount(diff_accounts_receivable, self.currency, false),
+                self.fmt(diff_accounts_receivable),
             ),
-            (
-                "diff_inventory",
-                format_amount(diff_inventory, self.currency, false),
-            ),
-            (
-                "diff_prepaid_expenses",
-                format_amount(diff_prepaid_expenses, self.currency, false),
-            ),
+            ("diff_inventory", self.fmt(diff_inventory)),
+            ("diff_prepaid_expenses", self.fmt(diff_prepaid_expenses)),
             (
                 "diff_other_current_assets",
-                format_amount(diff_other_current_assets, self.currency, false),
+                self.fmt(diff_other_current_assets),
             ),
-            (
-                "diff_accounts_payable",
-                format_amount(diff_accounts_payable, self.currency, false),
-            ),
-            (
-                "diff_accrued_expenses",
-                format_amount(diff_accrued_expenses, self.currency, false),
-            ),
-            (
-                "diff_deferred_revenue",
-                format_amount(diff_deferred_revenue, self.currency, false),
-            ),
+            ("diff_accounts_payable", self.fmt(diff_accounts_payable)),
+            ("diff_accrued_expenses", self.fmt(diff_accrued_expenses)),
+            ("diff_deferred_revenue", self.fmt(diff_deferred_revenue)),
             (
                 "diff_other_current_liabilities",
-                format_amount(diff_other_current_liabilities, self.currency, false),
+                self.fmt(diff_other_current_liabilities),
             ),
-            (
-                "gain_loss_sale_assets",
-                format_amount(gain_loss_sale_assets, self.currency, false),
-            ),
-            (
-                "net_operating",
-                format_amount(net_operating, self.currency, false),
-            ),
-            ("out_ppe", format_amount(out_ppe, self.currency, false)),
-            (
-                "out_intangible_assets",
-                format_amount(out_intangible_assets, self.currency, false),
-            ),
+            ("gain_loss_sale_assets", self.fmt(gain_loss_sale_assets)),
+            ("net_operating", self.fmt(net_operating)),
+            ("out_ppe", self.fmt(out_ppe)),
+            ("out_intangible_assets", self.fmt(out_intangible_assets)),
             (
                 "out_investment_securities",
-                format_amount(out_investment_securities, self.currency, false),
+                self.fmt(out_investment_securities),
             ),
-            (
-                "out_long_term_deposits",
-                format_amount(out_long_term_deposits, self.currency, false),
-            ),
-            (
-                "out_other_investing",
-                format_amount(out_other_investing, self.currency, false),
-            ),
-            ("in_ppe", format_amount(in_ppe, self.currency, false)),
-            (
-                "in_intangible_assets",
-                format_amount(in_intangible_assets, self.currency, false),
-            ),
+            ("out_long_term_deposits", self.fmt(out_long_term_deposits)),
+            ("out_other_investing", self.fmt(out_other_investing)),
+            ("in_ppe", self.fmt(in_ppe)),
+            ("in_intangible_assets", self.fmt(in_intangible_assets)),
             (
                 "in_investment_securities",
-                format_amount(in_investment_securities, self.currency, false),
+                self.fmt(in_investment_securities),
             ),
-            (
-                "in_long_term_deposits",
-                format_amount(in_long_term_deposits, self.currency, false),
-            ),
-            (
-                "in_other_investing",
-                format_amount(in_other_investing, self.currency, false),
-            ),
-            (
-                "net_investing",
-                format_amount(net_investing, self.currency, false),
-            ),
-            (
-                "in_borrowings",
-                format_amount(in_borrowings, self.currency, false),
-            ),
-            (
-                "out_borrowings",
-                format_amount(out_borrowings, self.currency, false),
-            ),
-            (
-                "in_issuance_shares",
-                format_amount(in_issuance_shares, self.currency, false),
-            ),
-            (
-                "out_share_buybacks",
-                format_amount(out_share_buybacks, self.currency, false),
-            ),
-            (
-                "out_dividends",
-                format_amount(out_dividends, self.currency, false),
-            ),
-            (
-                "in_out_other_financing",
-                format_amount(in_out_other_financing, self.currency, false),
-            ),
-            (
-                "net_financing",
-                format_amount(net_financing, self.currency, false),
-            ),
-            (
-                "balance_opening",
-                format_amount(balance_opening, self.currency, false),
-            ),
-            (
-                "balance_change",
-                format_amount(balance_change, self.currency, false),
-            ),
-            (
-                "balance_before_exchange",
-                format_amount(balance_before_exchange, self.currency, false),
-            ),
-            (
-                "exchange_rate_effects",
-                format_amount(exchange_rate_effects, self.currency, false),
-            ),
-            (
-                "balance_closing",
-                format_amount(balance_closing, self.currency, false),
-            ),
+            ("in_long_term_deposits", self.fmt(in_long_term_deposits)),
+            ("in_other_investing", self.fmt(in_other_investing)),
+            ("net_investing", self.fmt(net_investing)),
+            ("in_borrowings", self.fmt(in_borrowings)),
+            ("out_borrowings", self.fmt(out_borrowings)),
+            ("in_issuance_shares", self.fmt(in_issuance_shares)),
+            ("out_share_buybacks", self.fmt(out_share_buybacks)),
+            ("out_dividends", self.fmt(out_dividends)),
+            ("in_out_other_financing", self.fmt(in_out_other_financing)),
+            ("net_financing", self.fmt(net_financing)),
+            ("balance_opening", self.fmt(balance_opening)),
+            ("balance_change", self.fmt(balance_change)),
+            ("balance_before_exchange", self.fmt(balance_before_exchange)),
+            ("exchange_rate_effects", self.fmt(exchange_rate_effects)),
+            ("balance_closing", self.fmt(balance_closing)),
             (
                 "non_cash_investing_activities",
                 non_cash_investing_activities.to_string(),
@@ -354,6 +267,10 @@ impl CashFlowStatementGenerator {
         let bytes = include_bytes!("../../../res/cash_flow_statement_template.txt");
         let template = String::from_utf8_lossy(bytes).to_string();
         replace_all_placeholders_in_string(template, &placeholders, true)
+    }
+
+    fn fmt(&self, amount: f64) -> String {
+        format!("{:>22}", format_amount(amount, self.currency, false))
     }
 
     fn net_income(&self) -> Result<f64, ServerError> {
