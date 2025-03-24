@@ -60,10 +60,14 @@ Opening Balance of Cash and Cash Equivalents                                  {{
 = Closing Balance of Cash and Cash Equivalents                                {{balance_closing}}
 
 
-Non-Cash Investing Activities
+Additional Disclosures
 ----------------------------------------------------------------------------------------------------
 
+Non-Cash Investing Activities:
 • {{non_cash_investing_activities}}
+
+Non-Cash Reclassifications:
+• {{non_cash_reclassifications}}
 
 
 Notes

@@ -560,9 +560,16 @@ impl<H: Handlers> SpecProcessor<H> {
                             -amount.abs(),
                             commodity.currency()?,
                         ),
-                        TransactionPosting::linked(
+                        // At this point, it's not linked, since the cash
+                        // transaction is to pre-pay, and can't yet be
+                        // considered cash for acquisition of the final
+                        // asset.
+                        //
+                        // As a result, regardless of asset type, this cash
+                        // flow will appear in the operating activities on
+                        // the cash flow statement (until reclassification).
+                        TransactionPosting::new(
                             a_handler.while_prepaid().into(),
-                            a_handler.account().into(),
                             amount.abs(),
                             commodity.currency()?,
                         ),
@@ -571,14 +578,14 @@ impl<H: Handlers> SpecProcessor<H> {
                 Transaction {
                     spec_id: id,
                     date: accrual_date,
-                    comment: Some("Accrue pre-paid asset".into()),
+                    comment: Some("Reclassify pre-paid asset".into()),
                     postings: vec![
                         TransactionPosting::new(
                             a_handler.while_prepaid().into(),
                             -amount.abs(),
                             commodity.currency()?,
                         ),
-                        TransactionPosting::new(
+                        TransactionPosting::non_cash_reclassification(
                             a_handler.account().into(),
                             amount.abs(),
                             commodity.currency()?,

@@ -135,14 +135,25 @@ impl HledgerPrinter {
                     .as_ref()
                     .unwrap_or(&posting.account)
                     .cashflow_tag(posting.amount)
-                    .map_or("".to_string(), |tag| {
-                        format!("       ; {}: {}", CashflowTracingTag::key(), tag.value())
-                    });
+                    .map(|tag| format!("{}: {}", CashflowTracingTag::key(), tag.value()));
+                let custom_tags = posting
+                    .custom_tags
+                    .iter()
+                    .map(|(k, v)| format!("{}: {}", k, v))
+                    .collect::<Vec<String>>();
+                let tag_str = match cashflow_tag
+                    .into_iter()
+                    .chain(custom_tags.into_iter())
+                    .collect::<Vec<String>>()
+                {
+                    tags if tags.is_empty() => "".to_string(),
+                    tags => format!("       ; {}", tags.join(", ")),
+                };
                 ledger_output.push_str(&format!(
                     "    {:75} {:>20}{}\n",
                     posting.account.ledger(),
                     format_amount(posting.amount, posting.currency, false),
-                    cashflow_tag
+                    tag_str
                 ));
             }
             for annotation in financial_records

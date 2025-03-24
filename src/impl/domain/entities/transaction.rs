@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::NaiveDate;
 use iso_currency::Currency;
 
@@ -17,6 +19,7 @@ pub struct TransactionPosting {
     pub source_account: Option<Account>,
     pub amount: f64,
     pub currency: Currency,
+    pub custom_tags: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone)]
@@ -36,6 +39,7 @@ impl TransactionPosting {
             source_account: None,
             amount,
             currency,
+            custom_tags: HashMap::new(),
         }
     }
 
@@ -50,6 +54,19 @@ impl TransactionPosting {
             source_account: Some(source_account),
             amount,
             currency,
+            custom_tags: HashMap::new(),
+        }
+    }
+
+    pub fn non_cash_reclassification(account: Account, amount: f64, currency: Currency) -> Self {
+        Self {
+            account,
+            source_account: None,
+            amount,
+            currency,
+            custom_tags: vec![("s".to_string(), "non_cash_reclassification".to_string())]
+                .into_iter()
+                .collect(),
         }
     }
 }
