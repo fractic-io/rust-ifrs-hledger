@@ -56,8 +56,8 @@ pub(crate) struct ExpenseHistoryDelta {
 
 /// Keep track of unreimbursed entries.
 pub(crate) type ReimbursementState = HashMap<LiabilityAccount, VecDeque<UnreimbursedEntry>>;
-#[derive(Debug)]
-pub(crate) struct UnreimbursedEntry {
+#[derive(Debug, Clone)]
+pub struct UnreimbursedEntry {
     pub(crate) transaction_date: NaiveDate,
     pub(crate) total_amount: f64,
     pub(crate) credit_postings: Vec<TransactionPosting>,
@@ -253,6 +253,15 @@ impl<H: Handlers> SpecProcessor<H> {
             assertions,
             label_lookup: transactions_fold_result.label_lookup,
             annotations_lookup: transactions_fold_result.annotations_lookup,
+            unreimbursed_entries: transactions_fold_result
+                .reimbursement_state
+                .into_iter()
+                .flat_map(|(account, entries)| {
+                    entries
+                        .into_iter()
+                        .map(move |entry| (account.clone(), entry))
+                })
+                .collect(),
         })
     }
 

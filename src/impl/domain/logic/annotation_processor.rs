@@ -37,7 +37,7 @@ impl<'a> AnnotationProcessor<'a> {
                 map
             });
 
-        let notes = annotations_map
+        let transaction_notes = annotations_map
             .into_iter()
             .map(|(annotation, labels)| {
                 (
@@ -47,8 +47,79 @@ impl<'a> AnnotationProcessor<'a> {
             })
             .collect();
 
+        let general_notes = self.unreimbursed_transaction_notes()?;
+
         Ok(NotesToFinancialRecords {
-            transaction_notes: notes,
+            transaction_notes,
+            general_notes,
         })
+    }
+
+    fn unreimbursed_transaction_notes(&self) -> Result<Vec<(String, String)>, ServerError> {
+        let mut n = Vec::new();
+        if !self.records.unreimbursed_entries.is_empty() {
+            n.push((
+                "Currently, unreimbursed transactions remain.".to_string(),
+                self.records
+                    .unreimbursed_entries
+                    .iter()
+                    .map(|(account, _)| account.clone())
+                    .collect::<HashSet<_>>()
+                    .into_iter()
+                    .map(|account| {
+                        let entries = self
+                            .records
+                            .unreimbursed_entries
+                            .iter()
+                            .filter(|(a, _)| a == &account)
+                            .collect::<Vec<_>>();
+                        format!(
+                            "{} ({} | {:.2} | {})",
+                            account.0.as_ref().unwrap_or(&"Unknown".to_string()),
+                            entries.len(),
+                            entries
+                                .iter()
+                                .map(|(_, entry)| entry.total_amount)
+                                .sum::<f64>(),
+                            entries
+                                .iter()
+                                .flat_map(|(_, entry)| entry
+                                    .credit_postings
+                                    .iter()
+                                    .map(|p| p.account.ledger())
+                                    .collect::<Vec<_>>())
+                                .collect::<HashSet<_>>()
+                                .into_iter()
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            ));
+            let cashflow_tags_of_unreimbursed_entries: HashSet<_> = self
+                .records
+                .unreimbursed_entries
+                .iter()
+                .flat_map(|(_, entry)| {
+                    entry
+                        .credit_postings
+                        .iter()
+                        .filter_map(|p| p.account.cashflow_tag(p.amount))
+                })
+                .collect();
+            if !cashflow_tags_of_unreimbursed_entries.is_empty() {
+                n.push((
+                    "WARNING: Unreimbursed transactions are associated with the cashflow tracing tags."
+                        .to_string(),
+                    cashflow_tags_of_unreimbursed_entries
+                        .into_iter()
+                        .map(|tag| tag.value())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                ));
+            }
+        }
+        Ok(n)
     }
 }

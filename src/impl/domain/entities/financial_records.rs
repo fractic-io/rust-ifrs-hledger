@@ -3,12 +3,15 @@
 
 use std::collections::HashMap;
 
-use crate::entities::{
-    Annotation, Assertion, AssertionSpec, DecoratedTransactionSpec, Transaction, TransactionLabel,
-    TransactionSpec, TransactionSpecId,
+use crate::{
+    domain::logic::spec_processor::UnreimbursedEntry,
+    entities::{
+        Annotation, Assertion, AssertionSpec, DecoratedTransactionSpec, Transaction,
+        TransactionLabel, TransactionSpec, TransactionSpecId,
+    },
 };
 
-use super::handlers::Handlers;
+use super::{account::LiabilityAccount, handlers::Handlers};
 
 #[derive(Debug)]
 pub(crate) struct FinancialRecordSpecs<H: Handlers> {
@@ -34,9 +37,11 @@ pub struct FinancialRecords {
     pub assertions: Vec<Assertion>,
     pub label_lookup: HashMap<TransactionSpecId, TransactionLabel>,
     pub annotations_lookup: HashMap<TransactionSpecId, Vec<Annotation>>,
+    pub unreimbursed_entries: Vec<(LiabilityAccount, UnreimbursedEntry)>,
 }
 
 #[derive(Debug, Clone)]
 pub struct NotesToFinancialRecords {
     pub transaction_notes: Vec<(String, String)>,
+    pub general_notes: Vec<(String, String)>,
 }
