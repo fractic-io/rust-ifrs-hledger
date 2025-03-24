@@ -1296,7 +1296,7 @@ impl<H: Handlers> SpecProcessor<H> {
             .map(|p| {
                 TransactionPosting::linked(
                     r_account.clone().into(),
-                    p.account.clone(),
+                    p.source_account.clone().unwrap_or(p.account.clone()),
                     p.amount.abs(),
                     p.currency,
                 )
