@@ -63,8 +63,9 @@ Opening Balance of Cash and Cash Equivalents                                  {{
 Additional Disclosures
 ----------------------------------------------------------------------------------------------------
 
-Non-Cash Investing Activities:
-{{non_cash_investing_activities}}
+Non-Cash Investing / Financing Activities:
+• May occur due to reimbursable transactions not yet reimbursed in the current period. Such
+  transactions are disclosed in the notes to the financial statements.
 
 Non-Cash Reclassifications:
 {{non_cash_reclassifications}}

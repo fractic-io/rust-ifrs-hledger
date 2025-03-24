@@ -194,7 +194,6 @@ impl CashFlowStatementGenerator {
         // ADDITIONAL DISCLOSURES
         // -------------------------------------
 
-        let non_cash_investing_activities = "• TODO";
         let non_cash_reclassifications = self
             .non_cash_reclassifications()?
             .into_iter()
@@ -260,10 +259,6 @@ impl CashFlowStatementGenerator {
             ("balance_before_exchange", self.fmt(balance_before_exchange)),
             ("exchange_rate_effects", self.fmt(exchange_rate_effects)),
             ("balance_closing", self.fmt(balance_closing)),
-            (
-                "non_cash_investing_activities",
-                non_cash_investing_activities.to_string(),
-            ),
             (
                 "non_cash_reclassifications",
                 non_cash_reclassifications.to_string(),
