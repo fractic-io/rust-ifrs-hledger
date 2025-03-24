@@ -7,6 +7,14 @@ impl CashflowTracingTag {
 
     pub(crate) fn value(&self) -> String {
         match self {
+            // Operating.
+            CashflowTracingTag::NonCashExpenseDepreciation => "nce_depreciation",
+            CashflowTracingTag::NonCashExpenseAmortization => "nce_amortization",
+            CashflowTracingTag::NonCashExpenseOther => "nce_other",
+            CashflowTracingTag::ReclassifyGainLossOnSaleOfAssets => {
+                "rcl_gain_loss_on_sale_of_assets"
+            }
+
             // Investing.
             CashflowTracingTag::CashOutflowPpe => "out_ppe",
             CashflowTracingTag::CashOutflowIntangibleAssets => "out_intangible_assets",

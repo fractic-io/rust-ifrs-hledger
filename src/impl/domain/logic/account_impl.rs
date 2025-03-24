@@ -1,6 +1,7 @@
 use crate::entities::{
     Account, AssetAccount, AssetClassification, CashflowTracingTag, EquityAccount,
-    EquityClassification, LiabilityAccount, LiabilityClassification,
+    EquityClassification, ExpenseAccount, ExpenseClassification, IncomeAccount,
+    IncomeClassification, LiabilityAccount, LiabilityClassification,
 };
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -72,8 +73,50 @@ impl Account {
                     Some(CashflowTracingTag::CashInOutflowOtherFinancing)
                 }
             },
-            Account::Income(_) => None,
-            Account::Expense(_) => None,
+            Account::Income(IncomeAccount(_, classification)) => match classification {
+                IncomeClassification::SalesRevenue
+                | IncomeClassification::ServiceRevenue
+                | IncomeClassification::InterestIncome
+                | IncomeClassification::DividendIncome
+                | IncomeClassification::RentalIncome
+                | IncomeClassification::NonCoreInterestIncome
+                | IncomeClassification::NonCoreDividendIncome
+                | IncomeClassification::NonCoreRentalIncome
+                | IncomeClassification::RealizedFxGain
+                | IncomeClassification::VatRefundGain
+                | IncomeClassification::OtherNonOperatingIncome => None,
+
+                IncomeClassification::GainOnSaleOfAssets => {
+                    Some(CashflowTracingTag::ReclassifyGainLossOnSaleOfAssets)
+                }
+            },
+            Account::Expense(ExpenseAccount(_, classification)) => match classification {
+                ExpenseClassification::CostOfGoodsSold
+                | ExpenseClassification::SellingExpenses
+                | ExpenseClassification::GeneralAdministrativeExpenses
+                | ExpenseClassification::ResearchAndDevelopmentExpenses
+                | ExpenseClassification::CloudServicesExpenses
+                | ExpenseClassification::InterestExpense
+                | ExpenseClassification::IncomeTaxExpense
+                | ExpenseClassification::OtherTaxExpense
+                | ExpenseClassification::NonCoreInterestExpense
+                | ExpenseClassification::RealizedFxLoss
+                | ExpenseClassification::VatRefundLoss
+                | ExpenseClassification::OtherNonOperatingCashExpense => None,
+
+                ExpenseClassification::DepreciationExpense => {
+                    Some(CashflowTracingTag::NonCashExpenseDepreciation)
+                }
+                ExpenseClassification::AmortizationExpense => {
+                    Some(CashflowTracingTag::NonCashExpenseAmortization)
+                }
+                ExpenseClassification::OtherNonOperatingNonCashExpense => {
+                    Some(CashflowTracingTag::NonCashExpenseOther)
+                }
+                ExpenseClassification::LossOnSaleOfAssets => {
+                    Some(CashflowTracingTag::ReclassifyGainLossOnSaleOfAssets)
+                }
+            },
             Account::Equity(EquityAccount(_, classification)) => match classification {
                 EquityClassification::CommonStock => match direction.into() {
                     Direction::Inflow => Some(CashflowTracingTag::CashInflowIssuanceShares),

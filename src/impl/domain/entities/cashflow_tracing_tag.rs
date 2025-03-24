@@ -2,9 +2,16 @@ pub enum CashflowTracingTag {
     // Operating activities.
     // =========================================================================
     //
-    // Values for operating activities should be pulled from the income
-    // statement; don't need to be tagged.
+    // Since we will use the indirect method, we only need to tag adjustments to
+    // net income.
     //
+    // Non-cash expenses.
+    NonCashExpenseDepreciation,
+    NonCashExpenseAmortization,
+    NonCashExpenseOther,
+    //
+    // Cash flows to be pull out for reclassification.
+    ReclassifyGainLossOnSaleOfAssets,
 
     // Investing activities.
     // =========================================================================
