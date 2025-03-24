@@ -244,44 +244,50 @@ impl PopByAmount for VecDeque<UnreimbursedEntry> {
     type Entry = UnreimbursedEntry;
 
     fn peak_until_exactly(&self, amount: f64) -> Result<(Vec<&Self::Entry>, f64), ServerError> {
+        const EPSILON: f64 = 1e-9;
         let mut remaining = amount;
         let mut entries = Vec::new();
-        let mut i = 0;
-        while remaining > 0.0 {
-            if i >= self.len() {
+
+        for entry in self.iter() {
+            // If we've essentially reached zero, we can stop.
+            if remaining.abs() < EPSILON {
+                break;
+            }
+
+            // If the next entry is larger than the remaining (considering
+            // tolerance), we cannot satisfy the exact amount.
+            if entry.total_amount > remaining + EPSILON {
                 return Err(ReimbursementTracingError::with_debug(
                     &format!(
-                        "ran out of entries before reaching the expected amount; remaining: {}",
-                        remaining
+                        "amount cannot be satisfied with a whole number of entries; remaining: {:.10}, next entry: {:.10}",
+                        remaining, entry.total_amount
                     ),
                     &self,
                 ));
             }
-            let entry = self.get(i).unwrap();
-            if entry.total_amount > remaining {
-                return Err(ReimbursementTracingError::with_debug(
-                    &format!(
-                        "amount cannot be satisfied in an whole number of entries; remaining: {}, next entry: {}",
-                        remaining,
-                        entry.total_amount
-                    ),
-                    &self,
-                ));
-            }
-            remaining -= entry.total_amount;
+
             entries.push(entry);
-            i += 1;
+            remaining -= entry.total_amount;
         }
+
+        // If after iterating the remaining amount is still significant, we ran
+        // out of entries.
+        if remaining.abs() > EPSILON {
+            return Err(ReimbursementTracingError::with_debug(
+                &format!(
+                    "ran out of entries before reaching the expected amount; remaining: {:.10}",
+                    remaining
+                ),
+                &self,
+            ));
+        }
+
         Ok((entries, remaining))
     }
 
     fn pop_until_exactly(&mut self, amount: f64) -> Result<(), ServerError> {
-        let (entries, _remaining) = self.peak_until_exactly(amount)?;
-        if !entries.is_empty() {
-            for _ in 0..entries.len() {
-                self.pop_front();
-            }
-        }
+        let (entries, _) = self.peak_until_exactly(amount)?;
+        self.drain(..entries.len());
         Ok(())
     }
 }
