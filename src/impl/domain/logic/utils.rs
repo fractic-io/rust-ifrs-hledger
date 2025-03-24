@@ -227,47 +227,21 @@ pub(crate) fn track_unreimbursed_entries<R: ReimbursableEntityHandler, C: CashHa
 pub(crate) trait PopByAmount {
     type Entry;
 
-    /// Pop from the front of the queue until an accumulated amount of exactly
-    /// 'amount'. Returns an error if we run out of entries to pop before
-    /// reaching the amount, or if the amount cannot be satisfied in an whole
-    /// number of entries.
-    fn pop_until_exactly(&mut self, amount: f64) -> Result<(), ServerError>;
-
     /// Peak the first entries in the queue accumulating to exactly 'amount',
     /// and the sum of the remaining unpeaked amount. Returns an error if we run
     /// out of entries to peak before reaching the amount, or if the amount
     /// cannot be satisfied in an whole number of entries.
     fn peak_until_exactly(&self, amount: f64) -> Result<(Vec<&Self::Entry>, f64), ServerError>;
+
+    /// Pop from the front of the queue until an accumulated amount of exactly
+    /// 'amount'. Returns an error if we run out of entries to pop before
+    /// reaching the amount, or if the amount cannot be satisfied in an whole
+    /// number of entries.
+    fn pop_until_exactly(&mut self, amount: f64) -> Result<(), ServerError>;
 }
 
 impl PopByAmount for VecDeque<UnreimbursedEntry> {
     type Entry = UnreimbursedEntry;
-
-    fn pop_until_exactly(&mut self, amount: f64) -> Result<(), ServerError> {
-        let mut remaining = amount;
-        while remaining > 0.0 {
-            if self.is_empty() {
-                return Err(ReimbursementTracingError::with_debug(
-                    "ran out of entries before reaching the expected amount",
-                    &self,
-                ));
-            }
-            let entry = self.front_mut().unwrap();
-            if entry.total_amount > remaining {
-                return Err(ReimbursementTracingError::with_debug(
-                    "amount cannot be satisfied in an whole number of entries",
-                    &self,
-                ));
-            }
-            remaining -= entry.total_amount;
-            if remaining == 0.0 {
-                self.pop_front();
-            } else {
-                self.pop_front();
-            }
-        }
-        Ok(())
-    }
 
     fn peak_until_exactly(&self, amount: f64) -> Result<(Vec<&Self::Entry>, f64), ServerError> {
         let mut remaining = amount;
@@ -275,14 +249,21 @@ impl PopByAmount for VecDeque<UnreimbursedEntry> {
         while remaining > 0.0 {
             if self.is_empty() {
                 return Err(ReimbursementTracingError::with_debug(
-                    "ran out of entries before reaching the expected amount",
+                    &format!(
+                        "ran out of entries before reaching the expected amount; remaining: {}",
+                        remaining
+                    ),
                     &self,
                 ));
             }
             let entry = self.front().unwrap();
             if entry.total_amount > remaining {
                 return Err(ReimbursementTracingError::with_debug(
-                    "amount cannot be satisfied in an whole number of entries",
+                    &format!(
+                        "amount cannot be satisfied in an whole number of entries; remaining: {}, next entry: {}",
+                        remaining,
+                        entry.total_amount
+                    ),
                     &self,
                 ));
             }
@@ -290,5 +271,15 @@ impl PopByAmount for VecDeque<UnreimbursedEntry> {
             entries.push(entry);
         }
         Ok((entries, remaining))
+    }
+
+    fn pop_until_exactly(&mut self, amount: f64) -> Result<(), ServerError> {
+        let (entries, _remaining) = self.peak_until_exactly(amount)?;
+        if !entries.is_empty() {
+            for _ in 0..entries.len() {
+                self.pop_front();
+            }
+        }
+        Ok(())
     }
 }
