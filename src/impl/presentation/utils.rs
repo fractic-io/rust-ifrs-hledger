@@ -8,8 +8,7 @@ fn decimal_places(currency: Currency) -> usize {
 }
 
 /// Format cash amount with currency symbol, correct number of decimal places,
-/// proper thousands separators, surrounding parentheses for negative amounts,
-/// and optional trailing decimal mark.
+/// proper thousands separators, and optional trailing decimal mark.
 ///
 /// For consistency, uses en locale ('.' as decimal mark, i.e. 1,000.00)
 /// regardless of user's locale or currency. Could be generalized in the future.
@@ -19,14 +18,7 @@ fn decimal_places(currency: Currency) -> usize {
 pub(crate) fn format_amount(amount: f64, currency: Currency, trailing_decimal: bool) -> String {
     let decimal_places = decimal_places(currency);
     if decimal_places == 0 {
-        let amount_rounded = {
-            let abs = (amount.abs().round() as i64).to_formatted_string(&Locale::en);
-            if amount < 0.0 {
-                format!("({})", abs)
-            } else {
-                abs
-            }
-        };
+        let amount_rounded = (amount.round() as i64).to_formatted_string(&Locale::en);
         return format!(
             "{}{} {}",
             amount_rounded,
@@ -34,26 +26,17 @@ pub(crate) fn format_amount(amount: f64, currency: Currency, trailing_decimal: b
             currency.symbol()
         );
     } else {
-        let amount_integer_part = (amount.abs().trunc() as i64).to_formatted_string(&Locale::en);
+        let amount_integer_part = (amount.trunc() as i64).to_formatted_string(&Locale::en);
         let amount_fractional_part = format!("{:.decimal_places$}", amount.fract())
             .split('.')
             .nth(1)
             .map(|f| f.to_string())
             .unwrap_or_default();
-        if amount < 0.0 {
-            format!(
-                "({}.{:0decimal_places$}) {}",
-                amount_integer_part,
-                amount_fractional_part,
-                currency.symbol(),
-            )
-        } else {
-            format!(
-                "{}.{:0decimal_places$} {}",
-                amount_integer_part,
-                amount_fractional_part,
-                currency.symbol(),
-            )
-        }
+        format!(
+            "{}.{:0decimal_places$} {}",
+            amount_integer_part,
+            amount_fractional_part,
+            currency.symbol(),
+        )
     }
 }
