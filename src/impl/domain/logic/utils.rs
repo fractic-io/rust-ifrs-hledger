@@ -206,6 +206,7 @@ pub(crate) fn track_unreimbursed_entries<R: ReimbursableEntityHandler, C: CashHa
                     ));
                 }
                 reimbursable_entries.push(UnreimbursedEntry {
+                    transaction_date: tx.date,
                     total_amount: reimbursable_debits,
                     credit_postings,
                 });
@@ -214,6 +215,7 @@ pub(crate) fn track_unreimbursed_entries<R: ReimbursableEntityHandler, C: CashHa
         if reimbursable_entries.is_empty() {
             Ok(None)
         } else {
+            reimbursable_entries.sort_by_key(|e| e.transaction_date);
             Ok(Some(ReimbursementStateDelta::Push {
                 account: r_handler.account(),
                 entries: reimbursable_entries,
@@ -225,49 +227,58 @@ pub(crate) fn track_unreimbursed_entries<R: ReimbursableEntityHandler, C: CashHa
 }
 
 pub(crate) trait PopByAmount {
-    type Entry;
-
     /// Peak the first entries in the queue accumulating to exactly 'amount',
     /// and the sum of the remaining unpeaked amount. Returns an error if we run
     /// out of entries to peak before reaching the amount, or if the amount
     /// cannot be satisfied in an whole number of entries.
-    fn peak_until_exactly(&self, amount: f64) -> Result<(Vec<&Self::Entry>, f64), ServerError>;
+    fn peak_until_exactly(
+        &self,
+        amount: f64,
+        cutoff: NaiveDate,
+    ) -> Result<(Vec<&UnreimbursedEntry>, f64), ServerError>;
 
     /// Pop from the front of the queue until an accumulated amount of exactly
     /// 'amount'. Returns an error if we run out of entries to pop before
     /// reaching the amount, or if the amount cannot be satisfied in an whole
     /// number of entries.
-    fn pop_until_exactly(&mut self, amount: f64) -> Result<(), ServerError>;
+    fn pop_until_exactly(&mut self, amount: f64, cutoff: NaiveDate) -> Result<(), ServerError>;
 }
 
 impl PopByAmount for VecDeque<UnreimbursedEntry> {
-    type Entry = UnreimbursedEntry;
-
-    fn peak_until_exactly(&self, amount: f64) -> Result<(Vec<&Self::Entry>, f64), ServerError> {
+    fn peak_until_exactly(
+        &self,
+        amount: f64,
+        cutoff: NaiveDate,
+    ) -> Result<(Vec<&UnreimbursedEntry>, f64), ServerError> {
         const EPSILON: f64 = 1e-9;
         let mut remaining = amount;
+        let mut unpeaked_amount = 0.0;
         let mut entries = Vec::new();
 
         for entry in self.iter() {
-            // If we've essentially reached zero, we can stop.
-            if remaining.abs() < EPSILON {
+            if entry.transaction_date > cutoff {
                 break;
             }
 
-            // If the next entry is larger than the remaining (considering
-            // tolerance), we cannot satisfy the exact amount.
-            if entry.total_amount > remaining + EPSILON {
-                return Err(ReimbursementTracingError::with_debug(
+            if remaining.abs() > EPSILON {
+                // If the next entry is larger than the remaining (considering
+                // tolerance), we cannot satisfy the exact amount.
+                if entry.total_amount > remaining + EPSILON {
+                    return Err(ReimbursementTracingError::with_debug(
                     &format!(
                         "amount cannot be satisfied with a whole number of entries; remaining: {:.10}, next entry: {:.10}",
                         remaining, entry.total_amount
                     ),
                     &self,
                 ));
-            }
+                }
 
-            entries.push(entry);
-            remaining -= entry.total_amount;
+                entries.push(entry);
+                remaining -= entry.total_amount;
+            } else {
+                // If we've essentially reached zero, we can stop peaking.
+                unpeaked_amount += entry.total_amount;
+            }
         }
 
         // If after iterating the remaining amount is still significant, we ran
@@ -282,11 +293,11 @@ impl PopByAmount for VecDeque<UnreimbursedEntry> {
             ));
         }
 
-        Ok((entries, remaining))
+        Ok((entries, unpeaked_amount))
     }
 
-    fn pop_until_exactly(&mut self, amount: f64) -> Result<(), ServerError> {
-        let (entries, _) = self.peak_until_exactly(amount)?;
+    fn pop_until_exactly(&mut self, amount: f64, cutoff: NaiveDate) -> Result<(), ServerError> {
+        let (entries, _) = self.peak_until_exactly(amount, cutoff)?;
         self.drain(..entries.len());
         Ok(())
     }

@@ -58,12 +58,14 @@ pub(crate) struct ExpenseHistoryDelta {
 pub(crate) type ReimbursementState = HashMap<LiabilityAccount, VecDeque<UnreimbursedEntry>>;
 #[derive(Debug)]
 pub(crate) struct UnreimbursedEntry {
+    pub(crate) transaction_date: NaiveDate,
     pub(crate) total_amount: f64,
     pub(crate) credit_postings: Vec<TransactionPosting>,
 }
 #[derive(Debug)]
 pub(crate) enum ReimbursementStateDelta {
     Pop {
+        date: NaiveDate,
         account: LiabilityAccount,
         amount: f64,
     },
@@ -117,11 +119,15 @@ impl FoldState {
         } = self;
 
         match t.reimbursement_state_delta {
-            Some(ReimbursementStateDelta::Pop { account, amount }) => {
+            Some(ReimbursementStateDelta::Pop {
+                date,
+                account,
+                amount,
+            }) => {
                 reimbursement_state
                     .entry(account)
                     .or_default()
-                    .pop_until_exactly(amount)?;
+                    .pop_until_exactly(amount, date)?;
             }
             Some(ReimbursementStateDelta::Push { account, entries }) => {
                 reimbursement_state
@@ -1272,7 +1278,7 @@ impl<H: Handlers> SpecProcessor<H> {
 
         let (reimbursement_entries, unreimbursed_remaining) = reimbursement_state
             .get(&r_account)
-            .map(|v| v.peak_until_exactly(amount.abs()))
+            .map(|v| v.peak_until_exactly(amount.abs(), payment_date))
             .transpose()?
             .ok_or_else(|| NoTransactionsToReimburse::new(&id, &r_account))?;
 
@@ -1331,6 +1337,7 @@ impl<H: Handlers> SpecProcessor<H> {
             ext_assertions: ext_assertions.into_iter().chain(once(assrt)).collect(),
             expense_history_delta: None,
             reimbursement_state_delta: Some(ReimbursementStateDelta::Pop {
+                date: payment_date,
                 account: r_account,
                 amount: amount.abs(),
             }),
