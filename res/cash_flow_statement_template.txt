@@ -1,5 +1,5 @@
-Cash Flow Statement (Period: {{period}})
-----------------------------------------------------------------------------------------------------
+Cash Flow Statement {{period}}
+─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 Operating Activities
 1. Net Income                                                                 {{net_income}}
@@ -51,7 +51,7 @@ Financing Activities
 
 
 Reconciliation of Cash and Cash Equivalents
-----------------------------------------------------------------------------------------------------
+─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 Opening Balance of Cash and Cash Equivalents                                  {{balance_opening}}
 + Net Increase (Decrease) in Cash:                                            {{balance_change}}
@@ -61,7 +61,7 @@ Opening Balance of Cash and Cash Equivalents                                  {{
 
 
 Additional Disclosures
-----------------------------------------------------------------------------------------------------
+─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 Non-Cash Investing / Financing Activities:
 • May occur due to reimbursable transactions not yet reimbursed in the current period. Such
@@ -72,7 +72,7 @@ Non-Cash Reclassifications:
 
 
 Notes
-----------------------------------------------------------------------------------------------------
+─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 • Operating activities are prepared using the indirect method.
 • Receipt of dividends, receipt of interest, and payment of interest are classified as operating
