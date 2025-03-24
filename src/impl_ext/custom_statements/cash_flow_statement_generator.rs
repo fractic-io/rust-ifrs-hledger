@@ -318,7 +318,7 @@ impl CashFlowStatementGenerator {
         Ok(-hledger(
             &self.ledger_path,
             &self.period,
-            Query::ChangeInAccountReverse {
+            Query::ChangeInAccount {
                 account: Into::<Account>::into(liability_tl(classification)).ledger(),
             },
             None,
