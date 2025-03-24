@@ -148,3 +148,86 @@ pub(crate) fn hledger(
     };
     Ok(amount)
 }
+
+#[derive(Debug)]
+#[allow(dead_code)]
+pub(crate) enum RegisterQuery {
+    Account(String),
+    Tag {
+        key: &'static str,
+        value: &'static str,
+    },
+    TagReverse {
+        key: &'static str,
+        value: &'static str,
+    },
+}
+#[derive(Debug)]
+pub(crate) enum RegisterOutput {
+    Raw { width: i64 },
+}
+pub(crate) fn hledger_register(
+    ledger_path: &PathBuf,
+    period: &str,
+    query: RegisterQuery,
+    pivot: Option<&'static str>,
+    format: RegisterOutput,
+) -> Result<Vec<String>, ServerError> {
+    let mut cmd = Command::new("hledger");
+    cmd.arg("-f")
+        .arg(ledger_path)
+        .arg("-p")
+        .arg(period)
+        .arg("register");
+
+    match &query {
+        RegisterQuery::Account(account) => {
+            let account_query = format!("^{}($|:)", account);
+            cmd.arg(account_query);
+        }
+        RegisterQuery::Tag { key, value } => {
+            let tag_query = format!("tag:{}={}", key, value);
+            cmd.arg(tag_query);
+        }
+        RegisterQuery::TagReverse { key, value } => {
+            let tag_query = format!("tag:{}={}", key, value);
+            cmd.arg(tag_query).arg("-r");
+        }
+    }
+
+    if let Some(pivot) = pivot {
+        cmd.arg("--pivot").arg(pivot);
+    }
+
+    match &format {
+        RegisterOutput::Raw { width } => {
+            cmd.arg("-w").arg(width.to_string());
+
+            let output = cmd.output().map_err(|e| {
+                HledgerCommandFailed::with_debug(&ledger_path.display().to_string(), &cmd, &e)
+            })?;
+            if !output.status.success() {
+                return Err(HledgerCommandFailed::with_debug(
+                    &ledger_path.display().to_string(),
+                    &cmd,
+                    &output,
+                ));
+            }
+
+            let out_raw = String::from_utf8(output.stdout).map_err(|e| {
+                CriticalError::with_debug("failed to parse hledger output as UTF-8", &e)
+            })?;
+
+            Ok(out_raw.lines().map(|s| s.to_string()).collect())
+        }
+    }
+}
+
+pub(crate) fn condense_whitespace(input: &str) -> String {
+    let re = Regex::new(r"\s+").unwrap();
+    re.replace_all(input, |caps: &regex::Captures| {
+        let matched = &caps[0];
+        if matched.len() > 3 { "   " } else { matched }.to_string()
+    })
+    .to_string()
+}

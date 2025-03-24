@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::iter::zip;
 use std::path::{Path, PathBuf};
 
 use fractic_server_error::ServerError;
@@ -11,7 +12,10 @@ use crate::entities::{
 use crate::errors::{HledgerInvalidPath, InvalidIsoCurrencyCode};
 use crate::presentation::utils::format_amount;
 
-use super::utils::{hledger, replace_all_placeholders_in_string, Query, Return};
+use super::utils::{
+    condense_whitespace, hledger, hledger_register, replace_all_placeholders_in_string, Query,
+    RegisterOutput, RegisterQuery, Return,
+};
 
 pub struct CashFlowStatementGenerator {
     ledger_path: PathBuf,
@@ -190,8 +194,13 @@ impl CashFlowStatementGenerator {
         // ADDITIONAL DISCLOSURES
         // -------------------------------------
 
-        let non_cash_investing_activities = "TODO";
-        let non_cash_reclassifications = "TODO";
+        let non_cash_investing_activities = "• TODO";
+        let non_cash_reclassifications = self
+            .non_cash_reclassifications()?
+            .into_iter()
+            .map(|s| format!("• {}", s))
+            .collect::<Vec<String>>()
+            .join("\n");
 
         // -------------------------------------
         // FILL TEMPLATE
@@ -382,5 +391,35 @@ impl CashFlowStatementGenerator {
             Return::Total,
         )?;
         Ok(period_end_balance - period_change)
+    }
+
+    fn non_cash_reclassifications(&self) -> Result<Vec<String>, ServerError> {
+        let source = hledger_register(
+            &self.ledger_path,
+            &self.period,
+            RegisterQuery::TagReverse {
+                key: "s",
+                value: "non_cash_reclassification",
+            },
+            None,
+            RegisterOutput::Raw { width: 200 },
+        )?;
+        let dest = hledger_register(
+            &self.ledger_path,
+            &self.period,
+            RegisterQuery::Tag {
+                key: "s",
+                value: "non_cash_reclassification",
+            },
+            None,
+            RegisterOutput::Raw { width: 200 },
+        )?;
+        zip(source.into_iter(), dest.into_iter())
+            .map(|(s, d)| {
+                let s = condense_whitespace(&s);
+                let d = condense_whitespace(&d);
+                Ok(format!("{}\n  -> {}", s, d))
+            })
+            .collect()
     }
 }
