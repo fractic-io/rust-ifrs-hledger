@@ -246,8 +246,9 @@ impl PopByAmount for VecDeque<UnreimbursedEntry> {
     fn peak_until_exactly(&self, amount: f64) -> Result<(Vec<&Self::Entry>, f64), ServerError> {
         let mut remaining = amount;
         let mut entries = Vec::new();
+        let mut i = 0;
         while remaining > 0.0 {
-            if self.is_empty() {
+            if i >= self.len() {
                 return Err(ReimbursementTracingError::with_debug(
                     &format!(
                         "ran out of entries before reaching the expected amount; remaining: {}",
@@ -256,7 +257,7 @@ impl PopByAmount for VecDeque<UnreimbursedEntry> {
                     &self,
                 ));
             }
-            let entry = self.front().unwrap();
+            let entry = self.get(i).unwrap();
             if entry.total_amount > remaining {
                 return Err(ReimbursementTracingError::with_debug(
                     &format!(
@@ -269,6 +270,7 @@ impl PopByAmount for VecDeque<UnreimbursedEntry> {
             }
             remaining -= entry.total_amount;
             entries.push(entry);
+            i += 1;
         }
         Ok((entries, remaining))
     }

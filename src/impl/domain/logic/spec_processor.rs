@@ -187,9 +187,12 @@ impl<H: Handlers> SpecProcessor<H> {
 
     pub(crate) fn process(self) -> Result<FinancialRecords, ServerError> {
         let DecoratedFinancialRecordSpecs {
-            transaction_specs,
+            mut transaction_specs,
             assertion_specs,
         } = self.specs;
+
+        // Important for reimbursement tracking.
+        transaction_specs.sort_by_key(|s| s.payment_date);
 
         let transactions_fold_result =
             transaction_specs
