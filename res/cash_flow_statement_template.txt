@@ -4,9 +4,9 @@ Cash Flow Statement (Period: {{period}})
 Operating Activities
 1. Net Income                                                                 {{net_income}}
 2. Adjustments for Non-Cash Expenses:
-    + Depreciation                                                            {{exp_depreciation}}
-    + Amortization                                                            {{exp_amortization}}
-    + Other Non-Cash Expenses                                                 {{exp_other_non_cash}}
+    + Depreciation                                                            {{nce_depreciation}}
+    + Amortization                                                            {{nce_amortization}}
+    + Other Non-Cash Expenses                                                 {{nce_other}}
 3. Adjustments for Changes in Working Capital:
     - Increase/(Decrease) in Accounts Receivable                              {{diff_accounts_receivable}}
     - Increase/(Decrease) in Inventory                                        {{diff_inventory}}
@@ -18,7 +18,7 @@ Operating Activities
     + Increase/(Decrease) in Other Current Liabilities                        {{diff_other_current_liabilities}}
 4. Exclude Cash Flows Included in Investing or Financing Activities:
     - Gain/(Loss) on Sale of Assets                                           {{gain_loss_sale_assets}}
-5. Net Cash Provided by (Used in) Operating Activities                        {{net_cash_operating}}
+5. Net Cash Provided by (Used in) Operating Activities                        {{net_operating}}
 
 
 Investing Activities
@@ -34,7 +34,7 @@ Investing Activities
     + Proceeds from Disposal of Investment Securities                         {{in_investment_securities}}
     + Refund of Long-Term Deposits                                            {{in_long_term_deposits}}
     + Other Investing Inflows                                                 {{in_other_investing}}
-3. Net Cash Provided by (Used in) Investing Activities                        {{net_cash_investing}}
+3. Net Cash Provided by (Used in) Investing Activities                        {{net_investing}}
 
 
 Financing Activities
@@ -47,7 +47,7 @@ Financing Activities
     - Dividends Paid                                                          {{out_dividends}}
 3. Other Financing Activities:
     + Other Financing Inflows/Outflows                                        {{in_out_other_financing}}
-4. Net Cash Provided by (Used in) Financing Activities                        {{net_cash_financing}}
+4. Net Cash Provided by (Used in) Financing Activities                        {{net_financing}}
 
 
 Reconciliation of Cash and Cash Equivalents

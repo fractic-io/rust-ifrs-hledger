@@ -1,21 +1,49 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
-use fractic_server_error::{CriticalError, ServerError};
+use fractic_server_error::ServerError;
+use iso_currency::Currency;
 
 use crate::entities::{
-    asset_tl, equity_tl, expense_tl, income_tl, liability_tl, Account, AssetClassification,
-    EquityClassification, ExpenseClassification, IncomeClassification, LiabilityClassification,
+    asset_tl, liability_tl, Account, AssetClassification, CashflowTracingTag,
+    LiabilityClassification,
 };
-use crate::errors::{HledgerBalanceInvalidTotal, HledgerCommandFailed, HledgerInvalidPath};
+use crate::errors::{HledgerInvalidPath, InvalidIsoCurrencyCode};
+use crate::presentation::utils::format_amount;
+
+use super::utils::{hledger, replace_all_placeholders_in_string, Query, Return};
 
 pub struct CashFlowStatementGenerator {
     ledger_path: PathBuf,
     period: String,
+    currency: Currency,
+}
+
+pub trait IntoCurrency {
+    fn try_into(self) -> Result<Currency, ServerError>;
+}
+impl IntoCurrency for &str {
+    fn try_into(self) -> Result<Currency, ServerError> {
+        Currency::from_code(self).ok_or_else(|| InvalidIsoCurrencyCode::new(self))
+    }
+}
+impl IntoCurrency for String {
+    fn try_into(self) -> Result<Currency, ServerError> {
+        Currency::from_code(&self).ok_or_else(|| InvalidIsoCurrencyCode::new(&self))
+    }
+}
+impl IntoCurrency for Currency {
+    fn try_into(self) -> Result<Currency, ServerError> {
+        Ok(self)
+    }
 }
 
 impl CashFlowStatementGenerator {
-    pub fn new<P: AsRef<Path>>(ledger_path: P, period: &str) -> Result<Self, ServerError> {
+    pub fn new<P: AsRef<Path>>(
+        ledger_path: P,
+        period: &str,
+        currency: impl IntoCurrency,
+    ) -> Result<Self, ServerError> {
         Ok(Self {
             ledger_path: ledger_path
                 .as_ref()
@@ -28,6 +56,7 @@ impl CashFlowStatementGenerator {
                 })?
                 .to_path_buf(),
             period: period.to_string(),
+            currency: currency.try_into()?,
         })
     }
 
@@ -36,274 +65,405 @@ impl CashFlowStatementGenerator {
         // OPERATING ACTIVITIES
         // -------------------------------------
 
-        let net_income = self.total_income()? - self.total_expenses()?;
+        let net_income = self.net_income()?;
 
-        // Adjustments for Non-Cash Items.
-        let depreciation_adj = self.expense(ExpenseClassification::DepreciationExpense)?;
-        let amortization_adj = self.expense(ExpenseClassification::AmortizationExpense)?;
-
-        // Adjustments for Non-Operating (Non-Cash) Gains/Losses.
-        let gain_on_sale = self.income(IncomeClassification::GainOnSaleOfAssets)?;
-        let loss_on_sale = self.expense(ExpenseClassification::LossOnSaleOfAssets)?;
-        let sale_adj = loss_on_sale - gain_on_sale;
-
-        let fx_gain = self.income(IncomeClassification::RealizedFxGain)?;
-        let fx_loss = self.expense(ExpenseClassification::RealizedFxLoss)?;
-        let fx_adj = fx_loss - fx_gain;
-
-        let vat_income = self.income(IncomeClassification::VatRefundGain)?;
-        let vat_expense = self.expense(ExpenseClassification::VatRefundLoss)?;
-        let vat_adj = vat_expense - vat_income;
-
-        let non_cash_adjustments =
-            depreciation_adj + amortization_adj + sale_adj + fx_adj + vat_adj;
-
-        // Changes in Working Capital.
+        // Adjustments for non-cash items.
         //
-        // For asset accounts, an increase uses cash (so we subtract the
-        // change). For liabilities, an increase provides cash (so we add the
-        // change).
-        let ar = self.change_in_asset(AssetClassification::AccountsReceivable)?;
-        let inventory = self.change_in_asset(AssetClassification::Inventory)?;
-        let prepaid = self.change_in_asset(AssetClassification::PrepaidExpenses)?;
-        let other_current_assets = self.change_in_asset(AssetClassification::OtherCurrentAssets)?;
-        let wc_assets = -(ar + inventory + prepaid + other_current_assets);
+        let nce_depreciation =
+            self.expense_by_tag(CashflowTracingTag::NonCashExpenseDepreciation)?;
+        let nce_amortization =
+            self.expense_by_tag(CashflowTracingTag::NonCashExpenseAmortization)?;
+        let nce_other = self.expense_by_tag(CashflowTracingTag::NonCashExpenseOther)?;
 
-        let accounts_payable =
+        // Changes in working capital.
+        //
+        let diff_accounts_receivable =
+            self.change_in_asset(AssetClassification::AccountsReceivable)?;
+        let diff_inventory = self.change_in_asset(AssetClassification::Inventory)?;
+        let diff_prepaid_expenses = self.change_in_asset(AssetClassification::PrepaidExpenses)?;
+        let diff_other_current_assets = self
+            .change_in_asset(AssetClassification::ShortTermInvestments)?
+            + self.change_in_asset(AssetClassification::ShortTermDeposits)?
+            + self.change_in_asset(AssetClassification::OtherCurrentAssets)?;
+        //
+        let diff_accounts_payable =
             self.change_in_liability(LiabilityClassification::AccountsPayable)?;
-        let accrued_expenses =
+        let diff_accrued_expenses =
             self.change_in_liability(LiabilityClassification::AccruedExpenses)?;
-        let deferred_revenue =
+        let diff_deferred_revenue =
             self.change_in_liability(LiabilityClassification::DeferredRevenue)?;
-        let other_current_liabilities =
-            self.change_in_liability(LiabilityClassification::OtherCurrentLiabilities)?;
-        let wc_liabilities =
-            accounts_payable + accrued_expenses + deferred_revenue + other_current_liabilities;
+        let diff_other_current_liabilities = self
+            .change_in_liability(LiabilityClassification::ShortTermDebt)?
+            + self.change_in_liability(LiabilityClassification::OtherCurrentLiabilities)?;
 
-        let working_capital_adjustments = wc_assets + wc_liabilities;
+        // Cash flows included in investing or financing activities.
+        //
+        let gain_loss_sale_assets =
+            self.income_by_tag(CashflowTracingTag::ReclassifyGainLossOnSaleOfAssets)?;
 
-        // Net Cash Provided by Operating Activities.
-        let operating_net = net_income + non_cash_adjustments + working_capital_adjustments;
+        // Net cash provided by operating activities.
+        //
+        let net_operating = net_income + nce_depreciation + nce_amortization + nce_other
+            - diff_accounts_receivable
+            - diff_inventory
+            - diff_prepaid_expenses
+            - diff_other_current_assets
+            + diff_accounts_payable
+            + diff_accrued_expenses
+            + diff_deferred_revenue
+            + diff_other_current_liabilities
+            - gain_loss_sale_assets;
 
         // -------------------------------------
         // INVESTING ACTIVITIES
         // -------------------------------------
 
-        let ppe = self.change_in_asset(AssetClassification::PropertyPlantEquipment)?;
-        let intangible = self.change_in_asset(AssetClassification::IntangibleAssets)?;
-        let lt_investments = self.change_in_asset(AssetClassification::LongTermInvestments)?;
-        let lt_deposits = self.change_in_asset(AssetClassification::LongTermDeposits)?;
-        let other_noncurrent = self.change_in_asset(AssetClassification::OtherNonCurrentAssets)?;
+        let out_ppe = self.cash_outflow_by_tag(CashflowTracingTag::CashOutflowPpe)?;
+        let out_intangible_assets =
+            self.cash_outflow_by_tag(CashflowTracingTag::CashOutflowIntangibleAssets)?;
+        let out_investment_securities =
+            self.cash_outflow_by_tag(CashflowTracingTag::CashOutflowInvestmentSecurities)?;
+        let out_long_term_deposits =
+            self.cash_outflow_by_tag(CashflowTracingTag::CashOutflowLongTermDeposits)?;
+        let out_other_investing =
+            self.cash_outflow_by_tag(CashflowTracingTag::CashOutflowOtherInvesting)?;
 
-        let mut investing_inflow = 0.0;
-        let mut investing_outflow = 0.0;
-        if ppe < 0.0 {
-            investing_inflow += ppe.abs();
-        } else {
-            investing_outflow += ppe;
-        }
-        if intangible < 0.0 {
-            investing_inflow += intangible.abs();
-        } else {
-            investing_outflow += intangible;
-        }
-        if lt_investments < 0.0 {
-            investing_inflow += lt_investments.abs();
-        } else {
-            investing_outflow += lt_investments;
-        }
-        if lt_deposits < 0.0 {
-            investing_inflow += lt_deposits.abs();
-        } else {
-            investing_outflow += lt_deposits;
-        }
-        if other_noncurrent < 0.0 {
-            investing_inflow += other_noncurrent.abs();
-        } else {
-            investing_outflow += other_noncurrent;
-        }
+        let in_ppe = self.cash_inflow_by_tag(CashflowTracingTag::CashInflowPpe)?;
+        let in_intangible_assets =
+            self.cash_inflow_by_tag(CashflowTracingTag::CashInflowIntangibleAssets)?;
+        let in_investment_securities =
+            self.cash_inflow_by_tag(CashflowTracingTag::CashInflowInvestmentSecurities)?;
+        let in_long_term_deposits =
+            self.cash_inflow_by_tag(CashflowTracingTag::CashInflowLongTermDeposits)?;
+        let in_other_investing =
+            self.cash_inflow_by_tag(CashflowTracingTag::CashInflowOtherInvesting)?;
 
-        let investing_net = -(ppe + intangible + lt_investments + lt_deposits + other_noncurrent);
+        let net_investing = -out_ppe
+            - out_intangible_assets
+            - out_investment_securities
+            - out_long_term_deposits
+            - out_other_investing
+            + in_ppe
+            + in_intangible_assets
+            + in_investment_securities
+            + in_long_term_deposits
+            + in_other_investing;
 
         // -------------------------------------
         // FINANCING ACTIVITIES
         // -------------------------------------
 
-        // Cash Flows from Debt Transactions.
-        let short_term_debt = self.change_in_liability(LiabilityClassification::ShortTermDebt)?;
-        let long_term_debt = self.change_in_liability(LiabilityClassification::LongTermDebt)?;
-        let debt_flow = short_term_debt + long_term_debt;
+        // Debt-related cash flows.
+        //
+        let in_borrowings = self.cash_inflow_by_tag(CashflowTracingTag::CashInflowBorrowings)?;
+        let out_borrowings = self.cash_outflow_by_tag(CashflowTracingTag::CashOutflowBorrowings)?;
 
-        // Cash Flows from Equity Transactions.
-        let common_stock = self.change_in_equity(EquityClassification::CommonStock)?;
-        let preferred_stock = self.change_in_equity(EquityClassification::PreferredStock)?;
-        let equity_flow = common_stock + preferred_stock;
+        // Equity-related cash flows.
+        //
+        let in_issuance_shares =
+            self.cash_inflow_by_tag(CashflowTracingTag::CashInflowIssuanceShares)?;
+        let out_share_buybacks =
+            self.cash_outflow_by_tag(CashflowTracingTag::CashOutflowShareBuybacks)?;
+        let out_dividends = self.cash_outflow_by_tag(CashflowTracingTag::CashOutflowDividends)?;
 
-        // Other Financing Activities are not explicitly tracked (assumed zero).
-        let other_financing = 0.0;
-        let financing_net = debt_flow + equity_flow + other_financing;
+        // Other financing activities.
+        //
+        let in_out_other_financing =
+            self.cash_inflow_by_tag(CashflowTracingTag::CashInOutflowOtherFinancing)?;
+
+        let net_financing = in_borrowings - out_borrowings + in_issuance_shares
+            - out_share_buybacks
+            - out_dividends
+            + in_out_other_financing;
 
         // -------------------------------------
-        // OUTPUT THE STATEMENT OF CASH FLOWS
+        // RECONCILIATION
         // -------------------------------------
 
-        let mut output = String::new();
-        output.push_str(&format!(
-            "Statement of Cash Flows (Period: {})\n",
-            self.period
-        ));
-        output.push_str("\n");
-        output.push_str(&format!("Operating Activities:\n"));
-        output.push_str(&format!("  1. Net Income: {:.2}\n", net_income));
-        output.push_str(&format!("  2. Adjustments for Non-Cash Items:\n"));
-        output.push_str(&format!("       Depreciation: {:.2}\n", depreciation_adj));
-        output.push_str(&format!("       Amortization: {:.2}\n", amortization_adj));
-        output.push_str(&format!(
-            "  3. Adjustments for Non-Operating (Non-Cash) Gains/Losses:\n"
-        ));
-        output.push_str(&format!(
-            "       Gain/Loss on Sale of Assets: {:.2}\n",
-            sale_adj
-        ));
-        output.push_str(&format!(
-            "       Foreign Exchange Adjustments: {:.2}\n",
-            fx_adj
-        ));
-        output.push_str(&format!("       VAT Adjustments: {:.2}\n", vat_adj));
-        output.push_str(&format!("  4. Changes in Working Capital:\n"));
-        output.push_str(&format!("       Accounts Receivable: {:.2}\n", -ar));
-        output.push_str(&format!("       Inventory: {:.2}\n", -inventory));
-        output.push_str(&format!("       Prepaid Expenses: {:.2}\n", -prepaid));
-        output.push_str(&format!(
-            "       Other Current Assets: {:.2}\n",
-            -other_current_assets
-        ));
-        output.push_str(&format!(
-            "       Accounts Payable: {:.2}\n",
-            accounts_payable
-        ));
-        output.push_str(&format!(
-            "       Accrued Expenses: {:.2}\n",
-            accrued_expenses
-        ));
-        output.push_str(&format!(
-            "       Deferred Revenue: {:.2}\n",
-            deferred_revenue
-        ));
-        output.push_str(&format!(
-            "       Other Current Liabilities: {:.2}\n",
-            other_current_liabilities
-        ));
-        output.push_str(&format!(
-            "  5. Net Cash Provided by Operating Activities: {:.2}\n",
-            operating_net
-        ));
-        output.push_str("\n");
-        output.push_str(&format!("Investing Activities:\n"));
-        output.push_str(&format!(
-            "  1. Cash Outflows for Acquisitions of Long-Term Assets: {:.2}\n",
-            investing_outflow
-        ));
-        output.push_str(&format!(
-            "  2. Cash Inflows from Disposals of Long-Term Assets: {:.2}\n",
-            investing_inflow
-        ));
-        output.push_str(&format!(
-            "  3. Net Cash Used (or Provided) by Investing Activities: {:.2}\n",
-            investing_net
-        ));
-        output.push_str("\n");
-        output.push_str(&format!("Financing Activities:\n"));
-        output.push_str(&format!(
-            "  1. Cash Flows from Debt Transactions: {:.2}\n",
-            debt_flow
-        ));
-        output.push_str(&format!(
-            "  2. Cash Flows from Equity Transactions: {:.2}\n",
-            equity_flow
-        ));
-        output.push_str(&format!(
-            "  3. Other Financing Activities: {:.2}\n",
-            other_financing
-        ));
-        output.push_str(&format!(
-            "  4. Net Cash Provided (or Used) by Financing Activities: {:.2}\n",
-            financing_net
-        ));
+        let balance_opening = self.period_start_balance()?;
+        let balance_change = net_operating + net_investing + net_financing;
+        let balance_before_exchange = balance_opening + balance_change;
+        let exchange_rate_effects = 0.0;
+        let balance_closing = balance_before_exchange + exchange_rate_effects;
 
-        Ok(output)
+        // -------------------------------------
+        // ADDITIONAL DISCLOSURES
+        // -------------------------------------
+
+        let non_cash_investing_activities = "TODO";
+        let non_cash_reclassifications = "TODO";
+
+        // -------------------------------------
+        // FILL TEMPLATE
+        // -------------------------------------
+
+        let placeholders: HashMap<String, String> = vec![
+            ("period", self.period.clone()),
+            (
+                "net_income",
+                format_amount(net_income, self.currency, false),
+            ),
+            (
+                "nce_depreciation",
+                format_amount(nce_depreciation, self.currency, false),
+            ),
+            (
+                "nce_amortization",
+                format_amount(nce_amortization, self.currency, false),
+            ),
+            ("nce_other", format_amount(nce_other, self.currency, false)),
+            (
+                "diff_accounts_receivable",
+                format_amount(diff_accounts_receivable, self.currency, false),
+            ),
+            (
+                "diff_inventory",
+                format_amount(diff_inventory, self.currency, false),
+            ),
+            (
+                "diff_prepaid_expenses",
+                format_amount(diff_prepaid_expenses, self.currency, false),
+            ),
+            (
+                "diff_other_current_assets",
+                format_amount(diff_other_current_assets, self.currency, false),
+            ),
+            (
+                "diff_accounts_payable",
+                format_amount(diff_accounts_payable, self.currency, false),
+            ),
+            (
+                "diff_accrued_expenses",
+                format_amount(diff_accrued_expenses, self.currency, false),
+            ),
+            (
+                "diff_deferred_revenue",
+                format_amount(diff_deferred_revenue, self.currency, false),
+            ),
+            (
+                "diff_other_current_liabilities",
+                format_amount(diff_other_current_liabilities, self.currency, false),
+            ),
+            (
+                "gain_loss_sale_assets",
+                format_amount(gain_loss_sale_assets, self.currency, false),
+            ),
+            (
+                "net_operating",
+                format_amount(net_operating, self.currency, false),
+            ),
+            ("out_ppe", format_amount(out_ppe, self.currency, false)),
+            (
+                "out_intangible_assets",
+                format_amount(out_intangible_assets, self.currency, false),
+            ),
+            (
+                "out_investment_securities",
+                format_amount(out_investment_securities, self.currency, false),
+            ),
+            (
+                "out_long_term_deposits",
+                format_amount(out_long_term_deposits, self.currency, false),
+            ),
+            (
+                "out_other_investing",
+                format_amount(out_other_investing, self.currency, false),
+            ),
+            ("in_ppe", format_amount(in_ppe, self.currency, false)),
+            (
+                "in_intangible_assets",
+                format_amount(in_intangible_assets, self.currency, false),
+            ),
+            (
+                "in_investment_securities",
+                format_amount(in_investment_securities, self.currency, false),
+            ),
+            (
+                "in_long_term_deposits",
+                format_amount(in_long_term_deposits, self.currency, false),
+            ),
+            (
+                "in_other_investing",
+                format_amount(in_other_investing, self.currency, false),
+            ),
+            (
+                "net_investing",
+                format_amount(net_investing, self.currency, false),
+            ),
+            (
+                "in_borrowings",
+                format_amount(in_borrowings, self.currency, false),
+            ),
+            (
+                "out_borrowings",
+                format_amount(out_borrowings, self.currency, false),
+            ),
+            (
+                "in_issuance_shares",
+                format_amount(in_issuance_shares, self.currency, false),
+            ),
+            (
+                "out_share_buybacks",
+                format_amount(out_share_buybacks, self.currency, false),
+            ),
+            (
+                "out_dividends",
+                format_amount(out_dividends, self.currency, false),
+            ),
+            (
+                "in_out_other_financing",
+                format_amount(in_out_other_financing, self.currency, false),
+            ),
+            (
+                "net_financing",
+                format_amount(net_financing, self.currency, false),
+            ),
+            (
+                "balance_opening",
+                format_amount(balance_opening, self.currency, false),
+            ),
+            (
+                "balance_change",
+                format_amount(balance_change, self.currency, false),
+            ),
+            (
+                "balance_before_exchange",
+                format_amount(balance_before_exchange, self.currency, false),
+            ),
+            (
+                "exchange_rate_effects",
+                format_amount(exchange_rate_effects, self.currency, false),
+            ),
+            (
+                "balance_closing",
+                format_amount(balance_closing, self.currency, false),
+            ),
+            (
+                "non_cash_investing_activities",
+                non_cash_investing_activities.to_string(),
+            ),
+            (
+                "non_cash_reclassifications",
+                non_cash_reclassifications.to_string(),
+            ),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v))
+        .collect();
+
+        let bytes = include_bytes!("../../../res/cash_flow_statement_template.txt");
+        let template = String::from_utf8_lossy(bytes).to_string();
+        replace_all_placeholders_in_string(template, &placeholders, true)
     }
 
-    fn run_hledger_sum(&self, account: &str) -> Result<f64, ServerError> {
-        let account_query = format!("^{}($|:)", account);
-        let output = Command::new("hledger")
-            .arg("-f")
-            .arg(&self.ledger_path)
-            .arg("-p")
-            .arg(&self.period)
-            .arg("balance")
-            .arg(account_query)
-            .arg("--output-format=csv")
-            .arg("--layout=bare")
-            .output()
-            .map_err(|e| {
-                HledgerCommandFailed::with_debug(&self.ledger_path.display().to_string(), &e)
-            })?;
-        if !output.status.success() {
-            return Err(HledgerCommandFailed::with_debug(
-                &self.ledger_path.display().to_string(),
-                &format!(
-                    "failed with exit code: {}",
-                    output.status.code().unwrap_or(-1)
-                ),
-            ));
-        }
-        let out_csv = String::from_utf8(output.stdout).map_err(|e| {
-            CriticalError::with_debug("failed to parse hledger output as UTF-8", &e)
-        })?;
-
-        // Total is found in the last row, last column.
-        let amount_str = csv::Reader::from_reader(out_csv.as_bytes())
-            .records()
-            .last()
-            .and_then(|r| r.ok())
-            .and_then(|r| r.iter().last().map(|s| s.to_owned()))
-            .ok_or_else(|| HledgerBalanceInvalidTotal::new(account))?;
-        let amount = amount_str
-            .parse::<f64>()
-            .map_err(|_| HledgerBalanceInvalidTotal::with_debug(account, &amount_str))?;
-
-        Ok(amount)
+    fn net_income(&self) -> Result<f64, ServerError> {
+        hledger(
+            &self.ledger_path,
+            &self.period,
+            Query::IncomeStatement,
+            None,
+            Return::Total,
+        )
     }
 
-    fn total_income(&self) -> Result<f64, ServerError> {
-        Ok(-self.run_hledger_sum("Income")?)
+    fn expense_by_tag(&self, tag: CashflowTracingTag) -> Result<f64, ServerError> {
+        hledger(
+            &self.ledger_path,
+            &self.period,
+            Query::ChangeInAccount {
+                account: tag.value(),
+            },
+            Some(CashflowTracingTag::key()),
+            Return::Total,
+        )
     }
 
-    fn total_expenses(&self) -> Result<f64, ServerError> {
-        self.run_hledger_sum("Expenses")
-    }
-
-    fn income(&self, classification: IncomeClassification) -> Result<f64, ServerError> {
-        Ok(-self.run_hledger_sum(&Into::<Account>::into(income_tl(classification)).ledger())?)
-    }
-
-    fn expense(&self, classification: ExpenseClassification) -> Result<f64, ServerError> {
-        self.run_hledger_sum(&Into::<Account>::into(expense_tl(classification)).ledger())
+    fn income_by_tag(&self, tag: CashflowTracingTag) -> Result<f64, ServerError> {
+        Ok(-self.expense_by_tag(tag)?)
     }
 
     fn change_in_asset(&self, classification: AssetClassification) -> Result<f64, ServerError> {
-        self.run_hledger_sum(&Into::<Account>::into(asset_tl(classification)).ledger())
+        hledger(
+            &self.ledger_path,
+            &self.period,
+            Query::ChangeInAccount {
+                account: Into::<Account>::into(asset_tl(classification)).ledger(),
+            },
+            None,
+            Return::Total,
+        )
     }
 
     fn change_in_liability(
         &self,
         classification: LiabilityClassification,
     ) -> Result<f64, ServerError> {
-        Ok(-self.run_hledger_sum(&Into::<Account>::into(liability_tl(classification)).ledger())?)
+        Ok(-hledger(
+            &self.ledger_path,
+            &self.period,
+            Query::ChangeInAccountReverse {
+                account: Into::<Account>::into(liability_tl(classification)).ledger(),
+            },
+            None,
+            Return::Total,
+        )?)
     }
 
-    fn change_in_equity(&self, classification: EquityClassification) -> Result<f64, ServerError> {
-        Ok(-self.run_hledger_sum(&Into::<Account>::into(equity_tl(classification)).ledger())?)
+    fn cash_outflow_by_tag(&self, tag: CashflowTracingTag) -> Result<f64, ServerError> {
+        let cash_backed = hledger(
+            &self.ledger_path,
+            &self.period,
+            Query::ChangeInAccountReverse {
+                account: Into::<Account>::into(asset_tl(
+                    AssetClassification::CashAndCashEquivalents,
+                ))
+                .ledger(),
+            },
+            Some(CashflowTracingTag::key()),
+            Return::SearchRowOrZero(tag.value()),
+        )?;
+        let non_cash_reclassifications = hledger(
+            &self.ledger_path,
+            &self.period,
+            Query::ChangeByTag {
+                key: "s",
+                value: "non_cash_reclassification",
+            },
+            Some(CashflowTracingTag::key()),
+            Return::SearchRowOrZero(tag.value()),
+        )?;
+        Ok(cash_backed + non_cash_reclassifications)
+    }
+
+    fn cash_inflow_by_tag(&self, tag: CashflowTracingTag) -> Result<f64, ServerError> {
+        Ok(-self.cash_outflow_by_tag(tag)?)
+    }
+
+    fn period_start_balance(&self) -> Result<f64, ServerError> {
+        let period_end_balance = hledger(
+            &self.ledger_path,
+            &self.period,
+            Query::CumulativeBalance {
+                account: Into::<Account>::into(asset_tl(
+                    AssetClassification::CashAndCashEquivalents,
+                ))
+                .ledger(),
+            },
+            None,
+            Return::Total,
+        )?;
+        let period_change = hledger(
+            &self.ledger_path,
+            &self.period,
+            Query::ChangeInAccount {
+                account: Into::<Account>::into(asset_tl(
+                    AssetClassification::CashAndCashEquivalents,
+                ))
+                .ledger(),
+            },
+            None,
+            Return::Total,
+        )?;
+        Ok(period_end_balance - period_change)
     }
 }

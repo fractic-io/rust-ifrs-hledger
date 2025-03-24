@@ -13,6 +13,7 @@ fractic-server-error = { git = "https://github.com/fractic-io/rust-server-error.
 futures = "0.3.31"
 iso_currency = "^0.5.3"
 num-format = "^0.4.4"
+regex = "^1.11.1"
 ron = "^0.8.1"
 serde = "^1.0.218"
 serde_derive = "^1.0.218"

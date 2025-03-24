@@ -3,6 +3,7 @@
 
 pub(crate) mod custom_statements {
     pub(crate) mod cash_flow_statement_generator;
+    mod utils;
 }
 
 pub(crate) mod standard_accounts {

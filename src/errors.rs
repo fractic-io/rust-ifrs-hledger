@@ -1,3 +1,5 @@
+use std::process::Command;
+
 use chrono::NaiveDate;
 use fractic_server_error::{define_client_error, define_internal_error};
 
@@ -84,16 +86,21 @@ define_client_error!(
     { spec_id: &TransactionSpecId, account: &LiabilityAccount, amount: f64 }
 );
 
-// Generating statement of cash flows.
+// Custom statement generation.
 define_internal_error!(
-    HledgerCommandFailed,
-    "hledger command failed for ledger '{ledger}'.",
-    { ledger: &str }
+    UnreplacedPlaceholdersRemain,
+    "Unexpected placeholders remain: {unreplaced:?}.",
+    { unreplaced: &Vec<String> }
 );
 define_internal_error!(
-    HledgerBalanceInvalidTotal,
-    "Running 'balance' command for account '{account}' returned an invalid response. Could not parse total change during the given period.",
-    { account: &str }
+    HledgerCommandFailed,
+    "hledger command failed for ledger '{ledger}':\n\n{command:?}",
+    { ledger: &str, command: &Command }
+);
+define_internal_error!(
+    HledgerInvalidResponse,
+    "hledger command returned an invalid response. Could not parse total change during the given period:\n\n{command:?}\n\nQuery: {query}\n\nReturn: {fetch}",
+    { command: &Command, query: String, fetch: String }
 );
 define_client_error!(
     HledgerInvalidPath,
