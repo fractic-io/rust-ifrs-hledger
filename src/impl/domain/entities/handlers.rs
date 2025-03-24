@@ -31,6 +31,17 @@ pub trait AssetHandler:
             None => liability_tl(LiabilityClassification::AccountsPayable),
         }
     }
+
+    /// IMPORTANT: For correct cash flow statement generation, the destination
+    /// of accrual adjustments should depend on whether the asset is current or
+    /// non-current.
+    ///
+    /// For current assets:
+    ///   The destination should be a regular cash expense account.
+    ///
+    /// For non-current assets:
+    ///   The destination should be a depreciation, amortization, or other
+    ///   non-cash expense account.
     fn upon_accrual(&self) -> Option<ExpenseAccount> {
         None
     }
