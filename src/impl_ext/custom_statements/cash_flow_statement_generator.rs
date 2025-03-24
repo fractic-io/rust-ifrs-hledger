@@ -13,7 +13,7 @@ use crate::errors::{HledgerInvalidPath, InvalidIsoCurrencyCode};
 use crate::presentation::utils::format_amount;
 
 use super::utils::{
-    condense_whitespace, hledger, hledger_register, replace_all_placeholders_in_string, Query,
+    hledger, hledger_register, replace_all_placeholders_in_string, split_sections, Query,
     RegisterOutput, RegisterQuery, Return,
 };
 
@@ -416,9 +416,16 @@ impl CashFlowStatementGenerator {
         )?;
         zip(source.into_iter(), dest.into_iter())
             .map(|(s, d)| {
-                let s = condense_whitespace(&s);
-                let d = condense_whitespace(&d);
-                Ok(format!("{}\n  -> {}", s, d))
+                let s_sec = split_sections(&s);
+                let d_sec = split_sections(&d);
+                Ok(format!(
+                    "{}\n    {:78} {:>17}\n    {:78} {:>17}",
+                    s_sec.get(0).map_or("", |s| s),
+                    s_sec.get(1).map_or("", |s| s),
+                    s_sec.get(2).map_or("", |s| s),
+                    d_sec.get(1).map_or("", |s| s),
+                    d_sec.get(2).map_or("", |s| s)
+                ))
             })
             .collect()
     }

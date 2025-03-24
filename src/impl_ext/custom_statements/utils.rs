@@ -223,11 +223,7 @@ pub(crate) fn hledger_register(
     }
 }
 
-pub(crate) fn condense_whitespace(input: &str) -> String {
-    let re = Regex::new(r"\s+").unwrap();
-    re.replace_all(input, |caps: &regex::Captures| {
-        let matched = &caps[0];
-        if matched.len() > 3 { "   " } else { matched }.to_string()
-    })
-    .to_string()
+pub(crate) fn split_sections(s: &str) -> Vec<&str> {
+    let re = Regex::new(r"\s{4,}").unwrap();
+    re.split(s).filter(|part| !part.trim().is_empty()).collect()
 }
