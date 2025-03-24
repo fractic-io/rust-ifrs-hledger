@@ -17,10 +17,7 @@ pub enum AccountingLogicModel<E, A, I, R, S> {
     ImmaterialIncome(I),
     ImmaterialExpense(E),
     Reimburse(R),
-    ReimbursePartial {
-        to: R,
-        remaining: f64,
-    },
+    ReimbursePartial(R),
     ClearVat {
         from: ISODateModel,
         to: ISODateModel,
@@ -42,9 +39,7 @@ impl<E, A, I, R, S> Into<AccountingLogic<E, A, I, R, S>> for AccountingLogicMode
             AccountingLogicModel::ImmaterialIncome(i) => AccountingLogic::ImmaterialIncome(i),
             AccountingLogicModel::ImmaterialExpense(e) => AccountingLogic::ImmaterialExpense(e),
             AccountingLogicModel::Reimburse(r) => AccountingLogic::Reimburse(r),
-            AccountingLogicModel::ReimbursePartial { to, remaining } => {
-                AccountingLogic::ReimbursePartial { to, remaining }
-            }
+            AccountingLogicModel::ReimbursePartial(r) => AccountingLogic::ReimbursePartial(r),
             AccountingLogicModel::ClearVat { from, to } => AccountingLogic::ClearVat {
                 from: from.into(),
                 to: to.into(),

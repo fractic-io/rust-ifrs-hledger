@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 use fractic_server_error::{define_client_error, define_internal_error};
 
-use crate::entities::TransactionSpecId;
+use crate::entities::{LiabilityAccount, TransactionSpecId};
 
 // IO-related.
 define_client_error!(ReadError, "Error reading file.");
@@ -67,6 +67,21 @@ define_client_error!(
     UnexpectedPositiveValue,
     "Unexpected positive amount ({amount}) for '{accounting_logic}' accounting logic (id: {spec_id:?}).",
     { amount: f64, accounting_logic: &str, spec_id: &TransactionSpecId }
+);
+define_internal_error!(
+    ReimbursementTracingError,
+    "Error tracing reimbursements: {details}.",
+    { details: &str }
+);
+define_client_error!(
+    NoTransactionsToReimburse,
+    "Reimburse spec '{spec_id:?}' can't be mapped to any unreimbursed transactions for '{account:?}'.",
+    { spec_id: &TransactionSpecId, account: &LiabilityAccount }
+);
+define_client_error!(
+    UnexpectedPartialReimbursement,
+    "Reimburse spec '{spec_id:?}' unexpectedly leaves an unreimbursed amount of {amount} for '{account:?}'.",
+    { spec_id: &TransactionSpecId, account: &LiabilityAccount, amount: f64 }
 );
 
 // Generating statement of cash flows.

@@ -22,7 +22,7 @@ pub enum AccountingLogic<E, A, I, R, S> {
     ImmaterialIncome(I),
     ImmaterialExpense(E),
     Reimburse(R),
-    ReimbursePartial { to: R, remaining: f64 },
+    ReimbursePartial(R),
     ClearVat { from: NaiveDate, to: NaiveDate },
 }
 
@@ -83,5 +83,9 @@ where
             BackingAccount::Reimburse(r) => r.account().into(),
             BackingAccount::Cash(c) => c.account().into(),
         }
+    }
+
+    pub fn is_reimburse(&self) -> bool {
+        matches!(self, BackingAccount::Reimburse(_))
     }
 }

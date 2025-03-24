@@ -1,8 +1,17 @@
+use std::collections::VecDeque;
+
 use chrono::{Datelike, Duration, NaiveDate};
 use fractic_server_error::{CriticalError, ServerError};
 use iso_currency::Currency;
 
-use super::spec_processor::ExpenseHistoryPriceRecord;
+use crate::{
+    entities::{BackingAccount, CashHandler, ReimbursableEntityHandler, Transaction},
+    errors::ReimbursementTracingError,
+};
+
+use super::spec_processor::{
+    ExpenseHistoryPriceRecord, ReimbursementStateDelta, UnreimbursedEntry,
+};
 
 /// Returns the last day of each month between the given dates.
 pub(crate) fn month_end_dates(
@@ -161,5 +170,125 @@ pub(crate) fn compute_daily_average(
         None
     } else {
         Some(total_amount / (total_window_days as f64))
+    }
+}
+
+pub(crate) fn track_unreimbursed_entries<R: ReimbursableEntityHandler, C: CashHandler>(
+    backing_account: &BackingAccount<R, C>,
+    transactions: &Vec<Transaction>,
+    ext_transactions: &Vec<Transaction>,
+) -> Result<Option<ReimbursementStateDelta>, ServerError> {
+    if let BackingAccount::Reimburse(r_handler) = backing_account {
+        let mut reimbursable_entries = Vec::new();
+        for tx in transactions.iter().chain(ext_transactions.iter()) {
+            let reimbursable_debits = tx
+                .postings
+                .iter()
+                .filter_map(|p| {
+                    if p.amount < 0.0 && p.account == r_handler.account().into() {
+                        Some(p.amount.abs())
+                    } else {
+                        None
+                    }
+                })
+                .sum::<f64>();
+            if reimbursable_debits > 0.0 {
+                let credit_postings = tx
+                    .postings
+                    .iter()
+                    .filter(|p| p.amount > 0.0)
+                    .cloned()
+                    .collect::<Vec<_>>();
+                if credit_postings.iter().map(|p| p.amount).sum::<f64>() != reimbursable_debits {
+                    return Err(ReimbursementTracingError::with_debug(
+                        "some transactions included a combination of reimbursable and non-reimbursable debits, which is not yet supported",
+                        &backing_account,
+                    ));
+                }
+                reimbursable_entries.push(UnreimbursedEntry {
+                    total_amount: reimbursable_debits,
+                    credit_postings,
+                });
+            }
+        }
+        if reimbursable_entries.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(ReimbursementStateDelta::Push {
+                account: r_handler.account(),
+                entries: reimbursable_entries,
+            }))
+        }
+    } else {
+        Ok(None)
+    }
+}
+
+pub(crate) trait PopByAmount {
+    type Entry;
+
+    /// Pop from the front of the queue until an accumulated amount of exactly
+    /// 'amount'. Returns an error if we run out of entries to pop before
+    /// reaching the amount, or if the amount cannot be satisfied in an whole
+    /// number of entries.
+    fn pop_until_exactly(&mut self, amount: f64) -> Result<(), ServerError>;
+
+    /// Peak the first entries in the queue accumulating to exactly 'amount',
+    /// and the sum of the remaining unpeaked amount. Returns an error if we run
+    /// out of entries to peak before reaching the amount, or if the amount
+    /// cannot be satisfied in an whole number of entries.
+    fn peak_until_exactly(&self, amount: f64) -> Result<(Vec<&Self::Entry>, f64), ServerError>;
+}
+
+impl PopByAmount for VecDeque<UnreimbursedEntry> {
+    type Entry = UnreimbursedEntry;
+
+    fn pop_until_exactly(&mut self, amount: f64) -> Result<(), ServerError> {
+        let mut remaining = amount;
+        while remaining > 0.0 {
+            if self.is_empty() {
+                return Err(ReimbursementTracingError::with_debug(
+                    "ran out of entries before reaching the expected amount",
+                    &self,
+                ));
+            }
+            let entry = self.front_mut().unwrap();
+            if entry.total_amount > remaining {
+                return Err(ReimbursementTracingError::with_debug(
+                    "amount cannot be satisfied in an whole number of entries",
+                    &self,
+                ));
+            }
+            remaining -= entry.total_amount;
+            if remaining == 0.0 {
+                self.pop_front();
+            } else {
+                self.pop_front();
+            }
+        }
+        Ok(())
+    }
+
+    fn peak_until_exactly(&self, amount: f64) -> Result<(Vec<&Self::Entry>, f64), ServerError> {
+        let mut remaining = amount;
+        let mut entries = Vec::new();
+        while remaining > 0.0 {
+            if self.is_empty() {
+                return Err(ReimbursementTracingError::with_debug(
+                    "ran out of entries before reaching the expected amount",
+                    &self,
+                ));
+            }
+            let entry = self.front().unwrap();
+            if entry.total_amount > remaining {
+                return Err(ReimbursementTracingError::with_debug(
+                    "amount cannot be satisfied in an whole number of entries",
+                    &self,
+                ));
+            }
+            remaining -= entry.total_amount;
+            entries.push(entry);
+        }
+        Ok((entries, remaining))
     }
 }

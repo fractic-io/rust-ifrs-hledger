@@ -1,11 +1,15 @@
-use std::{collections::HashMap, iter::once};
+use std::{
+    collections::{HashMap, VecDeque},
+    iter::once,
+};
 
 use chrono::{Duration, NaiveDate};
 use fractic_server_error::ServerError;
 
 use crate::{
     domain::logic::utils::{
-        compute_daily_average, monthly_accrual_adjustments, MonthlyAccrualAdjustment,
+        compute_daily_average, monthly_accrual_adjustments, track_unreimbursed_entries,
+        MonthlyAccrualAdjustment,
     },
     entities::{
         AccountingLogic, Annotation, Assertion, AssetHandler, BackingAccount, CashHandler,
@@ -15,14 +19,16 @@ use crate::{
         TransactionPosting, TransactionSpecId,
     },
     errors::{
-        CommonStockCannotBePrepaid, InvalidArgumentsForAccountingLogic, NonAmortizableAsset,
-        UnexpectedNegativeValue, UnexpectedPositiveValue, VariableExpenseDoubleInit,
-        VariableExpenseInvalidPaymentDate, VariableExpenseNoInit,
-        VariableExpenseNotEnoughHistoricalData,
+        CommonStockCannotBePrepaid, InvalidArgumentsForAccountingLogic, NoTransactionsToReimburse,
+        NonAmortizableAsset, UnexpectedNegativeValue, UnexpectedPartialReimbursement,
+        UnexpectedPositiveValue, VariableExpenseDoubleInit, VariableExpenseInvalidPaymentDate,
+        VariableExpenseNoInit, VariableExpenseNotEnoughHistoricalData,
     },
     ext::standard_accounts::SHARE_CAPITAL_RECEIVABLE,
     impl_ext::standard_accounts::vat::{VAT_PAYABLE, VAT_RECEIVABLE},
 };
+
+use super::utils::PopByAmount;
 
 pub(crate) struct SpecProcessor<H: Handlers> {
     specs: DecoratedFinancialRecordSpecs<H>,
@@ -48,6 +54,25 @@ pub(crate) struct ExpenseHistoryDelta {
     pub(crate) is_init: bool,
 }
 
+/// Keep track of unreimbursed entries.
+pub(crate) type ReimbursementState = HashMap<LiabilityAccount, VecDeque<UnreimbursedEntry>>;
+#[derive(Debug)]
+pub(crate) struct UnreimbursedEntry {
+    pub(crate) total_amount: f64,
+    pub(crate) credit_postings: Vec<TransactionPosting>,
+}
+#[derive(Debug)]
+pub(crate) enum ReimbursementStateDelta {
+    Pop {
+        account: LiabilityAccount,
+        amount: f64,
+    },
+    Push {
+        account: LiabilityAccount,
+        entries: Vec<UnreimbursedEntry>,
+    },
+}
+
 struct Transformation {
     spec_id: TransactionSpecId,
     label: TransactionLabel,
@@ -55,6 +80,7 @@ struct Transformation {
     ext_transactions: Vec<Transaction>,
     ext_assertions: Vec<Assertion>,
     expense_history_delta: Option<ExpenseHistoryDelta>,
+    reimbursement_state_delta: Option<ReimbursementStateDelta>,
     annotations: Vec<Annotation>,
 }
 
@@ -64,6 +90,7 @@ struct FoldState {
     expense_history_lookup: HashMap<ExpenseAccount, ExpenseHistory>,
     label_lookup: HashMap<TransactionSpecId, TransactionLabel>,
     annotations_lookup: HashMap<TransactionSpecId, Vec<Annotation>>,
+    reimbursement_state: ReimbursementState,
 }
 
 impl FoldState {
@@ -74,6 +101,7 @@ impl FoldState {
             expense_history_lookup: HashMap::new(),
             label_lookup: HashMap::new(),
             annotations_lookup: HashMap::new(),
+            reimbursement_state: HashMap::new(),
         }
     }
 
@@ -85,11 +113,29 @@ impl FoldState {
             mut expense_history_lookup,
             mut label_lookup,
             mut annotations_lookup,
+            mut reimbursement_state,
         } = self;
+
+        match t.reimbursement_state_delta {
+            Some(ReimbursementStateDelta::Pop { account, amount }) => {
+                reimbursement_state
+                    .entry(account)
+                    .or_default()
+                    .pop_until_exactly(amount)?;
+            }
+            Some(ReimbursementStateDelta::Push { account, entries }) => {
+                reimbursement_state
+                    .entry(account)
+                    .or_default()
+                    .extend(entries);
+            }
+            None => {}
+        }
 
         transactions.extend(t.transactions);
         transactions.extend(t.ext_transactions);
         assertions.extend(t.ext_assertions);
+
         if let Some(delta) = t.expense_history_delta {
             let expense_history = expense_history_lookup.entry(delta.account).or_default();
             if delta.is_init {
@@ -100,6 +146,7 @@ impl FoldState {
             }
             expense_history.price_records.push(delta.price_record);
         }
+
         label_lookup.insert(t.spec_id, t.label);
         annotations_lookup
             .entry(t.spec_id)
@@ -112,6 +159,7 @@ impl FoldState {
             expense_history_lookup,
             label_lookup,
             annotations_lookup,
+            reimbursement_state,
         })
     }
 }
@@ -165,9 +213,11 @@ impl<H: Handlers> SpecProcessor<H> {
                         AccountingLogic::ImmaterialExpense(..) => {
                             Self::process_immaterial_expense(spec)?
                         }
-                        AccountingLogic::Reimburse(..) => Self::process_reimburse(spec)?,
+                        AccountingLogic::Reimburse(..) => {
+                            Self::process_reimburse(spec, &state.reimbursement_state)?
+                        }
                         AccountingLogic::ReimbursePartial { .. } => {
-                            Self::process_reimburse_partial(spec)?
+                            Self::process_reimburse_partial(spec, &state.reimbursement_state)?
                         }
                         AccountingLogic::ClearVat { .. } => Self::process_clear_vat(spec)?,
                     };
@@ -290,10 +340,15 @@ impl<H: Handlers> SpecProcessor<H> {
                 payee: payee.name(),
                 description,
             },
+            expense_history_delta: None,
+            reimbursement_state_delta: track_unreimbursed_entries(
+                &backing_account,
+                &transactions,
+                &ext_transactions,
+            )?,
             transactions,
             ext_transactions,
             ext_assertions,
-            expense_history_delta: None,
             annotations,
         })
     }
@@ -427,10 +482,15 @@ impl<H: Handlers> SpecProcessor<H> {
                 payee: payee.name(),
                 description,
             },
+            expense_history_delta: None,
+            reimbursement_state_delta: track_unreimbursed_entries(
+                &backing_account,
+                &transactions,
+                &ext_transactions,
+            )?,
             transactions,
             ext_transactions,
             ext_assertions,
-            expense_history_delta: None,
             annotations,
         })
     }
@@ -564,10 +624,15 @@ impl<H: Handlers> SpecProcessor<H> {
                 payee: payee.name(),
                 description,
             },
+            expense_history_delta: None,
+            reimbursement_state_delta: track_unreimbursed_entries(
+                &backing_account,
+                &transactions,
+                &ext_transactions,
+            )?,
             transactions,
             ext_transactions,
             ext_assertions,
-            expense_history_delta: None,
             annotations,
         })
     }
@@ -606,7 +671,7 @@ impl<H: Handlers> SpecProcessor<H> {
             description: description.clone(),
             amount,
             commodity: commodity.clone(),
-            backing_account,
+            backing_account: backing_account.clone(),
             annotations: annotations.clone(),
             ext_transactions: Default::default(),
             ext_assertions: Default::default(),
@@ -657,10 +722,15 @@ impl<H: Handlers> SpecProcessor<H> {
                 payee: payee.name(),
                 description,
             },
+            expense_history_delta: None,
+            reimbursement_state_delta: track_unreimbursed_entries(
+                &backing_account,
+                &transactions,
+                &ext_transactions,
+            )?,
             transactions,
             ext_transactions,
             ext_assertions,
-            expense_history_delta: None,
             annotations,
         })
     }
@@ -792,10 +862,15 @@ impl<H: Handlers> SpecProcessor<H> {
                 payee: payee.name(),
                 description,
             },
+            expense_history_delta: None,
+            reimbursement_state_delta: track_unreimbursed_entries(
+                &backing_account,
+                &transactions,
+                &ext_transactions,
+            )?,
             transactions,
             ext_transactions,
             ext_assertions,
-            expense_history_delta: None,
             annotations,
         })
     }
@@ -1006,10 +1081,15 @@ impl<H: Handlers> SpecProcessor<H> {
                 payee: payee.name(),
                 description,
             },
+            expense_history_delta: Some(expense_history_delta),
+            reimbursement_state_delta: track_unreimbursed_entries(
+                &backing_account,
+                &transactions,
+                &ext_transactions,
+            )?,
             transactions,
             ext_transactions,
             ext_assertions,
-            expense_history_delta: Some(expense_history_delta),
             annotations: annotations.into_iter().chain(once(note)).collect(),
         })
     }
@@ -1069,6 +1149,7 @@ impl<H: Handlers> SpecProcessor<H> {
             ext_transactions,
             ext_assertions,
             expense_history_delta: None,
+            reimbursement_state_delta: None,
             annotations: annotations.into_iter().chain(once(note)).collect(),
         })
     }
@@ -1118,42 +1199,53 @@ impl<H: Handlers> SpecProcessor<H> {
         // the financial records.
         let note = Annotation::ImmaterialExpense;
 
+        let transactions = vec![tx];
         Ok(Transformation {
             spec_id: id,
             label: TransactionLabel {
                 payee: payee.name(),
                 description,
             },
-            transactions: vec![tx],
+            expense_history_delta: None,
+            reimbursement_state_delta: track_unreimbursed_entries(
+                &backing_account,
+                &transactions,
+                &ext_transactions,
+            )?,
+            transactions,
             ext_transactions,
             ext_assertions,
-            expense_history_delta: None,
             annotations: annotations.into_iter().chain(once(note)).collect(),
         })
     }
 
-    fn process_reimburse(spec: DecoratedTransactionSpec<H>) -> Result<Transformation, ServerError> {
+    fn process_reimburse(
+        spec: DecoratedTransactionSpec<H>,
+        reimbursement_state: &ReimbursementState,
+    ) -> Result<Transformation, ServerError> {
         let AccountingLogic::Reimburse(ref r_handler) = spec.accounting_logic else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
         };
         let r_account = r_handler.account();
-        Self::process_reimburse_helper(spec, r_account, 0.0)
+        Self::process_reimburse_helper(spec, r_account, false, reimbursement_state)
     }
 
     fn process_reimburse_partial(
         spec: DecoratedTransactionSpec<H>,
+        reimbursement_state: &ReimbursementState,
     ) -> Result<Transformation, ServerError> {
-        let AccountingLogic::ReimbursePartial { ref to, remaining } = spec.accounting_logic else {
+        let AccountingLogic::ReimbursePartial(ref r_handler) = spec.accounting_logic else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
         };
-        let r_account = to.account();
-        Self::process_reimburse_helper(spec, r_account, remaining)
+        let r_account = r_handler.account();
+        Self::process_reimburse_helper(spec, r_account, true, reimbursement_state)
     }
 
     fn process_reimburse_helper(
         spec: DecoratedTransactionSpec<H>,
         r_account: LiabilityAccount,
-        expect_remaining: f64,
+        expect_remaining: bool,
+        reimbursement_state: &ReimbursementState,
     ) -> Result<Transformation, ServerError> {
         let DecoratedTransactionSpec {
             id,
@@ -1175,27 +1267,53 @@ impl<H: Handlers> SpecProcessor<H> {
         };
         amount_should_be_negative!(amount, "Reimburse", &id);
 
+        let (reimbursement_entries, unreimbursed_remaining) = reimbursement_state
+            .get(&r_account)
+            .map(|v| v.peak_until_exactly(amount.abs()))
+            .transpose()?
+            .ok_or_else(|| NoTransactionsToReimburse::new(&id, &r_account))?;
+
+        if !expect_remaining && unreimbursed_remaining.abs() > 0.01 {
+            return Err(UnexpectedPartialReimbursement::new(
+                &id,
+                &r_account,
+                unreimbursed_remaining,
+            ));
+        }
+
+        let linked_postings = reimbursement_entries
+            .into_iter()
+            .flat_map(|e| e.credit_postings.iter())
+            .map(|p| {
+                TransactionPosting::linked(
+                    r_account.clone().into(),
+                    p.account.clone(),
+                    p.amount.abs(),
+                    p.currency,
+                )
+            })
+            .collect::<Vec<_>>();
+
         let tx = Transaction {
             spec_id: id,
             date: payment_date,
             comment: None,
-            postings: vec![
-                TransactionPosting::new(
-                    c_handler.account().into(),
-                    -amount.abs(),
-                    commodity.currency()?,
-                ),
-                TransactionPosting::new(
-                    r_account.clone().into(),
-                    amount.abs(),
-                    commodity.currency()?,
-                ),
-            ],
+            postings: once(TransactionPosting::new(
+                c_handler.account().into(),
+                -amount.abs(),
+                commodity.currency()?,
+            ))
+            .chain(linked_postings)
+            .collect(),
         };
         let assrt = Assertion {
             date: payment_date,
-            account: r_account.into(),
-            balance: -expect_remaining,
+            account: r_account.clone().into(),
+            balance: if expect_remaining {
+                -unreimbursed_remaining.abs()
+            } else {
+                0.0
+            },
             currency: commodity.currency()?,
         };
 
@@ -1209,6 +1327,10 @@ impl<H: Handlers> SpecProcessor<H> {
             ext_transactions,
             ext_assertions: ext_assertions.into_iter().chain(once(assrt)).collect(),
             expense_history_delta: None,
+            reimbursement_state_delta: Some(ReimbursementStateDelta::Pop {
+                account: r_account,
+                amount: amount.abs(),
+            }),
             annotations,
         })
     }
@@ -1312,6 +1434,7 @@ impl<H: Handlers> SpecProcessor<H> {
             ext_transactions,
             ext_assertions: ext_assertions.into_iter().chain(assrt).collect(),
             expense_history_delta: None,
+            reimbursement_state_delta: None,
             annotations,
         })
     }
