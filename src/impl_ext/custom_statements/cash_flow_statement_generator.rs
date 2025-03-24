@@ -274,7 +274,7 @@ impl CashFlowStatementGenerator {
     }
 
     fn fmt(&self, amount: f64) -> String {
-        format!("{:>22}", format_amount(amount, self.currency, false))
+        format!("{:>16}", format_amount(amount, self.currency, false))
     }
 
     fn net_income(&self) -> Result<f64, ServerError> {
@@ -414,7 +414,7 @@ impl CashFlowStatementGenerator {
                 let s_sec = split_sections(&s);
                 let d_sec = split_sections(&d);
                 Ok(format!(
-                    "{}\n    {:78} {:>17}\n    {:78} {:>17}",
+                    "{}\n    {:57} {:>17}\n    {:57} {:>17}",
                     s_sec.get(0).map_or("", |s| s),
                     s_sec.get(1).map_or("", |s| s),
                     s_sec.get(2).map_or("", |s| s),

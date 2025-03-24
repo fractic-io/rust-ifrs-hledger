@@ -1,79 +1,80 @@
 Cash Flow Statement {{period}}
-─────────────────────────────────────────────────────────────────────────────────────────────────────
+───────────────────────────────────────────────────────────────────────────────
 
 Operating Activities
-1. Net Income                                                                 {{net_income}}
+1. Net Income                                                  {{net_income}}
 2. Adjustments for Non-Cash Expenses:
-    + Depreciation                                                            {{nce_depreciation}}
-    + Amortization                                                            {{nce_amortization}}
-    + Other Non-Cash Expenses                                                 {{nce_other}}
+    + Depreciation                                             {{nce_depreciation}}
+    + Amortization                                             {{nce_amortization}}
+    + Other Non-Cash Expenses                                  {{nce_other}}
 3. Adjustments for Changes in Working Capital:
-    - Increase/(Decrease) in Accounts Receivable                              {{diff_accounts_receivable}}
-    - Increase/(Decrease) in Inventory                                        {{diff_inventory}}
-    - Increase/(Decrease) in Prepaid Expenses                                 {{diff_prepaid_expenses}}
-    - Increase/(Decrease) in Other Current Assets                             {{diff_other_current_assets}}
-    + Increase/(Decrease) in Accounts Payable                                 {{diff_accounts_payable}}
-    + Increase/(Decrease) in Accrued Expenses                                 {{diff_accrued_expenses}}
-    + Increase/(Decrease) in Deferred Revenue                                 {{diff_deferred_revenue}}
-    + Increase/(Decrease) in Other Current Liabilities                        {{diff_other_current_liabilities}}
+    - Increase/(Decrease) in Accounts Receivable               {{diff_accounts_receivable}}
+    - Increase/(Decrease) in Inventory                         {{diff_inventory}}
+    - Increase/(Decrease) in Prepaid Expenses                  {{diff_prepaid_expenses}}
+    - Increase/(Decrease) in Other Current Assets              {{diff_other_current_assets}}
+    + Increase/(Decrease) in Accounts Payable                  {{diff_accounts_payable}}
+    + Increase/(Decrease) in Accrued Expenses                  {{diff_accrued_expenses}}
+    + Increase/(Decrease) in Deferred Revenue                  {{diff_deferred_revenue}}
+    + Increase/(Decrease) in Other Current Liabilities         {{diff_other_current_liabilities}}
 4. Exclude Cash Flows Included in Investing or Financing Activities:
-    - Gain/(Loss) on Sale of Assets                                           {{gain_loss_sale_assets}}
-5. Net Cash Provided by (Used in) Operating Activities                        {{net_operating}}
+    - Gain/(Loss) on Sale of Assets                            {{gain_loss_sale_assets}}
+5. Net Cash Provided by (Used in) Operating Activities         {{net_operating}}
 
 
 Investing Activities
 1. Cash Outflows:
-    - Acquisition of Property, Plant, and Equipment                           {{out_ppe}}
-    - Acquisition of Intangible Assets                                        {{out_intangible_assets}}
-    - Acquisition of Investment Securities                                    {{out_investment_securities}}
-    - Increase in Long-Term Deposits                                          {{out_long_term_deposits}}
-    - Other Investing Outflows                                                {{out_other_investing}}
+    - Acquisition of Property, Plant, and Equipment            {{out_ppe}}
+    - Acquisition of Intangible Assets                         {{out_intangible_assets}}
+    - Acquisition of Investment Securities                     {{out_investment_securities}}
+    - Increase in Long-Term Deposits                           {{out_long_term_deposits}}
+    - Other Investing Outflows                                 {{out_other_investing}}
 2. Cash Inflows:
-    + Proceeds from Disposal of Property, Plant, and Equipment                {{in_ppe}}
-    + Proceeds from Disposal of Intangible Assets                             {{in_intangible_assets}}
-    + Proceeds from Disposal of Investment Securities                         {{in_investment_securities}}
-    + Refund of Long-Term Deposits                                            {{in_long_term_deposits}}
-    + Other Investing Inflows                                                 {{in_other_investing}}
-3. Net Cash Provided by (Used in) Investing Activities                        {{net_investing}}
+    + Proceeds from Disposal of Property, Plant, and Equipment {{in_ppe}}
+    + Proceeds from Disposal of Intangible Assets              {{in_intangible_assets}}
+    + Proceeds from Disposal of Investment Securities          {{in_investment_securities}}
+    + Refund of Long-Term Deposits                             {{in_long_term_deposits}}
+    + Other Investing Inflows                                  {{in_other_investing}}
+3. Net Cash Provided by (Used in) Investing Activities         {{net_investing}}
 
 
 Financing Activities
 1. Debt-Related Cash Flows:
-    + Proceeds from Borrowings                                                {{in_borrowings}}
-    - Repayment of Borrowings                                                 {{out_borrowings}}
+    + Proceeds from Borrowings                                 {{in_borrowings}}
+    - Repayment of Borrowings                                  {{out_borrowings}}
 2. Equity-Related Cash Flows:
-    + Proceeds from Issuance of Shares                                        {{in_issuance_shares}}
-    - Payment for Share Buybacks / Repayment of Equity                        {{out_share_buybacks}}
-    - Dividends Paid                                                          {{out_dividends}}
+    + Proceeds from Issuance of Shares                         {{in_issuance_shares}}
+    - Payment for Share Buybacks / Repayment of Equity         {{out_share_buybacks}}
+    - Dividends Paid                                           {{out_dividends}}
 3. Other Financing Activities:
-    + Other Financing Inflows/Outflows                                        {{in_out_other_financing}}
-4. Net Cash Provided by (Used in) Financing Activities                        {{net_financing}}
+    + Other Financing Inflows/Outflows                         {{in_out_other_financing}}
+4. Net Cash Provided by (Used in) Financing Activities         {{net_financing}}
 
 
 Reconciliation of Cash and Cash Equivalents
-─────────────────────────────────────────────────────────────────────────────────────────────────────
+───────────────────────────────────────────────────────────────────────────────
 
-Opening Balance of Cash and Cash Equivalents                                  {{balance_opening}}
-+ Net Increase (Decrease) in Cash:                                            {{balance_change}}
-= Cash and Cash Equivalents Before Exchange Rate Effects                      {{balance_before_exchange}}
-+ Exchange Rate Effects (if applicable)                                       {{exchange_rate_effects}}
-= Closing Balance of Cash and Cash Equivalents                                {{balance_closing}}
+Opening Balance of Cash and Cash Equivalents                   {{balance_opening}}
++ Net Increase (Decrease) in Cash:                             {{balance_change}}
+= Cash and Cash Equivalents Before Exchange Rate Effects       {{balance_before_exchange}}
++ Exchange Rate Effects (if applicable)                        {{exchange_rate_effects}}
+= Closing Balance of Cash and Cash Equivalents                 {{balance_closing}}
 
 
 Additional Disclosures
-─────────────────────────────────────────────────────────────────────────────────────────────────────
+───────────────────────────────────────────────────────────────────────────────
 
 Non-Cash Investing / Financing Activities:
-• May occur due to reimbursable transactions not yet reimbursed in the current period. Such
-  transactions are disclosed in the notes to the financial statements.
+• May occur due to reimbursable transactions not yet reimbursed in the current
+  period. Such transactions are disclosed in the notes to the financial
+  statements.
 
 Non-Cash Reclassifications:
 {{non_cash_reclassifications}}
 
 
 Notes
-─────────────────────────────────────────────────────────────────────────────────────────────────────
+───────────────────────────────────────────────────────────────────────────────
 
 • Operating activities are prepared using the indirect method.
-• Receipt of dividends, receipt of interest, and payment of interest are classified as operating
-  activities.
+• Receipt of dividends, receipt of interest, and payment of interest are
+  classified as operating activities.
