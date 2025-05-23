@@ -32,8 +32,18 @@ pub(crate) fn format_amount(amount: f64, currency: Currency, trailing_decimal: b
             .nth(1)
             .map(|f| f.to_string())
             .unwrap_or_default();
+
+        // There is an edge-case where the number is negative, but the integer
+        // part is 0, causing the sign to be omitted.
+        let edge_case_sign = if amount < 0.0 && amount.trunc() as i64 == 0 {
+            "-"
+        } else {
+            ""
+        };
+
         format!(
-            "{}.{:0decimal_places$} {}",
+            "{}{}.{:0decimal_places$} {}",
+            edge_case_sign,
             amount_integer_part,
             amount_fractional_part,
             currency.symbol(),
