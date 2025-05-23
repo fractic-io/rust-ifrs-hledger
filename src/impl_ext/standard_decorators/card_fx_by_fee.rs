@@ -75,7 +75,7 @@ impl<H: Handlers> DecoratorLogic<H> for StandardDecoratorCardFxByFee {
             )
             .await?;
 
-        let foreign_transaction_fee = converted_amount.abs() * self.fee_percent;
+        let foreign_transaction_fee = converted_amount.abs() * self.fee_percent / 100.0;
         let vat_transactions = if foreign_transaction_fee.abs() > 0.01 {
             vec![Transaction {
                 spec_id: id.clone(),
