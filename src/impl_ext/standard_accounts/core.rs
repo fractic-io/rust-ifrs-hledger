@@ -24,3 +24,9 @@ pub static REALIZED_FX_GAIN: LazyLock<IncomeAccount> =
     LazyLock::new(|| income_tl(IncomeClassification::RealizedFxGain));
 pub static REALIZED_FX_LOSS: LazyLock<ExpenseAccount> =
     LazyLock::new(|| expense_tl(ExpenseClassification::RealizedFxLoss));
+pub static FOREIGN_TRANSACTION_FEE: LazyLock<ExpenseAccount> = LazyLock::new(|| {
+    expense(
+        "ForeignTransactionFee",
+        ExpenseClassification::GeneralAdministrativeExpenses,
+    )
+});

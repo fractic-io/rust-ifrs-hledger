@@ -6,7 +6,9 @@ pub enum Annotation {
     VatKorea,
     VatKoreaUnrecoverable,
     VatKoreaReverseChargeExempt,
-    CardFx,
+    CardFxBySettle,
+    CardFxByFee,
+    WithholdingTaxUnrecoverable(i32),
     Custom(String),
 }
 
@@ -19,7 +21,9 @@ impl std::fmt::Display for Annotation {
             Annotation::VatKorea => write!(f, "VAT is removed from transaction and separately recorded as VAT that is awaiting a proper receipt. Upon receipt, it is reclassified as a VAT receivable asset or payable liability. Upon VAT tax payment / refund, those accounts are cleared."),
             Annotation::VatKoreaUnrecoverable => write!(f, "Due to insufficient VAT receipts, the VAT charged for this purchase can not be claimed. As such, the entire cost of the purchase (including unrecoverable VAT) is recorded in the books. Any accrual logic or amortization is applied to the total cost."),
             Annotation::VatKoreaReverseChargeExempt => write!(f, "VAT was charged on a reverse-charge basis, meaning it is the company's responsibility to pay VAT through proxy payment. However, since the purchase is used for taxable business, the proxy payment is exempt, and the cost is simply recorded in the books without VAT."),
-            Annotation::CardFx => write!(f, "Transaction amount was converted to the target currency using the latest available exchange rate at the time of payment. On settlement, the amount was adjusted to reflect the actual exchange rate."),
+            Annotation::CardFxBySettle => write!(f, "Transaction amount was converted to the target currency using the latest available exchange rate at the time of payment. On settlement, the amount was adjusted to reflect the actual exchange rate."),
+            Annotation::CardFxByFee => write!(f, "Transaction amount was converted to the target currency using the latest available exchange rate at the time of payment. The foreign transaction fee charged by the card issuer was recorded as a separate transaction."),
+            Annotation::WithholdingTaxUnrecoverable(w) => write!(f, "A {}% withholding tax was charged on this transaction, but it is unrecoverable. The entire cost of the income / expense (including unrecoverable withholding tax) is recorded in the books. Any accrual logic or amortization is applied to the total cost.", w),
             Annotation::Custom(s) => write!(f, "{}", s),
         }
     }
