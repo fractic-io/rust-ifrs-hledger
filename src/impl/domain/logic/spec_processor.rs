@@ -558,33 +558,33 @@ impl<H: Handlers> SpecProcessor<H> {
             }]
         } else if payment_date < accrual_date {
             // Record prepaid asset, then clear on accrual.
-            vec![
-                Transaction {
-                    spec_id: id,
-                    date: payment_date,
-                    comment: Some("Pre-paid asset".into()),
-                    postings: vec![
-                        TransactionPosting::new(
-                            backing_account.account(),
-                            -amount.abs(),
-                            commodity.currency()?,
-                        ),
-                        // At this point, it's not linked, since the cash
-                        // transaction is to pre-pay, and can't yet be
-                        // considered cash for acquisition of the final
-                        // asset.
-                        //
-                        // As a result, regardless of asset type, this cash
-                        // flow will appear in the operating activities on
-                        // the cash flow statement (until reclassification).
-                        TransactionPosting::new(
-                            a_handler.while_prepaid().into(),
-                            amount.abs(),
-                            commodity.currency()?,
-                        ),
-                    ],
-                },
-                Transaction {
+            let mut ts = vec![Transaction {
+                spec_id: id,
+                date: payment_date,
+                comment: Some("Pre-paid asset".into()),
+                postings: vec![
+                    TransactionPosting::new(
+                        backing_account.account(),
+                        -amount.abs(),
+                        commodity.currency()?,
+                    ),
+                    // At this point, it's not linked, since the cash
+                    // transaction is to pre-pay, and can't yet be
+                    // considered cash for acquisition of the final
+                    // asset.
+                    //
+                    // As a result, regardless of asset type, this cash
+                    // flow will appear in the operating activities on
+                    // the cash flow statement (until reclassification).
+                    TransactionPosting::new(
+                        a_handler.while_prepaid().into(),
+                        amount.abs(),
+                        commodity.currency()?,
+                    ),
+                ],
+            }];
+            if a_handler.account() != a_handler.while_prepaid() {
+                ts.push(Transaction {
                     spec_id: id,
                     date: accrual_date,
                     comment: Some("Reclassify pre-paid asset".into()),
@@ -600,8 +600,9 @@ impl<H: Handlers> SpecProcessor<H> {
                             commodity.currency()?,
                         ),
                     ],
-                },
-            ]
+                });
+            }
+            ts
         } else {
             // Accrue as payable, then clear on payment.
             vec![
