@@ -12,8 +12,7 @@ pub(crate) mod standard_accounts {
 }
 
 pub(crate) mod standard_decorators {
-    pub(crate) mod card_fx_by_fee;
-    pub(crate) mod card_fx_by_settle;
+    pub(crate) mod card_fx;
     pub(crate) mod payment_fee;
     pub(crate) mod vat_korea;
     pub(crate) mod withholding_tax;
@@ -38,8 +37,7 @@ pub mod exports {
     }
 
     pub mod standard_decorators {
-        pub use crate::impl_ext::standard_decorators::card_fx_by_fee::*;
-        pub use crate::impl_ext::standard_decorators::card_fx_by_settle::*;
+        pub use crate::impl_ext::standard_decorators::card_fx::*;
         pub use crate::impl_ext::standard_decorators::payment_fee::*;
         pub use crate::impl_ext::standard_decorators::vat_korea::*;
         pub use crate::impl_ext::standard_decorators::withholding_tax::*;
