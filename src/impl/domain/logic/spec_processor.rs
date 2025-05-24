@@ -1045,7 +1045,7 @@ impl<H: Handlers> SpecProcessor<H> {
 
         // Record any estimation discrepancies.
         let discrepancy = amount.abs() - estimated_total;
-        if discrepancy.abs() > 0.01 {
+        if discrepancy.abs() >= commodity.precision_cutoff()? {
             transactions.push(Transaction {
                 spec_id: id,
                 date: payment_date,
@@ -1298,7 +1298,7 @@ impl<H: Handlers> SpecProcessor<H> {
             .transpose()?
             .ok_or_else(|| NoTransactionsToReimburse::new(&id, &r_account))?;
 
-        if !expect_remaining && unreimbursed_remaining.abs() > 0.01 {
+        if !expect_remaining && unreimbursed_remaining.abs() >= commodity.precision_cutoff()? {
             return Err(UnexpectedPartialReimbursement::new(
                 &id,
                 &r_account,

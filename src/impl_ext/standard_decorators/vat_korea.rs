@@ -280,7 +280,7 @@ impl StandardDecoratorVatKorea {
         };
 
         let discrepancy = cleared_amount - core_amount;
-        let vat_transactions = if discrepancy.abs() > 0.01 {
+        let vat_transactions = if discrepancy.abs() >= commodity.precision_cutoff()? {
             vec![Transaction {
                 spec_id: id.clone(),
                 date: payment_date,

@@ -125,6 +125,16 @@ pub trait CommodityHandler:
         Currency::from_code(&s).ok_or_else(|| InvalidIsoCurrencyCode::new(&s))
     }
     fn default() -> Self;
+
+    /// Smallest value that would display as a non-zero number.
+    ///
+    /// For example, for USD, this would be 0.005, since this is the smallest
+    /// number that rounds up to a displayable value. For KRW, this would be
+    /// 0.5.
+    fn precision_cutoff(&self) -> Result<f64, ServerError> {
+        let exp = self.currency()?.exponent().unwrap_or(0) as i32;
+        Ok(1f64 / 10f64.powi(exp) / 2f64)
+    }
 }
 
 // Some type-magic to combine all handlers into a single type, greatly

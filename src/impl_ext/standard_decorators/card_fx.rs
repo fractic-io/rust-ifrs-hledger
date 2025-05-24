@@ -152,7 +152,7 @@ impl StandardDecoratorCardFx {
             // For expense, positive discrepancy is a loss.
             converted_amount.abs() - settle_amount.abs()
         };
-        let vat_transactions = if fx_discrepancy.abs() > 0.01 {
+        let vat_transactions = if fx_discrepancy.abs() >= main_commodity.precision_cutoff()? {
             vec![Transaction {
                 spec_id: id.clone(),
                 date: settle_date,
@@ -244,27 +244,28 @@ impl StandardDecoratorCardFx {
             .await?;
 
         let foreign_transaction_fee = charged.abs() - converted_amount.abs();
-        let vat_transactions = if foreign_transaction_fee.abs() > 0.01 {
-            vec![Transaction {
-                spec_id: id.clone(),
-                date: payment_date,
-                postings: vec![
-                    TransactionPosting::new(
-                        backing_account.account().into(),
-                        -foreign_transaction_fee,
-                        main_commodity.currency()?,
-                    ),
-                    TransactionPosting::new(
-                        FOREIGN_TRANSACTION_FEE.clone().into(),
-                        foreign_transaction_fee,
-                        main_commodity.currency()?,
-                    ),
-                ],
-                comment: Some("Foreign transaction fee".to_string()),
-            }]
-        } else {
-            vec![]
-        };
+        let vat_transactions =
+            if foreign_transaction_fee.abs() >= main_commodity.precision_cutoff()? {
+                vec![Transaction {
+                    spec_id: id.clone(),
+                    date: payment_date,
+                    postings: vec![
+                        TransactionPosting::new(
+                            backing_account.account().into(),
+                            -foreign_transaction_fee,
+                            main_commodity.currency()?,
+                        ),
+                        TransactionPosting::new(
+                            FOREIGN_TRANSACTION_FEE.clone().into(),
+                            foreign_transaction_fee,
+                            main_commodity.currency()?,
+                        ),
+                    ],
+                    comment: Some("Foreign transaction fee".to_string()),
+                }]
+            } else {
+                vec![]
+            };
 
         // Tag this transaction, since the accounting logic deserves a note in
         // the financial records.
