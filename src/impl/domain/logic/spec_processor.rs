@@ -8,8 +8,8 @@ use fractic_server_error::ServerError;
 
 use crate::{
     domain::logic::utils::{
-        compute_daily_average, monthly_accrual_adjustments, track_unreimbursed_entries,
-        MonthlyAccrualAdjustment,
+        compute_daily_average, monthly_accrual_adjustments, round_to_currency_precision,
+        track_unreimbursed_entries, MonthlyAccrualAdjustment,
     },
     entities::{
         AccountingLogic, Annotation, Assertion, AssetHandler, BackingAccount, CashHandler,
@@ -1004,6 +1004,7 @@ impl<H: Handlers> SpecProcessor<H> {
             ));
         }
 
+        let currency = commodity.currency()?;
         let accrual_days = (accrual_end - accrual_start).num_days() + 1;
         let estimated_total = estimated_daily_rate * (accrual_days as f64);
         let actual_daily_rate = amount.abs() / (accrual_days as f64);
@@ -1015,12 +1016,8 @@ impl<H: Handlers> SpecProcessor<H> {
             period_end,
             adjustment_amount: period_estimate,
             adjustment_date,
-        } in monthly_accrual_adjustments(
-            accrual_start,
-            accrual_end,
-            estimated_total,
-            commodity.currency()?,
-        )? {
+        } in monthly_accrual_adjustments(accrual_start, accrual_end, estimated_total, currency)?
+        {
             transactions.push(Transaction {
                 spec_id: id,
                 date: adjustment_date,
@@ -1032,19 +1029,19 @@ impl<H: Handlers> SpecProcessor<H> {
                     TransactionPosting::new(
                         e_handler.while_payable().into(),
                         -period_estimate,
-                        commodity.currency()?,
+                        currency,
                     ),
-                    TransactionPosting::new(
-                        e_handler.account().into(),
-                        period_estimate,
-                        commodity.currency()?,
-                    ),
+                    TransactionPosting::new(e_handler.account().into(), period_estimate, currency),
                 ],
             });
         }
 
         // Record any estimation discrepancies.
-        let discrepancy = amount.abs() - estimated_total;
+        //
+        // Note, to ensure we don't have lingering pennies, the discrepancy must
+        // be calculated at the precision level of the currency.
+        let discrepancy = round_to_currency_precision(amount.abs(), &currency)?
+            - round_to_currency_precision(estimated_total, &currency)?;
         if discrepancy.abs() >= commodity.precision_cutoff()? {
             transactions.push(Transaction {
                 spec_id: id,
@@ -1054,13 +1051,9 @@ impl<H: Handlers> SpecProcessor<H> {
                     TransactionPosting::new(
                         e_handler.while_payable().into(),
                         -discrepancy,
-                        commodity.currency()?,
+                        currency,
                     ),
-                    TransactionPosting::new(
-                        e_handler.account().into(),
-                        discrepancy,
-                        commodity.currency()?,
-                    ),
+                    TransactionPosting::new(e_handler.account().into(), discrepancy, currency),
                 ],
             });
         }
@@ -1071,16 +1064,12 @@ impl<H: Handlers> SpecProcessor<H> {
             date: payment_date,
             comment: Some("Clear payable expense".into()),
             postings: vec![
-                TransactionPosting::new(
-                    backing_account.account(),
-                    -amount.abs(),
-                    commodity.currency()?,
-                ),
+                TransactionPosting::new(backing_account.account(), -amount.abs(), currency),
                 TransactionPosting::linked(
                     e_handler.while_payable().into(),
                     e_handler.account().into(),
                     amount.abs(),
-                    commodity.currency()?,
+                    currency,
                 ),
             ],
         });

@@ -302,3 +302,12 @@ impl PopByAmount for VecDeque<UnreimbursedEntry> {
         Ok(())
     }
 }
+
+pub(crate) fn round_to_currency_precision(
+    amount: f64,
+    currency: &Currency,
+) -> Result<f64, ServerError> {
+    let decimal_places = currency.exponent().unwrap_or(0) as i32;
+    let factor = 10_f64.powi(decimal_places);
+    Ok((amount * factor).round() / factor)
+}
