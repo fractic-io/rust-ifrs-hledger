@@ -1,4 +1,4 @@
-use std::{iter::once, path::PathBuf, str::FromStr as _};
+use std::{iter::once, path::PathBuf, str::FromStr as _, vec};
 
 use async_trait::async_trait;
 use chrono::NaiveDate;
@@ -22,6 +22,7 @@ enum LogicType {
     },
     ImmediateWithFee {
         charged: f64,
+        fee: f64,
     },
 }
 
@@ -39,14 +40,6 @@ pub struct StandardDecoratorCardFx {
 //   library (even if some other information, like the bank exchange rate used,
 //   is directly available). This way we maintain comparability between FX
 //   transactions, even if the card fee and settlement logic differs.
-//
-//   For example, let's say we have two cards: one with a transparent exchange
-//   rate that could be directly used, and one where the exchange rate and final
-//   settlement logic is opaque. If we use the exchange rate info to record
-//   transactions with the first card more accurately, it's now less comparable
-//   with transactions from the second card. So it's best to first record the
-//   transaction with the same logic (i.e. EOD rate from the library), and then
-//   correct later based on card-specific details.
 //
 impl StandardDecoratorCardFx {
     /// Use for foreign currency transactions where:
@@ -86,14 +79,15 @@ impl StandardDecoratorCardFx {
     ///   settlement date).
     ///
     /// In this case, the fee is recorded as a general administrative expense,
-    /// not FX gain / loss.
+    /// and any remaining discrepancy as FX gain / loss.
     pub fn immediate_with_fee(
         charged: f64,
+        fee: f64,
         currency_conversion_cache_dir: impl Into<PathBuf>,
         currency_conversion_api_key: impl Into<String>,
     ) -> Result<Self, ServerError> {
         Ok(Self {
-            logic: LogicType::ImmediateWithFee { charged },
+            logic: LogicType::ImmediateWithFee { charged, fee },
             currency_conversion_cache_dir: currency_conversion_cache_dir.into(),
             currency_conversion_api_key: currency_conversion_api_key.into(),
         })
@@ -206,6 +200,7 @@ impl StandardDecoratorCardFx {
         &self,
         tx: DecoratedTransactionSpec<H>,
         charged: f64,
+        fee: f64,
     ) -> Result<DecoratedTransactionSpec<H>, ServerError> {
         let DecoratedTransactionSpec {
             id,
@@ -243,28 +238,63 @@ impl StandardDecoratorCardFx {
             )
             .await?;
 
-        let foreign_transaction_fee = charged.abs() - converted_amount.abs();
-        let vat_transactions =
-            if foreign_transaction_fee.abs() >= main_commodity.precision_cutoff()? {
-                vec![Transaction {
+        let fee_transaction = if fee.abs() >= main_commodity.precision_cutoff()? {
+            Some(Transaction {
+                spec_id: id.clone(),
+                date: payment_date,
+                postings: vec![
+                    TransactionPosting::new(
+                        backing_account.account().into(),
+                        -fee,
+                        main_commodity.currency()?,
+                    ),
+                    TransactionPosting::new(
+                        FOREIGN_TRANSACTION_FEE.clone().into(),
+                        fee,
+                        main_commodity.currency()?,
+                    ),
+                ],
+                comment: Some("Foreign transaction fee".to_string()),
+            })
+        } else {
+            None
+        };
+
+        let fx_discrepency = {
+            let abs = charged.abs() - fee.abs() - converted_amount.abs();
+            if source_amount > 0.0 {
+                // For income, positive discrepancy is a gain.
+                abs
+            } else {
+                // For expense, positive discrepancy is a loss.
+                -abs
+            }
+        };
+        let fx_discrepency_transaction =
+            if fx_discrepency.abs() >= main_commodity.precision_cutoff()? {
+                Some(Transaction {
                     spec_id: id.clone(),
                     date: payment_date,
                     postings: vec![
                         TransactionPosting::new(
                             backing_account.account().into(),
-                            -foreign_transaction_fee,
+                            fx_discrepency,
                             main_commodity.currency()?,
                         ),
                         TransactionPosting::new(
-                            FOREIGN_TRANSACTION_FEE.clone().into(),
-                            foreign_transaction_fee,
+                            if fx_discrepency > 0.0 {
+                                REALIZED_FX_GAIN.clone().into()
+                            } else {
+                                REALIZED_FX_LOSS.clone().into()
+                            },
+                            -fx_discrepency,
                             main_commodity.currency()?,
                         ),
                     ],
-                    comment: Some("Foreign transaction fee".to_string()),
-                }]
+                    comment: Some("Correct FX discrepancy".to_string()),
+                })
             } else {
-                vec![]
+                None
             };
 
         // Tag this transaction, since the accounting logic deserves a note in
@@ -285,7 +315,11 @@ impl StandardDecoratorCardFx {
             annotations: annotations.into_iter().chain(once(note)).collect(),
             ext_transactions: ext_transactions
                 .into_iter()
-                .chain(vat_transactions)
+                .chain(
+                    vec![fee_transaction, fx_discrepency_transaction]
+                        .into_iter()
+                        .flatten(),
+                )
                 .collect(),
             ext_assertions,
         })
@@ -306,8 +340,8 @@ impl<H: Handlers> DecoratorLogic<H> for StandardDecoratorCardFx {
                 self.apply_delayed_settle_unknown_fee(tx, *settle_date, *settle_amount)
                     .await
             }
-            LogicType::ImmediateWithFee { charged } => {
-                self.apply_immediate_with_fee(tx, *charged).await
+            LogicType::ImmediateWithFee { charged, fee } => {
+                self.apply_immediate_with_fee(tx, *charged, *fee).await
             }
         }
     }
