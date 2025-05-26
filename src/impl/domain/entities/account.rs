@@ -161,6 +161,13 @@ pub enum EquityClassification {
     // =========================================================================
     //
     RetainedEarnings,
+
+    // Other.
+    // =========================================================================
+    //
+    // Some accounting standards require unpaid share capital to be recorded as
+    // negative equity (instead of a receivable asset).
+    UnpaidShareCapital,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]

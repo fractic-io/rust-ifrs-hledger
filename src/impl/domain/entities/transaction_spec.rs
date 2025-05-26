@@ -10,20 +10,35 @@ use super::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TransactionSpecId(pub(crate) u64);
 
+#[derive(Debug, serde_derive::Deserialize)]
+pub enum CommonStockWhileUnpaid {
+    Asset,
+    NegativeEquity,
+}
+
 #[derive(Debug)]
 pub enum AccountingLogic<E, A, I, R, S> {
-    CommonStock(S),
+    CommonStock {
+        subscriber: S,
+        while_unpaid: CommonStockWhileUnpaid,
+    },
     SimpleExpense(E),
     Capitalize(A),
     Amortize(A),
     FixedExpense(E),
     VariableExpense(E),
-    VariableExpenseInit { account: E, estimate: i64 },
+    VariableExpenseInit {
+        account: E,
+        estimate: i64,
+    },
     ImmaterialIncome(I),
     ImmaterialExpense(E),
     Reimburse(R),
     ReimbursePartial(R),
-    ClearVat { from: NaiveDate, to: NaiveDate },
+    ClearVat {
+        from: NaiveDate,
+        to: NaiveDate,
+    },
 }
 
 #[derive(Debug, Clone)]

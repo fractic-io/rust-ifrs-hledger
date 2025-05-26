@@ -5,12 +5,16 @@ use crate::entities::{
 };
 use std::sync::LazyLock;
 
-pub static SHARE_CAPITAL_RECEIVABLE: LazyLock<AssetAccount> = LazyLock::new(|| {
+// For unpaid share capital, account depends on the business logic.
+pub static UNPAID_SHARE_CAPITAL_AS_ASSET: LazyLock<AssetAccount> = LazyLock::new(|| {
     asset(
         "SubscribedCapitalReceivable",
         AssetClassification::OtherCurrentAssets,
     )
 });
+pub static UNPAID_SHARE_CAPITAL_AS_EQUITY: LazyLock<EquityAccount> =
+    LazyLock::new(|| equity_tl(EquityClassification::UnpaidShareCapital));
+
 pub static RETAINED_EARNINGS: LazyLock<EquityAccount> =
     LazyLock::new(|| equity_tl(EquityClassification::RetainedEarnings));
 

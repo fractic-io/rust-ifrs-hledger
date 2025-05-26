@@ -12,11 +12,11 @@ use crate::{
         track_unreimbursed_entries, MonthlyAccrualAdjustment,
     },
     entities::{
-        AccountingLogic, Annotation, Assertion, AssetHandler, BackingAccount, CashHandler,
-        CommodityHandler, DecoratedFinancialRecordSpecs, DecoratedTransactionSpec, ExpenseAccount,
-        ExpenseHandler, FinancialRecords, Handlers, IncomeHandler, LiabilityAccount, PayeeHandler,
-        ReimbursableEntityHandler, ShareholderHandler, Transaction, TransactionLabel,
-        TransactionPosting, TransactionSpecId,
+        Account, AccountingLogic, Annotation, Assertion, AssetHandler, BackingAccount, CashHandler,
+        CommodityHandler, CommonStockWhileUnpaid, DecoratedFinancialRecordSpecs,
+        DecoratedTransactionSpec, ExpenseAccount, ExpenseHandler, FinancialRecords, Handlers,
+        IncomeHandler, LiabilityAccount, PayeeHandler, ReimbursableEntityHandler,
+        ShareholderHandler, Transaction, TransactionLabel, TransactionPosting, TransactionSpecId,
     },
     errors::{
         CommonStockCannotBePrepaid, InvalidArgumentsForAccountingLogic, NoTransactionsToReimburse,
@@ -24,7 +24,7 @@ use crate::{
         UnexpectedPositiveValue, VariableExpenseDoubleInit, VariableExpenseInvalidPaymentDate,
         VariableExpenseNoInit, VariableExpenseNotEnoughHistoricalData,
     },
-    ext::standard_accounts::SHARE_CAPITAL_RECEIVABLE,
+    ext::standard_accounts::{UNPAID_SHARE_CAPITAL_AS_ASSET, UNPAID_SHARE_CAPITAL_AS_EQUITY},
     impl_ext::standard_accounts::vat::{VAT_PAYABLE, VAT_RECEIVABLE},
 };
 
@@ -205,7 +205,7 @@ impl<H: Handlers> SpecProcessor<H> {
                 .into_iter()
                 .try_fold(FoldState::new(), |state, spec| {
                     let transformation = match &spec.accounting_logic {
-                        AccountingLogic::CommonStock(..) => Self::process_common_stock(spec)?,
+                        AccountingLogic::CommonStock { .. } => Self::process_common_stock(spec)?,
                         AccountingLogic::SimpleExpense(..) => Self::process_simple_expense(spec)?,
                         AccountingLogic::Capitalize(..) => Self::process_capitalize(spec)?,
                         AccountingLogic::Amortize(..) => Self::process_amortize(spec)?,
@@ -273,7 +273,11 @@ impl<H: Handlers> SpecProcessor<H> {
             accrual_start: accrual_date,
             accrual_end: None,
             payment_date,
-            accounting_logic: AccountingLogic::CommonStock(s_handler),
+            accounting_logic:
+                AccountingLogic::CommonStock {
+                    subscriber: s_handler,
+                    while_unpaid,
+                },
             payee,
             description,
             amount,
@@ -311,6 +315,12 @@ impl<H: Handlers> SpecProcessor<H> {
         } else if payment_date > accrual_date {
             // Capital contribution was made later, so record unpaid share
             // capital as a temporary asset.
+            let account: Account = match while_unpaid {
+                CommonStockWhileUnpaid::Asset => UNPAID_SHARE_CAPITAL_AS_ASSET.clone().into(),
+                CommonStockWhileUnpaid::NegativeEquity => {
+                    UNPAID_SHARE_CAPITAL_AS_EQUITY.clone().into()
+                }
+            };
             vec![
                 Transaction {
                     spec_id: id,
@@ -323,7 +333,7 @@ impl<H: Handlers> SpecProcessor<H> {
                             commodity.currency()?,
                         ),
                         TransactionPosting::new(
-                            SHARE_CAPITAL_RECEIVABLE.clone().into(),
+                            account.clone(),
                             amount.abs(),
                             commodity.currency()?,
                         ),
@@ -335,7 +345,7 @@ impl<H: Handlers> SpecProcessor<H> {
                     comment: Some("Share capital contribution".into()),
                     postings: vec![
                         TransactionPosting::linked(
-                            SHARE_CAPITAL_RECEIVABLE.clone().into(),
+                            account,
                             s_handler.account().into(),
                             -amount.abs(),
                             commodity.currency()?,

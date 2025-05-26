@@ -1,10 +1,19 @@
-use crate::entities::AccountingLogic;
+use crate::entities::{AccountingLogic, CommonStockWhileUnpaid};
 
 use super::iso_date_model::ISODateModel;
 
 #[derive(Debug, serde_derive::Deserialize)]
+pub enum CommonStockWhileUnpaidModel {
+    Asset,
+    NegativeEquity,
+}
+
+#[derive(Debug, serde_derive::Deserialize)]
 pub enum AccountingLogicModel<E, A, I, R, S> {
-    CommonStock(S),
+    CommonStock {
+        subscriber: S,
+        while_unpaid: CommonStockWhileUnpaidModel,
+    },
     SimpleExpense(E),
     Capitalize(A),
     Amortize(A),
@@ -27,7 +36,18 @@ pub enum AccountingLogicModel<E, A, I, R, S> {
 impl<E, A, I, R, S> Into<AccountingLogic<E, A, I, R, S>> for AccountingLogicModel<E, A, I, R, S> {
     fn into(self) -> AccountingLogic<E, A, I, R, S> {
         match self {
-            AccountingLogicModel::CommonStock(s) => AccountingLogic::CommonStock(s),
+            AccountingLogicModel::CommonStock {
+                subscriber,
+                while_unpaid,
+            } => AccountingLogic::CommonStock {
+                subscriber,
+                while_unpaid: match while_unpaid {
+                    CommonStockWhileUnpaidModel::Asset => CommonStockWhileUnpaid::Asset,
+                    CommonStockWhileUnpaidModel::NegativeEquity => {
+                        CommonStockWhileUnpaid::NegativeEquity
+                    }
+                },
+            },
             AccountingLogicModel::SimpleExpense(e) => AccountingLogic::SimpleExpense(e),
             AccountingLogicModel::Capitalize(a) => AccountingLogic::Capitalize(a),
             AccountingLogicModel::Amortize(a) => AccountingLogic::Amortize(a),

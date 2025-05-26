@@ -131,6 +131,7 @@ impl Account {
                     Direction::Outflow => Some(CashflowTracingTag::CashOutflowShareBuybacks),
                 },
                 EquityClassification::RetainedEarnings => None,
+                EquityClassification::UnpaidShareCapital => None,
             },
         }
     }
