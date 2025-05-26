@@ -8,7 +8,7 @@ pub enum Annotation {
     VatKoreaReverseChargeExempt,
     CardFxBySettle,
     CardFxByFee,
-    WithholdingTaxUnrecoverable(i32),
+    ForeignWithholdingTax(i32),
     Custom(String),
 }
 
@@ -23,7 +23,7 @@ impl std::fmt::Display for Annotation {
             Annotation::VatKoreaReverseChargeExempt => write!(f, "VAT was charged on a reverse-charge basis, meaning it is the company's responsibility to pay VAT through proxy payment. However, since the purchase is used for taxable business, the proxy payment is exempt, and the cost is simply recorded in the books without VAT."),
             Annotation::CardFxBySettle => write!(f, "Transaction amount was converted to the target currency using the latest available exchange rate at the time of payment. On settlement, the amount was adjusted to reflect the actual exchange rate."),
             Annotation::CardFxByFee => write!(f, "Transaction amount was converted to the target currency using the latest available exchange rate at the time of payment. The foreign transaction fee charged by the card issuer was recorded as a separate transaction."),
-            Annotation::WithholdingTaxUnrecoverable(w) => write!(f, "A {}% withholding tax was charged on this transaction, but it is unrecoverable. The entire cost of the income / expense (including unrecoverable withholding tax) is recorded in the books. Any accrual logic or amortization is applied to the total cost.", w),
+            Annotation::ForeignWithholdingTax(w) => write!(f, "A {}% foreign withholding tax was imposed on this transaction. Any accounting logic (amortization, etc.) is applied to the pre-withholding amount, and the withholding amount itself is recorded as a foreign withholding tax expense on payment date.", w),
             Annotation::Custom(s) => write!(f, "{}", s),
         }
     }
