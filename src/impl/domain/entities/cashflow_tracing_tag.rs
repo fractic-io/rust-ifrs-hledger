@@ -40,6 +40,7 @@ pub enum CashflowTracingTag {
     //
     // Equity-related cash flows.
     CashInflowIssuanceShares,
+    CashOutflowShareIssuanceCosts,
     CashOutflowShareBuybacks,
     CashOutflowDividends,
     //

@@ -165,8 +165,11 @@ pub enum EquityClassification {
     // Other.
     // =========================================================================
     //
-    // Some accounting standards require unpaid share capital to be recorded as
-    // negative equity (instead of a receivable asset).
+    /// Cost of issuing shares, such as underwriting fees or legal costs.
+    ShareIssuanceCosts,
+    //
+    /// Some accounting standards require unpaid share capital to be recorded as
+    /// negative equity (instead of a receivable asset).
     UnpaidShareCapital,
 }
 

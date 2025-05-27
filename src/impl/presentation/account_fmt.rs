@@ -129,6 +129,7 @@ impl Account {
                     EquityClassification::RetainedEarnings => "EarnedCapital:RetainedEarnings",
 
                     // Other.
+                    EquityClassification::ShareIssuanceCosts => "Other:ShareIssuanceCosts",
                     EquityClassification::UnpaidShareCapital => "Other:UnpaidShareCapital",
                 },
                 match &s.0 {

@@ -31,6 +31,7 @@ impl CashflowTracingTag {
             CashflowTracingTag::CashInflowBorrowings => "in_borrowings",
             CashflowTracingTag::CashOutflowBorrowings => "out_borrowings",
             CashflowTracingTag::CashInflowIssuanceShares => "in_issuance_shares",
+            CashflowTracingTag::CashOutflowShareIssuanceCosts => "out_share_issuance_costs",
             CashflowTracingTag::CashOutflowShareBuybacks => "out_share_buybacks",
             CashflowTracingTag::CashOutflowDividends => "out_dividends",
             CashflowTracingTag::CashInOutflowOtherFinancing => "in_out_other_financing",

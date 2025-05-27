@@ -131,6 +131,10 @@ impl Account {
                     Direction::Outflow => Some(CashflowTracingTag::CashOutflowShareBuybacks),
                 },
                 EquityClassification::RetainedEarnings => None,
+                EquityClassification::ShareIssuanceCosts => match direction.into() {
+                    Direction::Inflow => None,
+                    Direction::Outflow => Some(CashflowTracingTag::CashOutflowShareIssuanceCosts),
+                },
                 EquityClassification::UnpaidShareCapital => None,
             },
         }

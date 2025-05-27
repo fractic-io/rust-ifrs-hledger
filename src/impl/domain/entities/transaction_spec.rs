@@ -22,6 +22,7 @@ pub enum AccountingLogic<E, A, I, R, S> {
         subscriber: S,
         while_unpaid: CommonStockWhileUnpaid,
     },
+    CostOfEquity,
     SimpleExpense(E),
     Capitalize(A),
     Amortize(A),

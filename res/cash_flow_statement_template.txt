@@ -42,7 +42,7 @@ Financing Activities
     + Proceeds from Borrowings                                 {{in_borrowings}}
     - Repayment of Borrowings                                  {{out_borrowings}}
 2. Equity-Related Cash Flows:
-    + Proceeds from Issuance of Shares                         {{in_issuance_shares}}
+    + Proceeds from Issuance of Shares, Net Costs              {{net_issuance_shares}}
     - Payment for Share Buybacks / Repayment of Equity         {{out_share_buybacks}}
     - Dividends Paid                                           {{out_dividends}}
 3. Other Financing Activities:

@@ -24,7 +24,10 @@ use crate::{
         UnexpectedPositiveValue, VariableExpenseDoubleInit, VariableExpenseInvalidPaymentDate,
         VariableExpenseNoInit, VariableExpenseNotEnoughHistoricalData,
     },
-    ext::standard_accounts::{UNPAID_SHARE_CAPITAL_AS_ASSET, UNPAID_SHARE_CAPITAL_AS_EQUITY},
+    ext::standard_accounts::{
+        PREPAID_SHARE_ISSUANCE_COSTS, SHARE_ISSUANCE_COSTS, SHARE_ISSUANCE_COSTS_PAYABLE,
+        UNPAID_SHARE_CAPITAL_AS_ASSET, UNPAID_SHARE_CAPITAL_AS_EQUITY,
+    },
     impl_ext::standard_accounts::vat::{VAT_PAYABLE, VAT_RECEIVABLE},
 };
 
@@ -206,6 +209,7 @@ impl<H: Handlers> SpecProcessor<H> {
                 .try_fold(FoldState::new(), |state, spec| {
                     let transformation = match &spec.accounting_logic {
                         AccountingLogic::CommonStock { .. } => Self::process_common_stock(spec)?,
+                        AccountingLogic::CostOfEquity => Self::process_cost_of_equity(spec)?,
                         AccountingLogic::SimpleExpense(..) => Self::process_simple_expense(spec)?,
                         AccountingLogic::Capitalize(..) => Self::process_capitalize(spec)?,
                         AccountingLogic::Amortize(..) => Self::process_amortize(spec)?,
@@ -360,6 +364,148 @@ impl<H: Handlers> SpecProcessor<H> {
             ]
         } else {
             return Err(CommonStockCannotBePrepaid::new(&description));
+        };
+
+        Ok(Transformation {
+            spec_id: id,
+            label: TransactionLabel {
+                payee: payee.name(),
+                description,
+            },
+            expense_history_delta: None,
+            reimbursement_state_delta: track_unreimbursed_entries(
+                &backing_account,
+                &transactions,
+                &ext_transactions,
+            )?,
+            transactions,
+            ext_transactions,
+            ext_assertions,
+            annotations,
+        })
+    }
+
+    fn process_cost_of_equity(
+        spec: DecoratedTransactionSpec<H>,
+    ) -> Result<Transformation, ServerError> {
+        let DecoratedTransactionSpec {
+            id,
+            accrual_start: accrual_date,
+            accrual_end: None,
+            payment_date,
+            accounting_logic: AccountingLogic::CostOfEquity,
+            payee,
+            description,
+            amount,
+            commodity,
+            backing_account,
+            annotations,
+            ext_transactions,
+            ext_assertions,
+        } = spec
+        else {
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+        };
+        amount_should_be_negative!(amount, "CostOfEquity", &id);
+
+        let transactions = if payment_date == accrual_date {
+            // Record a single journal entry on the day of payment, since
+            // accrual is immediate.
+            vec![Transaction {
+                spec_id: id,
+                date: payment_date,
+                comment: None,
+                postings: vec![
+                    TransactionPosting::new(
+                        backing_account.account(),
+                        -amount.abs(),
+                        commodity.currency()?,
+                    ),
+                    TransactionPosting::new(
+                        SHARE_ISSUANCE_COSTS.clone().into(),
+                        amount.abs(),
+                        commodity.currency()?,
+                    ),
+                ],
+            }]
+        } else if payment_date < accrual_date {
+            // Record as prepaid, then clear on accrual.
+            vec![
+                Transaction {
+                    spec_id: id,
+                    date: payment_date,
+                    comment: Some("Pre-paid share issuance costs".into()),
+                    postings: vec![
+                        TransactionPosting::new(
+                            backing_account.account(),
+                            -amount.abs(),
+                            commodity.currency()?,
+                        ),
+                        TransactionPosting::linked(
+                            PREPAID_SHARE_ISSUANCE_COSTS.clone().into(),
+                            SHARE_ISSUANCE_COSTS.clone().into(),
+                            amount.abs(),
+                            commodity.currency()?,
+                        ),
+                    ],
+                },
+                Transaction {
+                    spec_id: id,
+                    date: accrual_date,
+                    comment: Some("Accrue pre-paid share issuance costs".into()),
+                    postings: vec![
+                        TransactionPosting::new(
+                            PREPAID_SHARE_ISSUANCE_COSTS.clone().into(),
+                            -amount.abs(),
+                            commodity.currency()?,
+                        ),
+                        TransactionPosting::new(
+                            SHARE_ISSUANCE_COSTS.clone().into(),
+                            amount.abs(),
+                            commodity.currency()?,
+                        ),
+                    ],
+                },
+            ]
+        } else {
+            // Accrue as payable, then clear on payment.
+            vec![
+                Transaction {
+                    spec_id: id,
+                    date: accrual_date,
+                    comment: Some("Accrue payable share issuance costs".into()),
+                    postings: vec![
+                        TransactionPosting::new(
+                            SHARE_ISSUANCE_COSTS_PAYABLE.clone().into(),
+                            -amount.abs(),
+                            commodity.currency()?,
+                        ),
+                        TransactionPosting::new(
+                            SHARE_ISSUANCE_COSTS.clone().into(),
+                            amount.abs(),
+                            commodity.currency()?,
+                        ),
+                    ],
+                },
+                Transaction {
+                    spec_id: id,
+                    date: payment_date,
+                    comment: Some("Clear payable share issuance costs".into()),
+                    postings: vec![
+                        TransactionPosting::new(
+                            backing_account.account(),
+                            -amount.abs(),
+                            commodity.currency()?,
+                        ),
+                        TransactionPosting::linked(
+                            SHARE_ISSUANCE_COSTS_PAYABLE.clone().into(),
+                            SHARE_ISSUANCE_COSTS.clone().into(),
+                            amount.abs(),
+                            commodity.currency()?,
+                        ),
+                    ],
+                },
+            ]
         };
 
         Ok(Transformation {

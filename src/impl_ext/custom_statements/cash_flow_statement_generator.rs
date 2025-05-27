@@ -166,6 +166,8 @@ impl CashFlowStatementGenerator {
         //
         let in_issuance_shares =
             self.cash_inflow_by_tag(CashflowTracingTag::CashInflowIssuanceShares)?;
+        let out_share_issuance_costs =
+            self.cash_outflow_by_tag(CashflowTracingTag::CashOutflowShareIssuanceCosts)?;
         let out_share_buybacks =
             self.cash_outflow_by_tag(CashflowTracingTag::CashOutflowShareBuybacks)?;
         let out_dividends = self.cash_outflow_by_tag(CashflowTracingTag::CashOutflowDividends)?;
@@ -175,7 +177,8 @@ impl CashFlowStatementGenerator {
         let in_out_other_financing =
             self.cash_inflow_by_tag(CashflowTracingTag::CashInOutflowOtherFinancing)?;
 
-        let net_financing = in_borrowings - out_borrowings + in_issuance_shares
+        let net_issuance_shares = in_issuance_shares - out_share_issuance_costs;
+        let net_financing = in_borrowings - out_borrowings + net_issuance_shares
             - out_share_buybacks
             - out_dividends
             + in_out_other_financing;
@@ -249,7 +252,7 @@ impl CashFlowStatementGenerator {
             ("net_investing", self.fmt(net_investing)),
             ("in_borrowings", self.fmt(in_borrowings)),
             ("out_borrowings", self.fmt(out_borrowings)),
-            ("in_issuance_shares", self.fmt(in_issuance_shares)),
+            ("net_issuance_shares", self.fmt(net_issuance_shares)),
             ("out_share_buybacks", self.fmt(out_share_buybacks)),
             ("out_dividends", self.fmt(out_dividends)),
             ("in_out_other_financing", self.fmt(in_out_other_financing)),
