@@ -6,8 +6,9 @@ use crate::errors::InvalidIsoCurrencyCode;
 
 use super::{
     account::{
-        asset, asset_tl, liability, liability_tl, AssetAccount, AssetClassification, EquityAccount,
-        ExpenseAccount, IncomeAccount, LiabilityAccount, LiabilityClassification,
+        asset, asset_tl, equity, equity_tl, liability, liability_tl, AssetAccount,
+        AssetClassification, EquityAccount, EquityClassification, ExpenseAccount, IncomeAccount,
+        LiabilityAccount, LiabilityClassification,
     },
     decorator_logic::DecoratorLogic,
 };
@@ -93,6 +94,13 @@ pub trait ShareholderHandler:
     for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
 {
     fn account(&self) -> EquityAccount;
+
+    fn upon_contributed_surplus(&self) -> EquityAccount {
+        match self.account().0 {
+            Some(name) => equity(name, EquityClassification::ContributedSurplus),
+            None => equity_tl(EquityClassification::ContributedSurplus),
+        }
+    }
 }
 
 // Other.

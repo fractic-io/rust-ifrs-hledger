@@ -5,7 +5,9 @@ use fractic_server_error::{CriticalError, ServerError};
 use iso_currency::Currency;
 
 use crate::{
-    entities::{BackingAccount, CashHandler, ReimbursableEntityHandler, Transaction},
+    entities::{
+        BackingAccount, CashHandler, ReimbursableEntityHandler, ShareholderHandler, Transaction,
+    },
     errors::ReimbursementTracingError,
 };
 
@@ -173,8 +175,12 @@ pub(crate) fn compute_daily_average(
     }
 }
 
-pub(crate) fn track_unreimbursed_entries<R: ReimbursableEntityHandler, C: CashHandler>(
-    backing_account: &BackingAccount<R, C>,
+pub(crate) fn track_unreimbursed_entries<
+    R: ReimbursableEntityHandler,
+    C: CashHandler,
+    S: ShareholderHandler,
+>(
+    backing_account: &BackingAccount<R, C, S>,
     transactions: &Vec<Transaction>,
     ext_transactions: &Vec<Transaction>,
 ) -> Result<Option<ReimbursementStateDelta>, ServerError> {

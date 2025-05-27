@@ -135,6 +135,7 @@ impl Account {
                     Direction::Inflow => None,
                     Direction::Outflow => Some(CashflowTracingTag::CashOutflowShareIssuanceCosts),
                 },
+                EquityClassification::ContributedSurplus => None,
                 EquityClassification::UnpaidShareCapital => None,
             },
         }

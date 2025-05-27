@@ -76,7 +76,7 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                         AccountingAmountModel::from_str(raw_amount)?;
                     let commodity: H::M = from_str(raw_commodity)
                         .map_err(|e| InvalidRon::with_debug("Commodity", &e))?;
-                    let backing_account: BackingAccountModel<H::R, H::C> =
+                    let backing_account: BackingAccountModel<H::R, H::C, H::S> =
                         from_str(raw_backing_account)
                             .map_err(|e| InvalidRon::with_debug("BackingAccount", &e))?;
                     let custom_notes: Vec<Annotation> = if raw_notes.is_empty() {

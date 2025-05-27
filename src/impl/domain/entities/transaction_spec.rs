@@ -4,7 +4,7 @@ use crate::entities::{Annotation, Assertion, Transaction};
 
 use super::{
     account::Account,
-    handlers::{CashHandler, Handlers, ReimbursableEntityHandler},
+    handlers::{CashHandler, Handlers, ReimbursableEntityHandler, ShareholderHandler},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -43,9 +43,10 @@ pub enum AccountingLogic<E, A, I, R, S> {
 }
 
 #[derive(Debug, Clone)]
-pub enum BackingAccount<R, C> {
+pub enum BackingAccount<R, C, S> {
     Reimburse(R),
     Cash(C),
+    ContributedSurplus(S),
 }
 
 #[derive(Debug)]
@@ -60,7 +61,7 @@ pub(crate) struct TransactionSpec<H: Handlers> {
     pub description: String,
     pub amount: f64,
     pub commodity: H::M,
-    pub backing_account: BackingAccount<H::R, H::C>,
+    pub backing_account: BackingAccount<H::R, H::C, H::S>,
     pub annotations: Vec<Annotation>,
 }
 
@@ -75,7 +76,7 @@ pub struct DecoratedTransactionSpec<H: Handlers> {
     pub description: String,
     pub amount: f64,
     pub commodity: H::M,
-    pub backing_account: BackingAccount<H::R, H::C>,
+    pub backing_account: BackingAccount<H::R, H::C, H::S>,
     pub annotations: Vec<Annotation>,
     pub ext_transactions: Vec<Transaction>,
     pub ext_assertions: Vec<Assertion>,
@@ -89,15 +90,17 @@ impl std::fmt::Display for TransactionSpecId {
     }
 }
 
-impl<R, C> BackingAccount<R, C>
+impl<R, C, S> BackingAccount<R, C, S>
 where
     R: ReimbursableEntityHandler,
     C: CashHandler,
+    S: ShareholderHandler,
 {
     pub fn account(&self) -> Account {
         match self {
             BackingAccount::Reimburse(r) => r.account().into(),
             BackingAccount::Cash(c) => c.account().into(),
+            BackingAccount::ContributedSurplus(s) => s.upon_contributed_surplus().into(),
         }
     }
 
