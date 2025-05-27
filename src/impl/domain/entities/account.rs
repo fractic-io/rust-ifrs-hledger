@@ -156,6 +156,10 @@ pub enum EquityClassification {
     CommonStock,
     PreferredStock,
     TreasuryStock,
+    //
+    /// Surplus payments made by shareholders without expectation of
+    /// reimbursement or share issuance.
+    ContributedSurplus,
 
     // Earned capital.
     // =========================================================================
@@ -167,10 +171,6 @@ pub enum EquityClassification {
     //
     /// Cost of issuing shares, such as underwriting fees or legal costs.
     ShareIssuanceCosts,
-    //
-    /// Surplus payments made by shareholders without expectation of
-    /// reimbursement or share issuance.
-    ContributedSurplus,
     //
     /// Some accounting standards require unpaid share capital to be recorded as
     /// negative equity (instead of a receivable asset).

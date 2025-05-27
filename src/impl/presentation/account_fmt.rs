@@ -124,13 +124,14 @@ impl Account {
                     EquityClassification::CommonStock => "ContributedCapital:CommonStock",
                     EquityClassification::PreferredStock => "ContributedCapital:PreferredStock",
                     EquityClassification::TreasuryStock => "ContributedCapital:TreasuryStock",
+                    EquityClassification::ContributedSurplus =>
+                        "ContributedCapital:ContributedSurplus",
 
                     // Earned capital.
                     EquityClassification::RetainedEarnings => "EarnedCapital:RetainedEarnings",
 
                     // Other.
                     EquityClassification::ShareIssuanceCosts => "Other:ShareIssuanceCosts",
-                    EquityClassification::ContributedSurplus => "Other:ContributedSurplus",
                     EquityClassification::UnpaidShareCapital => "Other:UnpaidShareCapital",
                 },
                 match &s.0 {
