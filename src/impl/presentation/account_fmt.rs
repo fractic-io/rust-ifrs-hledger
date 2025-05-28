@@ -128,7 +128,8 @@ impl Account {
                         "ContributedCapital:ContributedSurplus",
 
                     // Earned capital.
-                    EquityClassification::RetainedEarnings => "EarnedCapital:RetainedEarnings",
+                    EquityClassification::RetainedEarnings
+                    | EquityClassification::ShareIssuanceCosts => "EarnedCapital:RetainedEarnings",
 
                     // Other.
                     EquityClassification::UnpaidShareCapital => "Other:UnpaidShareCapital",

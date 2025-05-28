@@ -120,7 +120,7 @@ impl Account {
             Account::Equity(EquityAccount(_, classification)) => match classification {
                 EquityClassification::CommonStock => match direction.into() {
                     Direction::Inflow => Some(CashflowTracingTag::CashInflowIssuanceShares),
-                    Direction::Outflow => Some(CashflowTracingTag::CashOutflowShareIssuanceCosts),
+                    Direction::Outflow => None,
                 },
                 EquityClassification::PreferredStock => match direction.into() {
                     Direction::Inflow => Some(CashflowTracingTag::CashInflowIssuanceShares),
@@ -138,6 +138,10 @@ impl Account {
                     Direction::Outflow => None,
                 },
                 EquityClassification::RetainedEarnings => None,
+                EquityClassification::ShareIssuanceCosts => match direction.into() {
+                    Direction::Inflow => None,
+                    Direction::Outflow => Some(CashflowTracingTag::CashOutflowShareIssuanceCosts),
+                },
                 EquityClassification::UnpaidShareCapital => None,
             },
         }

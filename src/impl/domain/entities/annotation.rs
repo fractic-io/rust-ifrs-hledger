@@ -9,6 +9,7 @@ pub enum Annotation {
     CardFxBySettle,
     CardFxByFee,
     ForeignWithholdingTax(i32),
+    ShareIssuanceCostsDirectedToRetainedEarnings,
     Custom(String),
 }
 
@@ -24,6 +25,7 @@ impl std::fmt::Display for Annotation {
             Annotation::CardFxBySettle => write!(f, "Transaction amount was converted to the target currency using the latest available exchange rate at the time of payment. On settlement, the amount was adjusted to reflect the actual exchange rate."),
             Annotation::CardFxByFee => write!(f, "Transaction amount was converted to the target currency using the latest available exchange rate at the time of payment. The foreign transaction fee charged by the card issuer was recorded as a separate transaction."),
             Annotation::ForeignWithholdingTax(w) => write!(f, "A {}% foreign withholding tax was imposed on this transaction. Any accounting logic (amortization, etc.) is applied to the pre-withholding amount, and the withholding amount itself is recorded as a foreign withholding tax expense on payment date.", w),
+            Annotation::ShareIssuanceCostsDirectedToRetainedEarnings => write!(f, "WARNING: Since share premium is not yet supported, it is assumed to be zero. As such, share issuance costs are directly debited to retained earnings."),
             Annotation::Custom(s) => write!(f, "{}", s),
         }
     }

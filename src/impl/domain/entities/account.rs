@@ -165,6 +165,13 @@ pub enum EquityClassification {
     // =========================================================================
     //
     RetainedEarnings,
+    //
+    /// Costs directly associated with issuing shares, such as legal and
+    /// registration fees. IMPORTANT: Since share premium is currently not
+    /// supported, these costs are directly fed into RetainedEarnings. They have
+    /// a separate classification here since they should trigger different cash
+    /// flow tagging.
+    ShareIssuanceCosts,
 
     // Other.
     // =========================================================================

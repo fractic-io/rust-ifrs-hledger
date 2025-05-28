@@ -22,6 +22,8 @@ pub static UNPAID_SHARE_CAPITAL_AS_EQUITY: LazyLock<EquityAccount> =
     LazyLock::new(|| equity_tl(EquityClassification::UnpaidShareCapital));
 
 // For recording costs of issuing shares.
+pub static SHARE_ISSUANCE_COSTS: LazyLock<EquityAccount> =
+    LazyLock::new(|| equity_tl(EquityClassification::ShareIssuanceCosts));
 pub static PREPAID_SHARE_ISSUANCE_COSTS: LazyLock<AssetAccount> = LazyLock::new(|| {
     asset(
         "PrepaidShareIssuanceCosts",
