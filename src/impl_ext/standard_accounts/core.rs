@@ -47,7 +47,9 @@ pub static REALIZED_FX_LOSS: LazyLock<ExpenseAccount> =
 pub static FOREIGN_TRANSACTION_FEE: LazyLock<ExpenseAccount> = LazyLock::new(|| {
     expense(
         "ForeignTransactionFee",
-        ExpenseClassification::GeneralAdministrativeExpenses,
+        // Foreign transaction fees are generally considered non-operation
+        // financial expenses, not administrative expenses.
+        ExpenseClassification::OtherFinancialExpense,
     )
 });
 
@@ -67,6 +69,7 @@ pub static FOREIGN_WITHHOLDING_TAX: LazyLock<ExpenseAccount> = LazyLock::new(|| 
 pub static PAYMENT_FEES: LazyLock<ExpenseAccount> = LazyLock::new(|| {
     expense(
         "PaymentFees",
+        // Payment fees are generally considered general administrative expenses.
         ExpenseClassification::GeneralAdministrativeExpenses,
     )
 });

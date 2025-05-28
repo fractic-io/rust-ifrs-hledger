@@ -134,15 +134,18 @@ pub enum ExpenseClassification {
     // Non-operating expenses.
     // =========================================================================
     //
-    /// Costs incurred on borrowings not part of the core business operations.
-    NonCoreInterestExpense,
-    //
     /// Losses from the sale of long-term assets.
     LossOnSaleOfAssets,
-    /// Losses from foreign exchange transactions.
-    RealizedFxLoss,
     /// Losses from VAT filing (ex. rounding losses).
     VatRefundLoss,
+    //
+    /// Costs incurred on borrowings not part of the core business operations.
+    NonCoreInterestExpense,
+    /// Losses from foreign exchange transactions.
+    RealizedFxLoss,
+    /// Other non-administrative financial expenses, such as foreign transaction
+    /// fees.
+    OtherFinancialExpense,
     //
     OtherNonOperatingCashExpense,
     OtherNonOperatingNonCashExpense,

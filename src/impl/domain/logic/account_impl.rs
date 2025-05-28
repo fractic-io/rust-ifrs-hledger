@@ -102,6 +102,7 @@ impl Account {
                 | ExpenseClassification::NonCoreInterestExpense
                 | ExpenseClassification::RealizedFxLoss
                 | ExpenseClassification::VatRefundLoss
+                | ExpenseClassification::OtherFinancialExpense
                 | ExpenseClassification::OtherNonOperatingCashExpense => None,
 
                 ExpenseClassification::DepreciationExpense => {

@@ -104,10 +104,13 @@ impl Account {
                     ExpenseClassification::OtherTaxExpense => "Tax:OtherTaxExpense",
 
                     // Non-operating expenses.
-                    ExpenseClassification::NonCoreInterestExpense => "NonOperating:InterestExpense",
                     ExpenseClassification::LossOnSaleOfAssets => "NonOperating:LossOnSaleOfAssets",
-                    ExpenseClassification::RealizedFxLoss => "NonOperating:RealizedFxLoss",
                     ExpenseClassification::VatRefundLoss => "NonOperating:VatRefundLoss",
+                    ExpenseClassification::NonCoreInterestExpense =>
+                        "NonOperating:Financial:InterestExpense",
+                    ExpenseClassification::RealizedFxLoss =>
+                        "NonOperating:Financial:RealizedFxLoss",
+                    ExpenseClassification::OtherFinancialExpense => "NonOperating:Financial:Other",
                     ExpenseClassification::OtherNonOperatingCashExpense
                     | ExpenseClassification::OtherNonOperatingNonCashExpense =>
                         "NonOperating:Other",
