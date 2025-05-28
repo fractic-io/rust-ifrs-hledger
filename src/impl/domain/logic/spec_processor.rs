@@ -322,7 +322,9 @@ impl<H: Handlers> SpecProcessor<H> {
             // Capital contribution was made later, so record unpaid share
             // capital as a temporary asset.
             let account: Account = match while_unpaid {
-                CommonStockWhileUnpaid::Asset => UNPAID_SHARE_CAPITAL_AS_ASSET.clone().into(),
+                CommonStockWhileUnpaid::ReceivableAsset => {
+                    UNPAID_SHARE_CAPITAL_AS_ASSET.clone().into()
+                }
                 CommonStockWhileUnpaid::NegativeEquity => {
                     UNPAID_SHARE_CAPITAL_AS_EQUITY.clone().into()
                 }

@@ -4,7 +4,7 @@ use super::iso_date_model::ISODateModel;
 
 #[derive(Debug, serde_derive::Deserialize)]
 pub enum CommonStockWhileUnpaidModel {
-    Asset,
+    ReceivableAsset,
     NegativeEquity,
 }
 
@@ -43,7 +43,9 @@ impl<E, A, I, R, S> Into<AccountingLogic<E, A, I, R, S>> for AccountingLogicMode
             } => AccountingLogic::CommonStock {
                 subscriber,
                 while_unpaid: match while_unpaid {
-                    CommonStockWhileUnpaidModel::Asset => CommonStockWhileUnpaid::Asset,
+                    CommonStockWhileUnpaidModel::ReceivableAsset => {
+                        CommonStockWhileUnpaid::ReceivableAsset
+                    }
                     CommonStockWhileUnpaidModel::NegativeEquity => {
                         CommonStockWhileUnpaid::NegativeEquity
                     }

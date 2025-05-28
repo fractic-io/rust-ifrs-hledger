@@ -12,7 +12,7 @@ pub struct TransactionSpecId(pub(crate) u64);
 
 #[derive(Debug, serde_derive::Deserialize)]
 pub enum CommonStockWhileUnpaid {
-    Asset,
+    ReceivableAsset,
     NegativeEquity,
 }
 
