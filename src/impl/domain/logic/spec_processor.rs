@@ -25,8 +25,8 @@ use crate::{
         VariableExpenseNoInit, VariableExpenseNotEnoughHistoricalData,
     },
     ext::standard_accounts::{
-        PREPAID_SHARE_ISSUANCE_COSTS, SHARE_ISSUANCE_COSTS, SHARE_ISSUANCE_COSTS_PAYABLE,
-        UNPAID_SHARE_CAPITAL_AS_ASSET, UNPAID_SHARE_CAPITAL_AS_EQUITY,
+        PREPAID_SHARE_ISSUANCE_COSTS, SHARE_ISSUANCE_COSTS_PAYABLE, UNPAID_SHARE_CAPITAL_AS_ASSET,
+        UNPAID_SHARE_CAPITAL_AS_EQUITY,
     },
     impl_ext::standard_accounts::vat::{VAT_PAYABLE, VAT_RECEIVABLE},
 };
@@ -209,7 +209,9 @@ impl<H: Handlers> SpecProcessor<H> {
                 .try_fold(FoldState::new(), |state, spec| {
                     let transformation = match &spec.accounting_logic {
                         AccountingLogic::CommonStock { .. } => Self::process_common_stock(spec)?,
-                        AccountingLogic::CostOfEquity => Self::process_cost_of_equity(spec)?,
+                        AccountingLogic::CostOfIssuingCommonStock(..) => {
+                            Self::process_cost_of_issuing_common_stock(spec)?
+                        }
                         AccountingLogic::SimpleExpense(..) => Self::process_simple_expense(spec)?,
                         AccountingLogic::Capitalize(..) => Self::process_capitalize(spec)?,
                         AccountingLogic::Amortize(..) => Self::process_amortize(spec)?,
@@ -385,7 +387,7 @@ impl<H: Handlers> SpecProcessor<H> {
         })
     }
 
-    fn process_cost_of_equity(
+    fn process_cost_of_issuing_common_stock(
         spec: DecoratedTransactionSpec<H>,
     ) -> Result<Transformation, ServerError> {
         let DecoratedTransactionSpec {
@@ -393,7 +395,7 @@ impl<H: Handlers> SpecProcessor<H> {
             accrual_start: accrual_date,
             accrual_end: None,
             payment_date,
-            accounting_logic: AccountingLogic::CostOfEquity,
+            accounting_logic: AccountingLogic::CostOfIssuingCommonStock(s_handler),
             payee,
             description,
             amount,
@@ -406,7 +408,7 @@ impl<H: Handlers> SpecProcessor<H> {
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
         };
-        amount_should_be_negative!(amount, "CostOfEquity", &id);
+        amount_should_be_negative!(amount, "CostOfIssuingCommonStock", &id);
 
         let transactions = if payment_date == accrual_date {
             // Record a single journal entry on the day of payment, since
@@ -422,7 +424,7 @@ impl<H: Handlers> SpecProcessor<H> {
                         commodity.currency()?,
                     ),
                     TransactionPosting::new(
-                        SHARE_ISSUANCE_COSTS.clone().into(),
+                        s_handler.account().into(),
                         amount.abs(),
                         commodity.currency()?,
                     ),
@@ -443,7 +445,7 @@ impl<H: Handlers> SpecProcessor<H> {
                         ),
                         TransactionPosting::linked(
                             PREPAID_SHARE_ISSUANCE_COSTS.clone().into(),
-                            SHARE_ISSUANCE_COSTS.clone().into(),
+                            s_handler.account().into(),
                             amount.abs(),
                             commodity.currency()?,
                         ),
@@ -460,7 +462,7 @@ impl<H: Handlers> SpecProcessor<H> {
                             commodity.currency()?,
                         ),
                         TransactionPosting::new(
-                            SHARE_ISSUANCE_COSTS.clone().into(),
+                            s_handler.account().into(),
                             amount.abs(),
                             commodity.currency()?,
                         ),
@@ -481,7 +483,7 @@ impl<H: Handlers> SpecProcessor<H> {
                             commodity.currency()?,
                         ),
                         TransactionPosting::new(
-                            SHARE_ISSUANCE_COSTS.clone().into(),
+                            s_handler.account().into(),
                             amount.abs(),
                             commodity.currency()?,
                         ),
@@ -499,7 +501,7 @@ impl<H: Handlers> SpecProcessor<H> {
                         ),
                         TransactionPosting::linked(
                             SHARE_ISSUANCE_COSTS_PAYABLE.clone().into(),
-                            SHARE_ISSUANCE_COSTS.clone().into(),
+                            s_handler.account().into(),
                             amount.abs(),
                             commodity.currency()?,
                         ),

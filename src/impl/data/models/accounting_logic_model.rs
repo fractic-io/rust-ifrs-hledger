@@ -14,7 +14,7 @@ pub enum AccountingLogicModel<E, A, I, R, S> {
         subscriber: S,
         while_unpaid: CommonStockWhileUnpaidModel,
     },
-    CostOfEquity,
+    CostOfIssuingCommonStock(S),
     SimpleExpense(E),
     Capitalize(A),
     Amortize(A),
@@ -49,7 +49,9 @@ impl<E, A, I, R, S> Into<AccountingLogic<E, A, I, R, S>> for AccountingLogicMode
                     }
                 },
             },
-            AccountingLogicModel::CostOfEquity => AccountingLogic::CostOfEquity,
+            AccountingLogicModel::CostOfIssuingCommonStock(s) => {
+                AccountingLogic::CostOfIssuingCommonStock(s)
+            }
             AccountingLogicModel::SimpleExpense(e) => AccountingLogic::SimpleExpense(e),
             AccountingLogicModel::Capitalize(a) => AccountingLogic::Capitalize(a),
             AccountingLogicModel::Amortize(a) => AccountingLogic::Amortize(a),
