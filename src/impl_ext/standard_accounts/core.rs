@@ -49,7 +49,7 @@ pub static FOREIGN_TRANSACTION_FEE: LazyLock<ExpenseAccount> = LazyLock::new(|| 
         "ForeignTransactionFee",
         // Foreign transaction fees are generally considered non-operation
         // financial expenses, not administrative expenses.
-        ExpenseClassification::OtherFinancialExpense,
+        ExpenseClassification::OtherNonCoreFinancialExpense,
     )
 });
 

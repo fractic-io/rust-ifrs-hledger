@@ -82,11 +82,13 @@ pub enum IncomeClassification {
     NonCoreDividendIncome,
     /// Income from rental properties not part of the core business operations.
     NonCoreRentalIncome,
+    /// Gains from foreign exchange transactions.
+    RealizedFxGain,
+    /// Other non-operating financial income.
+    OtherNonCoreFinancialIncome,
     //
     /// Gains from the sale of long-term assets.
     GainOnSaleOfAssets,
-    /// Gains from foreign exchange transactions.
-    RealizedFxGain,
     /// Gains from VAT filing (ex. discounts, rounding gains).
     VatRefundGain,
     //
@@ -145,7 +147,7 @@ pub enum ExpenseClassification {
     RealizedFxLoss,
     /// Other non-administrative financial expenses, such as foreign transaction
     /// fees.
-    OtherFinancialExpense,
+    OtherNonCoreFinancialExpense,
     //
     OtherNonOperatingCashExpense,
     OtherNonOperatingNonCashExpense,

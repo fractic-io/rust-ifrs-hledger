@@ -68,11 +68,16 @@ impl Account {
                     IncomeClassification::RentalIncome => "Financing:RentalIncome",
 
                     // Non-operating income.
-                    IncomeClassification::NonCoreInterestIncome => "NonOperating:InterestIncome",
-                    IncomeClassification::NonCoreDividendIncome => "NonOperating:DividendIncome",
-                    IncomeClassification::NonCoreRentalIncome => "NonOperating:RentalIncome",
+                    IncomeClassification::NonCoreInterestIncome =>
+                        "NonOperating:Financial:InterestIncome",
+                    IncomeClassification::NonCoreDividendIncome =>
+                        "NonOperating:Financial:DividendIncome",
+                    IncomeClassification::NonCoreRentalIncome =>
+                        "NonOperating:Financial:RentalIncome",
+                    IncomeClassification::RealizedFxGain => "NonOperating:Financial:RealizedFxGain",
+                    IncomeClassification::OtherNonCoreFinancialIncome =>
+                        "NonOperating:Financial:Other",
                     IncomeClassification::GainOnSaleOfAssets => "NonOperating:GainOnSaleOfAssets",
-                    IncomeClassification::RealizedFxGain => "NonOperating:RealizedFxGain",
                     IncomeClassification::VatRefundGain => "NonOperating:VatRefundGain",
                     IncomeClassification::OtherNonOperatingIncome => "NonOperating:Other",
                 },
@@ -110,7 +115,8 @@ impl Account {
                         "NonOperating:Financial:InterestExpense",
                     ExpenseClassification::RealizedFxLoss =>
                         "NonOperating:Financial:RealizedFxLoss",
-                    ExpenseClassification::OtherFinancialExpense => "NonOperating:Financial:Other",
+                    ExpenseClassification::OtherNonCoreFinancialExpense =>
+                        "NonOperating:Financial:Other",
                     ExpenseClassification::OtherNonOperatingCashExpense
                     | ExpenseClassification::OtherNonOperatingNonCashExpense =>
                         "NonOperating:Other",

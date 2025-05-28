@@ -83,6 +83,7 @@ impl Account {
                 | IncomeClassification::NonCoreDividendIncome
                 | IncomeClassification::NonCoreRentalIncome
                 | IncomeClassification::RealizedFxGain
+                | IncomeClassification::OtherNonCoreFinancialIncome
                 | IncomeClassification::VatRefundGain
                 | IncomeClassification::OtherNonOperatingIncome => None,
 
@@ -102,7 +103,7 @@ impl Account {
                 | ExpenseClassification::NonCoreInterestExpense
                 | ExpenseClassification::RealizedFxLoss
                 | ExpenseClassification::VatRefundLoss
-                | ExpenseClassification::OtherFinancialExpense
+                | ExpenseClassification::OtherNonCoreFinancialExpense
                 | ExpenseClassification::OtherNonOperatingCashExpense => None,
 
                 ExpenseClassification::DepreciationExpense => {
