@@ -130,7 +130,13 @@ impl Account {
                     Direction::Inflow => None,
                     Direction::Outflow => Some(CashflowTracingTag::CashOutflowShareBuybacks),
                 },
-                EquityClassification::ContributedSurplus => None,
+                EquityClassification::ContributedSurplus => match direction.into() {
+                    // We must also track 'cash inflows' that actually come from
+                    // non-cash, since any expenses paid with such methods
+                    // should be treated as non-cash expenses.
+                    Direction::Inflow => Some(CashflowTracingTag::NonCashPayment),
+                    Direction::Outflow => None,
+                },
                 EquityClassification::RetainedEarnings => None,
                 EquityClassification::ShareIssuanceCosts => match direction.into() {
                     Direction::Inflow => None,

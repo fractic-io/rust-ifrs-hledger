@@ -11,6 +11,7 @@ impl CashflowTracingTag {
             CashflowTracingTag::NonCashExpenseDepreciation => "nce_depreciation",
             CashflowTracingTag::NonCashExpenseAmortization => "nce_amortization",
             CashflowTracingTag::NonCashExpenseOther => "nce_other",
+            CashflowTracingTag::NonCashPayment => "non_cash_payment",
             CashflowTracingTag::ReclassifyGainLossOnSaleOfAssets => {
                 "rcl_gain_loss_on_sale_of_assets"
             }

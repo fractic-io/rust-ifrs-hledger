@@ -11,6 +11,10 @@ pub enum CashflowTracingTag {
     NonCashExpenseAmortization,
     NonCashExpenseOther,
     //
+    // Cash expenses made with non-cash payment methods (ex. contributed
+    // surplus) should also be treated as non-cash expenses.
+    NonCashPayment,
+    //
     // Cash flows to be pull out for reclassification.
     ReclassifyGainLossOnSaleOfAssets,
 

@@ -77,7 +77,8 @@ impl CashFlowStatementGenerator {
             self.expense_by_tag(CashflowTracingTag::NonCashExpenseDepreciation)?;
         let nce_amortization =
             self.expense_by_tag(CashflowTracingTag::NonCashExpenseAmortization)?;
-        let nce_other = self.expense_by_tag(CashflowTracingTag::NonCashExpenseOther)?;
+        let nce_other = self.expense_by_tag(CashflowTracingTag::NonCashExpenseOther)?
+            - self.expenses_paid_with_non_cash_payment()?;
 
         // Changes in working capital.
         //
@@ -287,6 +288,18 @@ impl CashFlowStatementGenerator {
             Query::IncomeStatement,
             None,
             Return::Total,
+        )
+    }
+
+    fn expenses_paid_with_non_cash_payment(&self) -> Result<f64, ServerError> {
+        hledger(
+            &self.ledger_path,
+            &self.period,
+            Query::ChangeInAccountReverse {
+                account: "Expenses".to_string(),
+            },
+            Some(CashflowTracingTag::key()),
+            Return::SearchRowOrZero(CashflowTracingTag::NonCashPayment.value()),
         )
     }
 
