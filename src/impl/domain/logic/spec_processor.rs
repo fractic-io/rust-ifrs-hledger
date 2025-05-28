@@ -884,8 +884,9 @@ impl<H: Handlers> SpecProcessor<H> {
                     period_start, period_end
                 )),
                 postings: vec![
-                    TransactionPosting::new(
+                    TransactionPosting::linked(
                         a_handler.account().into(),
+                        backing_account.account(),
                         -monthly_amort,
                         commodity.currency()?,
                     ),
