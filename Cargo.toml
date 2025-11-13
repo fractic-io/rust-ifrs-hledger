@@ -10,7 +10,7 @@ csv = "^1.3.1"
 fractic-core = { git = "https://github.com/fractic-io/rust-core.git" }
 fractic-currency-conversion = { git = "https://github.com/fractic-io/rust-currency-conversion.git" }
 fractic-server-error = { git = "https://github.com/fractic-io/rust-server-error.git" }
-futures = "0.3.31"
+futures = "^0.3.31"
 iso_currency = "^0.5.3"
 num-format = "^0.4.4"
 regex = "^1.11.1"
