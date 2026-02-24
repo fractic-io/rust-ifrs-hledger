@@ -2,6 +2,8 @@ use std::collections::HashSet;
 
 use chrono::{Datelike as _, NaiveDate};
 
+use crate::presentation::utils::header_comment;
+
 /// Represents the 'closing' section appended to the end of the ledger,
 /// including all EOY-closing transactions (retaining earnings, etc.).
 #[derive(Debug, Clone, Default)]
@@ -58,11 +60,7 @@ impl ClosingSection {
                 .map(|record| record.raw_statement.clone()),
         );
 
-        Some(format!(
-            "{}\n\n{}",
-            comment_header(&title),
-            entries.join("\n")
-        ))
+        Some(format!("{}{}", header_comment(&title), entries.join("\n")))
     }
 }
 
@@ -144,13 +142,4 @@ fn parse_record_date(line: &str) -> Option<NaiveDate> {
         return None;
     }
     NaiveDate::parse_from_str(&line[..10], "%Y-%m-%d").ok()
-}
-
-fn comment_header(title: &str) -> String {
-    // Match the existing 100-char section header style used in ledger output.
-    let mut header = format!("; --- {} ", title);
-    if header.len() < 100 {
-        header.push_str(&"-".repeat(100 - header.len()));
-    }
-    header
 }
