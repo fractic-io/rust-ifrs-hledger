@@ -4,6 +4,7 @@ use iso_currency::Currency;
 
 use crate::entities::{Account, Assertion, CashflowTracingTag, FinancialRecords, Transaction};
 
+use super::closing_section::ClosingSection;
 use super::utils::format_amount;
 
 pub(crate) struct HledgerPrinter;
@@ -13,17 +14,27 @@ impl HledgerPrinter {
         Self
     }
 
-    pub(crate) fn print_ledger(&self, financial_records: &FinancialRecords) -> String {
+    pub(crate) fn print_ledger<'a>(
+        &self,
+        financial_records: &FinancialRecords,
+        closing_statements: impl IntoIterator<Item = &'a str>,
+    ) -> String {
         let mut ledger_output = String::new();
 
         ledger_output.push_str(
-            "; --- Accounts -------------------------------------------------------------------------------------\n\n",
+            "; --- Accounts \
+             -------------------------------------------------------------------------------------\\
+             \
+             n\n",
         );
         self.print_accounts(&mut ledger_output, financial_records);
         ledger_output.push_str("\n\n");
 
         ledger_output.push_str(
-            "; --- Commodities ----------------------------------------------------------------------------------\n\n",
+            "; --- Commodities \
+             ----------------------------------------------------------------------------------\n\\
+             \
+             n",
         );
         self.print_commodities(&mut ledger_output, financial_records);
         ledger_output.push_str("\n\n");
@@ -35,15 +46,24 @@ impl HledgerPrinter {
         ledger_output.push_str("\n\n");
 
         ledger_output.push_str(
-            "; --- Transactions ---------------------------------------------------------------------------------\n\n",
+            "; --- Transactions \
+             ---------------------------------------------------------------------------------\n\n",
         );
         self.print_transactions(&mut ledger_output, financial_records);
         ledger_output.push_str("\n\n");
 
         ledger_output.push_str(
-            "; --- Assertions -----------------------------------------------------------------------------------\n\n",
+            "; --- Assertions \
+             -----------------------------------------------------------------------------------\\
+             n\n",
         );
         self.print_assertions(&mut ledger_output, financial_records);
+
+        let closing_section = ClosingSection::from_sources(closing_statements);
+        if let Some(rendered) = closing_section.render() {
+            ledger_output.push_str("\n\n");
+            ledger_output.push_str(&rendered);
+        }
 
         ledger_output
     }

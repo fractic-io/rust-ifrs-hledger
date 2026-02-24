@@ -48,6 +48,7 @@ pub(crate) mod domain {
 pub(crate) mod presentation {
     pub(crate) mod account_fmt;
     pub(crate) mod cashflow_tracing_tag_fmt;
+    pub(crate) mod closing_section;
     pub(crate) mod hledger_printer;
     pub(crate) mod utils;
 }

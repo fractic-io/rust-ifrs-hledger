@@ -1,4 +1,5 @@
 use fractic_server_error::ServerError;
+use futures::future::join_all;
 
 use crate::{
     domain::usecases::process_usecase::{ProcessUsecase as _, ProcessUsecaseImpl},
@@ -7,6 +8,7 @@ use crate::{
         FinancialRecords, HandlersImpl, IncomeHandler, NotesToFinancialRecords, PayeeHandler,
         ReimbursableEntityHandler, ShareholderHandler,
     },
+    errors::ReadError,
     presentation::hledger_printer::HledgerPrinter,
 };
 
@@ -51,28 +53,44 @@ where
         &self,
         transactions_csv: &str,
         balances_csv: &str,
+        prev_close: impl IntoIterator<Item = &'_ str>,
     ) -> Result<(FinancialRecords, NotesToFinancialRecords, Ledger), ServerError> {
         let (financial_records, notes_to_financial_records) = self
             .process_usecase
             .from_string(transactions_csv, balances_csv)
             .await?;
-        let ledger = self.printer.print_ledger(&financial_records);
+        let ledger = self.printer.print_ledger(&financial_records, prev_close);
         Ok((financial_records, notes_to_financial_records, ledger))
     }
 
-    pub async fn from_file<T>(
+    pub async fn from_file<T, U>(
         &self,
         transactions_csv: T,
         balances_csv: T,
+        prev_close: impl IntoIterator<Item = U>,
     ) -> Result<(FinancialRecords, NotesToFinancialRecords, Ledger), ServerError>
     where
         T: AsRef<std::path::Path> + Send,
+        U: AsRef<std::path::Path>,
     {
         let (financial_records, notes_to_financial_records) = self
             .process_usecase
             .from_file(transactions_csv, balances_csv)
             .await?;
-        let ledger = self.printer.print_ledger(&financial_records);
+
+        let prev_close_contents = join_all(prev_close.into_iter().map(|path| async move {
+            tokio::fs::read_to_string(path.as_ref())
+                .await
+                .map_err(|e| ServerError::from(ReadError::with_debug(&e)))
+        }))
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, ServerError>>()?;
+
+        let ledger = self.printer.print_ledger(
+            &financial_records,
+            prev_close_contents.iter().map(String::as_str),
+        );
         Ok((financial_records, notes_to_financial_records, ledger))
     }
 }
