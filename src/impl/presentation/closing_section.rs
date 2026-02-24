@@ -47,20 +47,27 @@ impl ClosingSection {
         let title = self.title();
         let mut entries = Vec::new();
 
-        let mut account_declarations: Vec<&str> = self
-            .account_declarations
-            .iter()
-            .map(String::as_str)
-            .collect();
-        account_declarations.sort();
-        entries.extend(account_declarations.into_iter().map(String::from));
+        if !self.account_declarations.is_empty() {
+            let mut account_declarations: Vec<&str> = self
+                .account_declarations
+                .iter()
+                .map(String::as_str)
+                .collect();
+            account_declarations.sort();
+            entries.extend(account_declarations.into_iter().map(String::from));
+            entries.push("\n".to_string());
+        }
         entries.extend(
             self.closing_transactions
                 .iter()
                 .map(|record| record.raw_statement.clone()),
         );
 
-        Some(format!("{}{}", header_comment(&title), entries.join("\n")))
+        Some(format!(
+            "{}{}\n",
+            header_comment(&title),
+            entries.join("\n")
+        ))
     }
 }
 
