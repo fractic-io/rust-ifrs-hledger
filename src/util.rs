@@ -63,15 +63,14 @@ where
         Ok((financial_records, notes_to_financial_records, ledger))
     }
 
-    pub async fn from_file<T, U>(
+    pub async fn from_file<T>(
         &self,
         transactions_csv: T,
         balances_csv: T,
-        prev_close: impl IntoIterator<Item = U>,
+        prev_close: impl IntoIterator<Item = T>,
     ) -> Result<(FinancialRecords, NotesToFinancialRecords, Ledger), ServerError>
     where
         T: AsRef<std::path::Path> + Send,
-        U: AsRef<std::path::Path>,
     {
         let (financial_records, notes_to_financial_records) = self
             .process_usecase
