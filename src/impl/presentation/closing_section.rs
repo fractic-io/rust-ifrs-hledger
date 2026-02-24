@@ -2,55 +2,74 @@ use std::collections::HashSet;
 
 use chrono::{Datelike as _, NaiveDate};
 
-#[derive(Debug, Clone)]
-struct ClosingRecord {
-    date: NaiveDate,
-    statement: String,
-}
-
+/// Represents the 'closing' section appended to the end of the ledger,
+/// including all EOY-closing transactions (retaining earnings, etc.).
 #[derive(Debug, Clone, Default)]
 pub(crate) struct ClosingSection {
-    account_statements: HashSet<String>,
-    closing_records: Vec<ClosingRecord>,
+    /// Additional account declarations encountered in the closing statements.
+    /// These are deduped and sorted.
+    account_declarations: HashSet<String>,
+    closing_transactions: Vec<ClosingTransaction>,
 }
 
+/// Represents a single year's closing transaction.
+#[derive(Debug, Clone)]
+struct ClosingTransaction {
+    date: NaiveDate,
+    raw_statement: String,
+}
+
+// Crate-public interface.
+// ----------------------------------------------------------------------------
+
 impl ClosingSection {
-    pub(crate) fn from_sources<'a>(sources: impl IntoIterator<Item = &'a str>) -> Self {
+    pub(crate) fn new<'a>(closing_statements: impl IntoIterator<Item = &'a str>) -> Self {
         let mut section = Self::default();
-        for source in sources {
-            section.ingest(source);
+        for statement in closing_statements {
+            section.ingest(statement);
         }
 
-        section.closing_records.sort_by(|a, b| {
+        section.closing_transactions.sort_by(|a, b| {
             a.date
                 .cmp(&b.date)
-                .then_with(|| a.statement.cmp(&b.statement))
+                .then_with(|| a.raw_statement.cmp(&b.raw_statement))
         });
         section
     }
 
     pub(crate) fn render(&self) -> Option<String> {
-        if self.closing_records.is_empty() {
+        if self.closing_transactions.is_empty() {
             return None;
         }
 
         let title = self.title();
-        let mut records = Vec::new();
+        let mut entries = Vec::new();
 
-        // Keep account declarations stable and deduplicated before entries.
-        let mut account_statements: Vec<&str> =
-            self.account_statements.iter().map(String::as_str).collect();
-        account_statements.sort();
-        records.extend(account_statements.into_iter().map(String::from));
-        records.extend(self.closing_records.iter().map(|record| record.statement.clone()));
+        let mut account_declarations: Vec<&str> = self
+            .account_declarations
+            .iter()
+            .map(String::as_str)
+            .collect();
+        account_declarations.sort();
+        entries.extend(account_declarations.into_iter().map(String::from));
+        entries.extend(
+            self.closing_transactions
+                .iter()
+                .map(|record| record.raw_statement.clone()),
+        );
 
         Some(format!(
             "{}\n\n{}",
             comment_header(&title),
-            records.join("\n")
+            entries.join("\n")
         ))
     }
+}
 
+// Internal.
+// ----------------------------------------------------------------------------
+
+impl ClosingSection {
     fn ingest(&mut self, source: &str) {
         let mut current_record_date: Option<NaiveDate> = None;
         let mut current_record_lines: Vec<String> = Vec::new();
@@ -61,10 +80,11 @@ impl ClosingSection {
                 continue;
             }
             if trimmed_start.starts_with("account ") {
-                self.account_statements.insert(line.trim_end().to_string());
+                self.account_declarations
+                    .insert(line.trim_end().to_string());
                 continue;
             }
-            if let Some(date) = parse_statement_date(trimmed_start) {
+            if let Some(date) = parse_record_date(trimmed_start) {
                 // A new dated line begins a new multiline closing record.
                 self.flush_record(&mut current_record_date, &mut current_record_lines);
                 current_record_date = Some(date);
@@ -90,17 +110,20 @@ impl ClosingSection {
         let statement = current_record_lines.join("\n");
         current_record_lines.clear();
 
-        self.closing_records.push(ClosingRecord { date, statement });
+        self.closing_transactions.push(ClosingTransaction {
+            date,
+            raw_statement: statement,
+        });
     }
 
     fn title(&self) -> String {
         let start_year = self
-            .closing_records
+            .closing_transactions
             .first()
             .map(|record| record.date.year())
             .unwrap_or_default();
         let end_year = self
-            .closing_records
+            .closing_transactions
             .last()
             .map(|record| record.date.year())
             .unwrap_or_default();
@@ -113,7 +136,10 @@ impl ClosingSection {
     }
 }
 
-fn parse_statement_date(line: &str) -> Option<NaiveDate> {
+// Helpers.
+// ----------------------------------------------------------------------------
+
+fn parse_record_date(line: &str) -> Option<NaiveDate> {
     if line.len() < 10 {
         return None;
     }

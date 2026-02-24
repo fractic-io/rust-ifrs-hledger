@@ -59,7 +59,7 @@ impl HledgerPrinter {
         );
         self.print_assertions(&mut ledger_output, financial_records);
 
-        let closing_section = ClosingSection::from_sources(closing_statements);
+        let closing_section = ClosingSection::new(closing_statements);
         if let Some(rendered) = closing_section.render() {
             ledger_output.push_str("\n\n");
             ledger_output.push_str(&rendered);
