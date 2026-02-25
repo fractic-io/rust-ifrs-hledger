@@ -11,6 +11,7 @@ use super::{
         LiabilityAccount, LiabilityClassification,
     },
     decorator_logic::DecoratorLogic,
+    transaction::Transaction,
 };
 
 // Account handlers.
@@ -145,6 +146,12 @@ pub trait CommodityHandler:
     }
 }
 
+pub trait OperationHandler:
+    for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
+{
+    fn run(&self, transactions: &Vec<Transaction>) -> String;
+}
+
 // Some type-magic to combine all handlers into a single type, greatly
 // shortening type parameters throughout the repo.
 // ---
@@ -159,14 +166,15 @@ pub trait Handlers: std::fmt::Debug + Send + Sync + 'static {
     type D: DecoratorHandler;
     type M: CommodityHandler;
     type P: PayeeHandler;
+    type O: OperationHandler;
 }
 
 #[derive(Debug)]
-pub(crate) struct HandlersImpl<A, I, E, R, C, S, D, M, P> {
-    pub _phantom: std::marker::PhantomData<(A, I, E, R, C, S, D, M, P)>,
+pub(crate) struct HandlersImpl<A, I, E, R, C, S, D, M, P, O> {
+    pub _phantom: std::marker::PhantomData<(A, I, E, R, C, S, D, M, P, O)>,
 }
 
-impl<A, I, E, R, C, S, D, M, P> Handlers for HandlersImpl<A, I, E, R, C, S, D, M, P>
+impl<A, I, E, R, C, S, D, M, P, O> Handlers for HandlersImpl<A, I, E, R, C, S, D, M, P, O>
 where
     A: AssetHandler,
     I: IncomeHandler,
@@ -177,6 +185,7 @@ where
     D: DecoratorHandler,
     M: CommodityHandler,
     P: PayeeHandler,
+    O: OperationHandler,
 {
     type A = A;
     type I = I;
@@ -187,4 +196,5 @@ where
     type D = D;
     type M = M;
     type P = P;
+    type O = O;
 }

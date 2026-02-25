@@ -3,7 +3,8 @@ use std::{
     iter::once,
 };
 
-use chrono::{Duration, NaiveDate};
+use base64::{engine::general_purpose::STANDARD, Engine as _};
+use chrono::{Datelike, Duration, NaiveDate};
 use fractic_server_error::ServerError;
 
 use crate::{
@@ -15,14 +16,16 @@ use crate::{
         Account, AccountingLogic, Annotation, Assertion, AssetHandler, BackingAccount, CashHandler,
         CommodityHandler, CommonStockWhileUnpaid, DecoratedFinancialRecordSpecs,
         DecoratedTransactionSpec, ExpenseAccount, ExpenseHandler, FinancialRecords, Handlers,
-        IncomeHandler, LiabilityAccount, PayeeHandler, ReimbursableEntityHandler,
-        ShareholderHandler, Transaction, TransactionLabel, TransactionPosting, TransactionSpecId,
+        IncomeHandler, LiabilityAccount, Operation, OperationHandler, OperationLogic,
+        OperationSpec, PayeeHandler, ReimbursableEntityHandler, ShareholderHandler, Transaction,
+        TransactionLabel, TransactionPosting, TransactionSpecId,
     },
     errors::{
-        CommonStockCannotBePrepaid, InvalidArgumentsForAccountingLogic, NoTransactionsToReimburse,
-        NonAmortizableAsset, UnexpectedNegativeValue, UnexpectedPartialReimbursement,
-        UnexpectedPositiveValue, VariableExpenseDoubleInit, VariableExpenseInvalidPaymentDate,
-        VariableExpenseNoInit, VariableExpenseNotEnoughHistoricalData,
+        CommonStockCannotBePrepaid, InvalidArgumentsForAccountingLogic, InvalidCsvContent,
+        NoTransactionsToReimburse, NonAmortizableAsset, UnexpectedNegativeValue,
+        UnexpectedPartialReimbursement, UnexpectedPositiveValue, VariableExpenseDoubleInit,
+        VariableExpenseInvalidPaymentDate, VariableExpenseNoInit,
+        VariableExpenseNotEnoughHistoricalData,
     },
     ext::standard_accounts::{
         PREPAID_SHARE_ISSUANCE_COSTS, SHARE_ISSUANCE_COSTS, SHARE_ISSUANCE_COSTS_PAYABLE,
@@ -198,6 +201,7 @@ impl<H: Handlers> SpecProcessor<H> {
         let DecoratedFinancialRecordSpecs {
             mut transaction_specs,
             assertion_specs,
+            operation_specs,
         } = self.specs;
 
         // Important for reimbursement tracking.
@@ -252,9 +256,15 @@ impl<H: Handlers> SpecProcessor<H> {
             .chain(transactions_fold_result.assertions.into_iter())
             .collect();
 
+        let operations = operation_specs
+            .into_iter()
+            .map(|spec| Self::process_operation(spec, &transactions_fold_result.transactions))
+            .collect::<Result<Vec<Operation>, ServerError>>()?;
+
         Ok(FinancialRecords {
             transactions: transactions_fold_result.transactions,
             assertions,
+            operations,
             label_lookup: transactions_fold_result.label_lookup,
             annotations_lookup: transactions_fold_result.annotations_lookup,
             unreimbursed_entries: transactions_fold_result
@@ -1616,5 +1626,62 @@ impl<H: Handlers> SpecProcessor<H> {
             reimbursement_state_delta: None,
             annotations,
         })
+    }
+
+    fn process_operation(
+        spec: OperationSpec<H>,
+        transactions: &Vec<Transaction>,
+    ) -> Result<Operation, ServerError> {
+        let OperationSpec {
+            id,
+            date,
+            operation_logic,
+            argument,
+            description,
+            amount: _amount,
+            commodity: _commodity,
+        } = spec;
+        match operation_logic {
+            OperationLogic::Close(logic) => {
+                if date.month() != 12 || date.day() != 31 {
+                    return Err(InvalidCsvContent::with_debug(
+                        &format!(
+                            "Close operation '{}' (id {}) date must be December 31.",
+                            description, id
+                        ),
+                        &date,
+                    ));
+                }
+                let content = STANDARD.decode(argument).map_err(|e| {
+                    InvalidCsvContent::with_debug(
+                        &format!(
+                            "Close operation '{}' (id {}) argument is not valid base64.",
+                            description, id
+                        ),
+                        &e,
+                    )
+                })?;
+                let entries =
+                    serde_json::from_slice::<Vec<(String, f64)>>(&content).map_err(|e| {
+                        InvalidCsvContent::with_debug(
+                            &format!(
+                                "Close operation '{}' (id {}) argument is not valid close-entry \
+                                 JSON.",
+                                description, id
+                            ),
+                            &e,
+                        )
+                    })?;
+                Ok(Operation::Close {
+                    date,
+                    entries,
+                    logic,
+                })
+            }
+            OperationLogic::Correction(logic) => Ok(Operation::Correction {
+                date,
+                result: logic.run(transactions),
+            }),
+        }
     }
 }
