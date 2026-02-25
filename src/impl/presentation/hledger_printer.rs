@@ -197,7 +197,7 @@ impl HledgerPrinter {
         // print them once at the start of the section.
         let account_statements = operations
             .iter()
-            .flat_map(|operation| accounts_used_by(operation))
+            .flat_map(|operation| account_declarations_for_operation(operation))
             .collect::<BTreeSet<_>>();
         for account_statement in account_statements {
             ledger_output.push_str(&format!("{}\n", account_statement));
@@ -257,7 +257,7 @@ impl HledgerPrinter {
                     }
                 }
                 Operation::Correction { result, .. } => {
-                    let normalized = normalize_operation_result(result)
+                    let normalized = normalize_posting_lines_spacing(result)
                         .join("\n")
                         .trim_end()
                         .to_string();
@@ -273,60 +273,46 @@ impl HledgerPrinter {
     }
 }
 
-// Helpers.
+// Building / manipulating account declarations. Ex:
+// "account Assets:Cash     ; type: C"
 // ----------------------------------------------------------------------------
 
 fn account_declaration(account: &Account) -> String {
-    format!(
-        "account {:81}  ; type: {}\n",
-        account.ledger(),
-        account.type_tag()
-    )
+    account_declaration_raw(&account.ledger(), account.type_tag())
 }
 
-fn operations_by_year(operations: &Vec<Operation>) -> BTreeMap<i32, Vec<&Operation>> {
-    operations.iter().fold(
-        BTreeMap::<i32, Vec<&Operation>>::new(),
-        |mut acc: BTreeMap<i32, Vec<&Operation>>, operation: &Operation| {
-            acc.entry(operation.year()).or_default().push(operation);
-            acc
-        },
-    )
+fn account_declaration_raw(ledger: &str, type_tag: char) -> String {
+    format!("account {:81}  ; type: {}\n", ledger, type_tag)
 }
 
-fn accounts_used_by(operation: &Operation) -> Vec<String> {
-    match operation {
-        Operation::Close { logic, .. } => match logic {
-            CloseLogic::Retain => {
-                vec![account_declaration(&(RETAINED_EARNINGS.clone().into()))]
-            }
-        },
-        Operation::Correction { result, .. } => result
-            .lines()
-            .filter(|line| is_account_declaration_line(line))
-            .map(|line| line.to_string())
-            .collect(),
-    }
-}
-
-fn normalize_operation_result(entry: &str) -> Vec<String> {
-    entry
-        .lines()
-        .filter(|line| !is_account_declaration_line(line))
-        .map(normalize_operation_line)
-        .collect()
-}
-
-fn normalize_operation_line(line: &str) -> String {
-    let Some((left, right)) = parse_posting_line(line) else {
-        return line.to_string();
-    };
-    resize_posting_line(left, right)
-}
-
-fn is_account_declaration_line(line: &str) -> bool {
+fn is_account_declaration(line: &str) -> bool {
     line.trim_start().starts_with("account ")
 }
+
+fn parse_account_declaration(line: &str) -> Option<(&str, char)> {
+    let trimmed = line.trim();
+    let rest = trimmed.strip_prefix("account")?.trim_start();
+    let (name_part, meta_part) = rest.split_once(';')?;
+    let name = name_part.trim();
+
+    let type_str = meta_part
+        .trim()
+        .strip_prefix("type")?
+        .trim_start()
+        .strip_prefix(':')?
+        .trim_start()
+        .trim();
+
+    let mut ch_iter = type_str.chars();
+    let ch = ch_iter.next()?;
+    let is_single = ch_iter.next().is_none();
+
+    Some((name, ch)).filter(|(n, _)| !n.is_empty() && is_single)
+}
+
+// Building / manipulating indented posting lines. Ex:
+// "    Account Name      Amount"
+// ----------------------------------------------------------------------------
 
 fn resize_posting_line(left: &str, right: &str) -> String {
     let current_width =
@@ -339,7 +325,7 @@ fn resize_posting_line(left: &str, right: &str) -> String {
 
 fn format_posting_line(left: &str, right: &str) -> String {
     let content_width = POSTING_TOTAL_WIDTH.saturating_sub(char_width(POSTING_INDENT));
-    let body = pad_between(left, right, content_width, POSTING_MIN_GAP);
+    let body = join_and_pad_between(left, right, content_width, POSTING_MIN_GAP);
     format!("{}{}", POSTING_INDENT, body)
 }
 
@@ -357,7 +343,55 @@ fn parse_posting_line(line: &str) -> Option<(&str, &str)> {
     Some((left, right))
 }
 
-fn pad_between(left: &str, right: &str, total_width: usize, min_gap: usize) -> String {
+/// Normalize the inner padding of *existing* posting lines, as detected from
+/// the raw ledger content.
+fn normalize_posting_lines_spacing(ledger_content: &str) -> Vec<String> {
+    ledger_content
+        .lines()
+        .filter(|line| !is_account_declaration(line))
+        .map(|line| {
+            if let Some((left, right)) = parse_posting_line(line) {
+                resize_posting_line(left, right)
+            } else {
+                line.to_string()
+            }
+        })
+        .collect()
+}
+
+// Operation-related helpers.
+// ----------------------------------------------------------------------------
+
+fn operations_by_year(operations: &Vec<Operation>) -> BTreeMap<i32, Vec<&Operation>> {
+    operations.iter().fold(
+        BTreeMap::<i32, Vec<&Operation>>::new(),
+        |mut acc: BTreeMap<i32, Vec<&Operation>>, operation: &Operation| {
+            acc.entry(operation.year()).or_default().push(operation);
+            acc
+        },
+    )
+}
+
+fn account_declarations_for_operation(operation: &Operation) -> Vec<String> {
+    match operation {
+        Operation::Close { logic, .. } => match logic {
+            CloseLogic::Retain => {
+                vec![account_declaration(&(RETAINED_EARNINGS.clone().into()))]
+            }
+        },
+        Operation::Correction { result, .. } => result
+            .lines()
+            .filter(|line| is_account_declaration(line))
+            .filter_map(parse_account_declaration)
+            .map(|(name, tag)| account_declaration_raw(name, tag))
+            .collect(),
+    }
+}
+
+// Generic helpers.
+// ----------------------------------------------------------------------------
+
+fn join_and_pad_between(left: &str, right: &str, total_width: usize, min_gap: usize) -> String {
     let min_width = char_width(left) + char_width(right) + min_gap;
     let gap = if min_width >= total_width {
         min_gap
