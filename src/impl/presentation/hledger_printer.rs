@@ -314,15 +314,6 @@ fn parse_account_declaration(line: &str) -> Option<(&str, char)> {
 // "    Account Name      Amount"
 // ----------------------------------------------------------------------------
 
-fn resize_posting_line(left: &str, right: &str) -> String {
-    let current_width =
-        char_width(POSTING_INDENT) + char_width(left) + char_width(right) + POSTING_MIN_GAP;
-    if current_width >= POSTING_TOTAL_WIDTH {
-        return format!("{}{}{}", POSTING_INDENT, left, " ".repeat(POSTING_MIN_GAP)) + right;
-    }
-    format_posting_line(left, right)
-}
-
 fn format_posting_line(left: &str, right: &str) -> String {
     let content_width = POSTING_TOTAL_WIDTH.saturating_sub(char_width(POSTING_INDENT));
     let body = join_and_pad_between(left, right, content_width, POSTING_MIN_GAP);
@@ -351,7 +342,7 @@ fn normalize_posting_lines_spacing(ledger_content: &str) -> Vec<String> {
         .filter(|line| !is_account_declaration(line))
         .map(|line| {
             if let Some((left, right)) = parse_posting_line(line) {
-                resize_posting_line(left, right)
+                format_posting_line(left, right)
             } else {
                 line.to_string()
             }
