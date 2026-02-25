@@ -83,7 +83,7 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                         vec![]
                     } else {
                         raw_notes
-                            .split(',')
+                            .lines()
                             .map(|n| Annotation::Custom(n.into()))
                             .collect()
                     };
