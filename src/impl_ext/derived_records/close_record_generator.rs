@@ -2,6 +2,7 @@ use std::fmt::{self, Display};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use fractic_server_error::{CriticalError, ServerError};
 
 use crate::errors::{
@@ -45,10 +46,11 @@ impl CloseRecordGenerator {
         let entries_json = serde_json::to_string(&entries).map_err(|e| {
             CriticalError::with_debug("failed to serialize close entries as JSON", &e)
         })?;
+        let tag = STANDARD.encode(entries_json);
         Ok(CloseRecord {
             year: self.year,
             closing_date: format!("{}-12-31", self.year),
-            entries: entries_json,
+            tag,
             total_amount,
         })
     }
@@ -61,7 +63,7 @@ impl CloseRecordGenerator {
 pub struct CloseRecord {
     pub year: i32,
     pub closing_date: String,
-    pub entries: String,
+    pub tag: String,
     pub total_amount: f64,
 }
 
@@ -74,13 +76,14 @@ impl Display for CloseRecord {
             "{BOLD}Year:{RESET} {}\n{BOLD}Closing Date:{RESET} {}\n{BOLD}Total Amount:{RESET} {}",
             self.year, self.closing_date, self.total_amount
         )?;
-        write!(f, "\n\n{BOLD}Entries:{RESET} {}", self.entries)?;
+        write!(f, "\n\n{BOLD}Tag:{RESET} {}", self.tag)?;
         write!(
             f,
-            "\n\n{BOLD}Instructions:{RESET} In the transactions CSV, create a `Close({})` record, \
-             and paste the `Entries` JSON into the `Description` column. Optionally paste the \
-             `Total Amount` value into the `Amount` column.",
-            self.year
+            "\n\n{BOLD}Instructions:{RESET} In the transactions CSV, create a \
+             'Close(<CLOSE_LOGIC>)' record by setting the first column to ':' (to indicate an \
+             operation record), the `Accounting Logic` column to the desired close logic (for \
+             example 'Close(Retain)'), the `Decorators` column to the `Tag` value, and the \
+             `Amount` column to the `Total Amount` value.",
         )
     }
 }
@@ -185,21 +188,17 @@ mod tests {
     }
 
     #[test]
-    fn close_record_display_is_multiline_with_entries_json() {
+    fn close_record_display_is_multiline_with_base64_tag() {
         let record = CloseRecord {
             year: 2024,
             closing_date: "2024-12-31".to_string(),
-            entries:
-                r#"[["Expenses:Operating:Sample",-1200.0],["Income:NonOperating:Other",300.0]]"#
-                    .to_string(),
+            tag: "W1siRXhwZW5zZXM6T3BlcmF0aW5nOlNhbXBsZSIsLTEyMDAuMF0sWyJJbmNvbWU6Tm9uT3BlcmF0aW5nOk90aGVyIiwzMDAuMF1d"
+                .to_string(),
             total_amount: -900.0,
         };
-        assert_eq!(
-            record.to_string(),
-            "\u{1b}[1mYear:\u{1b}[0m 2024\n\u{1b}[1mClosing Date:\u{1b}[0m \
-             2024-12-31\n\u{1b}[1mEntries:\u{1b}[0m \
-             [[\"Expenses:Operating:Sample\",-1200.0],[\"Income:NonOperating:Other\",300.0]]\n\\
-             u{1b}[1mTotal Amount:\u{1b}[0m -900"
-        );
+        let display = record.to_string();
+        assert!(display.contains("\u{1b}[1mTag:\u{1b}[0m"));
+        assert!(display.contains(&record.tag));
+        assert!(display.contains("paste the `Tag` value into the `Tag` column"));
     }
 }
