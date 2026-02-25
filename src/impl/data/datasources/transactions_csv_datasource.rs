@@ -8,11 +8,10 @@ use crate::{
     data::models::{
         accounting_amount_model::AccountingAmountModel,
         accounting_logic_model::AccountingLogicModel, backing_account_model::BackingAccountModel,
-        iso_date_model::ISODateModel,
+        iso_date_model::ISODateModel, operation_logic_model::OperationLogicModel,
     },
     entities::{
-        Annotation, Handlers, OperationLogic, OperationSpec, OperationSpecId, TransactionSpec,
-        TransactionSpecId,
+        Annotation, Handlers, OperationSpec, OperationSpecId, TransactionSpec, TransactionSpecId,
     },
     errors::{InvalidCsv, InvalidCsvContent, InvalidRon, ReadError},
 };
@@ -77,15 +76,17 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
 
                         let raw_date = r.get(2).unwrap_or("").trim();
                         let raw_operation_logic = r.get(3).unwrap_or("").trim();
-                        let raw_argument = r.get(4).unwrap_or("").trim().to_string();
+                        let raw_arguments = r.get(4).unwrap_or("").trim();
                         let raw_description = r.get(6).unwrap_or("").trim();
                         let raw_amount = r.get(7).unwrap_or("").trim();
                         let raw_commodity = r.get(8).unwrap_or("").trim();
 
                         let date: ISODateModel = ISODateModel::from_str(raw_date)?;
-                        let operation_logic: OperationLogic<H::O> =
+                        let operation_logic: OperationLogicModel<H::O> =
                             from_str(raw_operation_logic)
                                 .map_err(|e| InvalidRon::with_debug("OperationLogic", &e))?;
+                        let arguments: Vec<String> =
+                            raw_arguments.split(',').map(|s| s.to_string()).collect();
                         let amount: Option<AccountingAmountModel> = if raw_amount.is_empty() {
                             None
                         } else {
@@ -103,8 +104,8 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                         operation_specs.push(OperationSpec {
                             id: OperationSpecId((i + 2) as u64),
                             date: date.into(),
-                            operation_logic,
-                            argument: raw_argument,
+                            operation_logic: operation_logic.into(),
+                            arguments,
                             description: raw_description.into(),
                             amount: amount.map(Into::into),
                             commodity,

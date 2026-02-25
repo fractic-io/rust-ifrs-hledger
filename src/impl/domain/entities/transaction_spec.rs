@@ -10,7 +10,7 @@ use super::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TransactionSpecId(pub(crate) u64);
 
-#[derive(Debug, serde_derive::Deserialize)]
+#[derive(Debug)]
 pub enum CommonStockWhileUnpaid {
     ReceivableAsset,
     NegativeEquity,

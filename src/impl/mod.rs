@@ -11,6 +11,7 @@ pub(crate) mod data {
         pub(crate) mod accounting_logic_model;
         pub(crate) mod backing_account_model;
         pub(crate) mod iso_date_model;
+        pub(crate) mod operation_logic_model;
     }
     pub(crate) mod repositories {
         pub(crate) mod records_repository_impl;

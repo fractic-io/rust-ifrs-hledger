@@ -1636,7 +1636,7 @@ impl<H: Handlers> SpecProcessor<H> {
             id,
             date,
             operation_logic,
-            argument,
+            arguments,
             description,
             amount: _amount,
             commodity: _commodity,
@@ -1652,6 +1652,13 @@ impl<H: Handlers> SpecProcessor<H> {
                         &date,
                     ));
                 }
+                let Some(argument) = arguments.into_iter().next() else {
+                    return Err(InvalidCsvContent::new(&format!(
+                        "Close operation '{}' (id {}) must have argument field set to the closing \
+                         tag, as output by the CloseRecordGenerator.",
+                        description, id
+                    )));
+                };
                 let content = STANDARD.decode(argument).map_err(|e| {
                     InvalidCsvContent::with_debug(
                         &format!(

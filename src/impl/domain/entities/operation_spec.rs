@@ -21,7 +21,7 @@ pub(crate) struct OperationSpec<H: Handlers> {
     pub id: OperationSpecId,
     pub date: NaiveDate,
     pub operation_logic: OperationLogic<H::O>,
-    pub argument: String,
+    pub arguments: Vec<String>,
     pub description: String,
     pub amount: Option<f64>,
     pub commodity: Option<H::M>,
