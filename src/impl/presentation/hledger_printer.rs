@@ -200,7 +200,7 @@ impl HledgerPrinter {
             .flat_map(|operation| account_declarations_for_operation(operation))
             .collect::<BTreeSet<_>>();
         for account_statement in account_statements {
-            ledger_output.push_str(&format!("{}\n", account_statement));
+            ledger_output.push_str(&account_statement);
         }
         if !operations.is_empty() {
             ledger_output.push('\n');
