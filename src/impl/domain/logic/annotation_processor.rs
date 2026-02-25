@@ -1,8 +1,8 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use fractic_server_error::ServerError;
 
-use crate::entities::{Annotation, FinancialRecords, NotesToFinancialRecords};
+use crate::entities::{FinancialRecords, NotesToFinancialRecords};
 
 pub(crate) struct AnnotationProcessor<'a> {
     records: &'a FinancialRecords,
@@ -15,7 +15,7 @@ impl<'a> AnnotationProcessor<'a> {
 
     pub(crate) fn process(self) -> Result<NotesToFinancialRecords, ServerError> {
         let unknown_label = "Unknown".to_string();
-        let annotations_map: HashMap<Annotation, HashSet<String>> = self
+        let annotations_map: BTreeMap<String, BTreeSet<String>> = self
             .records
             .transactions
             .iter()
@@ -30,9 +30,9 @@ impl<'a> AnnotationProcessor<'a> {
                     .get(&tx.spec_id)
                     .into_iter()
                     .flatten()
-                    .map(move |annotation| (annotation.clone(), label))
+                    .map(move |annotation| (annotation.to_string(), label))
             })
-            .fold(HashMap::new(), |mut map, (annotation, label)| {
+            .fold(BTreeMap::new(), |mut map, (annotation, label)| {
                 map.entry(annotation).or_default().insert(label.to_string());
                 map
             });
@@ -41,11 +41,11 @@ impl<'a> AnnotationProcessor<'a> {
             .into_iter()
             .map(|(annotation, labels)| {
                 (
-                    annotation.to_string(),
+                    annotation,
                     labels.into_iter().collect::<Vec<_>>().join(", "),
                 )
             })
-            .collect();
+            .collect::<Vec<_>>();
 
         let general_notes = self.unreimbursed_transaction_notes()?;
 
@@ -64,7 +64,7 @@ impl<'a> AnnotationProcessor<'a> {
                     .unreimbursed_entries
                     .iter()
                     .map(|(account, _)| account.clone())
-                    .collect::<HashSet<_>>()
+                    .collect::<BTreeSet<_>>()
                     .into_iter()
                     .map(|account| {
                         let entries = self
@@ -88,7 +88,7 @@ impl<'a> AnnotationProcessor<'a> {
                                     .iter()
                                     .map(|p| p.account.ledger())
                                     .collect::<Vec<_>>())
-                                .collect::<HashSet<_>>()
+                                .collect::<BTreeSet<_>>()
                                 .into_iter()
                                 .collect::<Vec<_>>()
                                 .join(", ")
@@ -97,7 +97,7 @@ impl<'a> AnnotationProcessor<'a> {
                     .collect::<Vec<_>>()
                     .join(", "),
             ));
-            let cashflow_tags_of_unreimbursed_entries: HashSet<_> = self
+            let cashflow_tags_of_unreimbursed_entries: BTreeSet<_> = self
                 .records
                 .unreimbursed_entries
                 .iter()
@@ -110,7 +110,7 @@ impl<'a> AnnotationProcessor<'a> {
                 .collect();
             if !cashflow_tags_of_unreimbursed_entries.is_empty() {
                 n.push((
-                    "WARNING: Unreimbursed transactions are associated with the cashflow tracing tags."
+                    "WARNING: Unreimbursed transactions are associated with cashflow tracing tags."
                         .to_string(),
                     cashflow_tags_of_unreimbursed_entries
                         .into_iter()

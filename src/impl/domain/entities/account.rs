@@ -7,7 +7,7 @@ pub enum Account {
     Equity(EquityAccount),
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, PartialOrd, Ord)]
 pub enum AssetClassification {
     // Current.
     // =========================================================================
@@ -31,7 +31,7 @@ pub enum AssetClassification {
     OtherNonCurrentAssets,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, PartialOrd, Ord)]
 pub enum LiabilityClassification {
     // Current.
     // =========================================================================
@@ -50,7 +50,7 @@ pub enum LiabilityClassification {
     OtherNonCurrentLiabilities,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, PartialOrd, Ord)]
 pub enum IncomeClassification {
     // Operating (core business) revenues.
     // =========================================================================
@@ -95,7 +95,7 @@ pub enum IncomeClassification {
     OtherNonOperatingIncome,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, PartialOrd, Ord)]
 pub enum ExpenseClassification {
     // Operating expenses.
     // =========================================================================
@@ -153,7 +153,7 @@ pub enum ExpenseClassification {
     OtherNonOperatingNonCashExpense,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, PartialOrd, Ord)]
 pub enum EquityClassification {
     // Contributed capital.
     // =========================================================================
@@ -186,22 +186,22 @@ pub enum EquityClassification {
     UnpaidShareCapital,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
 pub struct AssetAccount(pub(crate) Option<String>, pub(crate) AssetClassification);
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
 pub struct LiabilityAccount(
     pub(crate) Option<String>,
     pub(crate) LiabilityClassification,
 );
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
 pub struct IncomeAccount(pub(crate) Option<String>, pub(crate) IncomeClassification);
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
 pub struct ExpenseAccount(pub(crate) Option<String>, pub(crate) ExpenseClassification);
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
 pub struct EquityAccount(pub(crate) Option<String>, pub(crate) EquityClassification);
 
 // Shorthand constructors.
