@@ -12,8 +12,19 @@ use crate::{
 
 pub type Ledger = String;
 
-pub struct IfrsHledgerUtil<A, I, E, C, S, R, D, M, P, O>
-where
+pub struct IfrsHledgerUtil<
+    // `()` provides default (placeholder) implementations for all handlers.
+    A = (),
+    I = (),
+    E = (),
+    C = (),
+    S = (),
+    R = (),
+    D = (),
+    M = (), // (USD)
+    P = (),
+    O = (),
+> where
     A: AssetHandler,
     I: IncomeHandler,
     E: ExpenseHandler,

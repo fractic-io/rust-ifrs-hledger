@@ -2,7 +2,10 @@ use fractic_server_error::ServerError;
 use iso_currency::Currency;
 use serde::Deserialize;
 
-use crate::errors::InvalidIsoCurrencyCode;
+use crate::{
+    entities::{expense_tl, income_tl, ExpenseClassification, IncomeClassification, NoOpDecorator},
+    errors::InvalidIsoCurrencyCode,
+};
 
 use super::{
     account::{
@@ -15,7 +18,7 @@ use super::{
 };
 
 // Account handlers.
-// ---
+// ----------------------------------------------------------------------------
 
 pub trait AssetHandler:
     for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
@@ -105,7 +108,7 @@ pub trait ShareholderHandler:
 }
 
 // Other.
-// ---
+// ----------------------------------------------------------------------------
 
 pub trait PayeeHandler:
     for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
@@ -154,7 +157,7 @@ pub trait OperationHandler:
 
 // Some type-magic to combine all handlers into a single type, greatly
 // shortening type parameters throughout the repo.
-// ---
+// ----------------------------------------------------------------------------
 
 pub trait Handlers: std::fmt::Debug + Send + Sync + 'static {
     type A: AssetHandler;
@@ -197,4 +200,71 @@ where
     type M = M;
     type P = P;
     type O = O;
+}
+
+// Make () implement all handlers, so clients can easily opt out of certain
+// handler types.
+// ----------------------------------------------------------------------------
+
+impl AssetHandler for () {
+    fn account(&self) -> AssetAccount {
+        asset_tl(AssetClassification::OtherCurrentAssets)
+    }
+}
+
+impl IncomeHandler for () {
+    fn account(&self) -> IncomeAccount {
+        income_tl(IncomeClassification::OtherNonOperatingIncome)
+    }
+}
+
+impl ExpenseHandler for () {
+    fn account(&self) -> ExpenseAccount {
+        expense_tl(ExpenseClassification::OtherNonOperatingCashExpense)
+    }
+}
+
+impl ReimbursableEntityHandler for () {
+    fn account(&self) -> LiabilityAccount {
+        liability_tl(LiabilityClassification::OtherCurrentLiabilities)
+    }
+}
+
+impl CashHandler for () {
+    fn account(&self) -> AssetAccount {
+        asset_tl(AssetClassification::CashAndCashEquivalents)
+    }
+}
+
+impl ShareholderHandler for () {
+    fn account(&self) -> EquityAccount {
+        equity_tl(EquityClassification::CommonStock)
+    }
+}
+
+impl DecoratorHandler for () {
+    fn logic<H: Handlers>(&self) -> Result<Box<dyn DecoratorLogic<H>>, ServerError> {
+        Ok(Box::new(NoOpDecorator::new()))
+    }
+}
+
+impl CommodityHandler for () {
+    fn iso_symbol(&self) -> String {
+        "USD".into()
+    }
+    fn default() -> Self {
+        ()
+    }
+}
+
+impl PayeeHandler for () {
+    fn name(&self) -> String {
+        String::new()
+    }
+}
+
+impl OperationHandler for () {
+    fn run(&self, _transactions: &Vec<Transaction>) -> String {
+        String::new()
+    }
 }
