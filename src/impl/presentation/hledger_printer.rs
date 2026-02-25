@@ -15,6 +15,10 @@ use super::utils::format_amount;
 
 pub(crate) struct HledgerPrinter;
 
+const POSTING_INDENT: &str = "    ";
+const POSTING_TOTAL_WIDTH: usize = 100;
+const POSTING_MIN_GAP: usize = 2;
+
 impl HledgerPrinter {
     pub(crate) fn new() -> Self {
         Self
@@ -143,12 +147,11 @@ impl HledgerPrinter {
                     tags if tags.is_empty() => "".to_string(),
                     tags => format!("       ; {}", tags.join(", ")),
                 };
-                ledger_output.push_str(&format!(
-                    "    {:75} {:>20}{}\n",
-                    posting.account.ledger(),
-                    format_amount(posting.amount, posting.currency, false),
-                    tag_str
-                ));
+                let posting_line = format_posting_line(
+                    &posting.account.ledger(),
+                    &format_amount(posting.amount, posting.currency, false),
+                );
+                ledger_output.push_str(&format!("{}{}\n", posting_line, tag_str));
             }
             for annotation in financial_records
                 .annotations_lookup
@@ -175,10 +178,13 @@ impl HledgerPrinter {
         };
         for assertion in sorted_assertions {
             ledger_output.push_str(&format!("{} <assertion>\n", assertion.date));
+            let right = format!(
+                "0 == {}",
+                format_amount(assertion.balance, assertion.currency, false)
+            );
             ledger_output.push_str(&format!(
-                "    {:70} 0 == {:>20}\n",
-                assertion.account.ledger(),
-                format_amount(assertion.balance, assertion.currency, false),
+                "{}\n",
+                format_posting_line(&assertion.account.ledger(), &right)
             ));
             ledger_output.push('\n');
         }
@@ -229,27 +235,29 @@ impl HledgerPrinter {
                             format_amount(*amount, *currency, true),
                             format_amount(0.0, *currency, true)
                         );
-                        ledger_output.push_str(&format!(
-                            "{}\n",
-                            format_posting_line_width_100(account, &right)
-                        ));
+                        ledger_output
+                            .push_str(&format!("{}\n", format_posting_line(account, &right)));
                     }
 
                     // Write credit entry.
                     if let Some(total) = total {
                         ledger_output.push_str(&format!(
                             "{}\n",
-                            format_posting_line_width_100(
+                            format_posting_line(
                                 &destination_account.ledger(),
                                 &format_amount(*total, *currency, true),
                             )
                         ));
                     } else {
-                        ledger_output.push_str(&format!("    {}\n", destination_account.ledger()));
+                        ledger_output.push_str(&format!(
+                            "{}{}\n",
+                            POSTING_INDENT,
+                            destination_account.ledger()
+                        ));
                     }
                 }
                 Operation::Correction { result, .. } => {
-                    let normalized = normalize_formatting(result)
+                    let normalized = normalize_operation_result(result)
                         .join("\n")
                         .trim_end()
                         .to_string();
@@ -295,55 +303,51 @@ fn accounts_used_by(operation: &Operation) -> Vec<String> {
         },
         Operation::Correction { result, .. } => result
             .lines()
-            .filter(|line| line.trim_start().starts_with("account "))
+            .filter(|line| is_account_declaration_line(line))
             .map(|line| line.to_string())
             .collect(),
     }
 }
 
-fn normalize_formatting(entry: &str) -> Vec<String> {
+fn normalize_operation_result(entry: &str) -> Vec<String> {
     entry
         .lines()
-        .filter(|line| !line.trim_start().starts_with("account "))
-        .map(|line| {
-            if is_resizable_posting_line(line) {
-                resize_posting_line_to_width(line, 100)
-            } else {
-                line.to_string()
-            }
-        })
+        .filter(|line| !is_account_declaration_line(line))
+        .map(normalize_operation_line)
         .collect()
 }
 
-fn is_resizable_posting_line(line: &str) -> bool {
-    line.starts_with("    ")
-        && !line.trim_start().starts_with(';')
-        && split_posting_line(line).is_some()
-}
-
-fn resize_posting_line_to_width(line: &str, width: usize) -> String {
-    if char_width(line) >= width {
-        return line.to_string();
-    }
-    let Some((left, right)) = split_posting_line(line) else {
+fn normalize_operation_line(line: &str) -> String {
+    let Some((left, right)) = parse_posting_line(line) else {
         return line.to_string();
     };
-    format_posting_line_with_width(left, right, width)
+    resize_posting_line(left, right)
 }
 
-fn format_posting_line_width_100(left: &str, right: &str) -> String {
-    format_posting_line_with_width(left, right, 100)
+fn is_account_declaration_line(line: &str) -> bool {
+    line.trim_start().starts_with("account ")
 }
 
-fn format_posting_line_with_width(left: &str, right: &str, width: usize) -> String {
-    const INDENT: &str = "    ";
-    let content_width = width.saturating_sub(char_width(INDENT));
-    let body = pad_between(left, right, content_width, 2);
-    format!("{}{}", INDENT, body)
+fn resize_posting_line(left: &str, right: &str) -> String {
+    let current_width =
+        char_width(POSTING_INDENT) + char_width(left) + char_width(right) + POSTING_MIN_GAP;
+    if current_width >= POSTING_TOTAL_WIDTH {
+        return format!("{}{}{}", POSTING_INDENT, left, " ".repeat(POSTING_MIN_GAP)) + right;
+    }
+    format_posting_line(left, right)
 }
 
-fn split_posting_line(line: &str) -> Option<(&str, &str)> {
-    let body = line.strip_prefix("    ")?;
+fn format_posting_line(left: &str, right: &str) -> String {
+    let content_width = POSTING_TOTAL_WIDTH.saturating_sub(char_width(POSTING_INDENT));
+    let body = pad_between(left, right, content_width, POSTING_MIN_GAP);
+    format!("{}{}", POSTING_INDENT, body)
+}
+
+fn parse_posting_line(line: &str) -> Option<(&str, &str)> {
+    let body = line.strip_prefix(POSTING_INDENT)?;
+    if body.trim_start().starts_with(';') {
+        return None;
+    }
     let split_at = body.match_indices("  ").last().map(|(idx, _)| idx)?;
     let left = body[..split_at].trim_end();
     let right = body[split_at..].trim();
