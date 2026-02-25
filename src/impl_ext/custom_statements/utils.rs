@@ -73,6 +73,7 @@ pub(crate) fn hledger(
     ledger_path: &PathBuf,
     period: &str,
     query: Query,
+    ignore_closing_entries: bool,
     pivot: Option<&'static str>,
     fetch: Return,
 ) -> Result<f64, ServerError> {
@@ -99,6 +100,10 @@ pub(crate) fn hledger(
             let account_query = format!("^{}($|:)", account);
             cmd.arg("balance").arg(account_query).arg("-H");
         }
+    }
+
+    if ignore_closing_entries {
+        cmd.arg("not:tag:close");
     }
 
     if let Some(pivot) = pivot {
@@ -170,6 +175,7 @@ pub(crate) fn hledger_register(
     ledger_path: &PathBuf,
     period: &str,
     query: RegisterQuery,
+    ignore_closing_entries: bool,
     pivot: Option<&'static str>,
     format: RegisterOutput,
 ) -> Result<Vec<String>, ServerError> {
@@ -193,6 +199,10 @@ pub(crate) fn hledger_register(
             let tag_query = format!("tag:{}={}", key, value);
             cmd.arg(tag_query).arg("-r");
         }
+    }
+
+    if ignore_closing_entries {
+        cmd.arg("not:tag:close");
     }
 
     if let Some(pivot) = pivot {

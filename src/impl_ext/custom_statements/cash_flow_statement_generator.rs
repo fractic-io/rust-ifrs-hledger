@@ -286,6 +286,7 @@ impl CashFlowStatementGenerator {
             &self.ledger_path,
             &self.period,
             Query::IncomeStatement,
+            true,
             None,
             Return::Total,
         )
@@ -298,6 +299,7 @@ impl CashFlowStatementGenerator {
             Query::ChangeInAccountReverse {
                 account: "Expenses".to_string(),
             },
+            true,
             Some(CashflowTracingTag::key()),
             Return::SearchRowOrZero(CashflowTracingTag::NonCashPayment.value()),
         )
@@ -310,6 +312,7 @@ impl CashFlowStatementGenerator {
             Query::ChangeInAccount {
                 account: tag.value(),
             },
+            true,
             Some(CashflowTracingTag::key()),
             Return::Total,
         )
@@ -326,6 +329,7 @@ impl CashFlowStatementGenerator {
             Query::ChangeInAccount {
                 account: Into::<Account>::into(asset_tl(classification)).ledger(),
             },
+            true,
             None,
             Return::Total,
         )
@@ -341,6 +345,7 @@ impl CashFlowStatementGenerator {
             Query::ChangeInAccount {
                 account: Into::<Account>::into(liability_tl(classification)).ledger(),
             },
+            true,
             None,
             Return::Total,
         )?)
@@ -356,6 +361,7 @@ impl CashFlowStatementGenerator {
                 ))
                 .ledger(),
             },
+            true,
             Some(CashflowTracingTag::key()),
             Return::SearchRowOrZero(tag.value()),
         )?;
@@ -366,6 +372,7 @@ impl CashFlowStatementGenerator {
                 key: "s",
                 value: "non_cash_reclassification",
             },
+            true,
             Some(CashflowTracingTag::key()),
             Return::SearchRowOrZero(tag.value()),
         )?;
@@ -386,6 +393,7 @@ impl CashFlowStatementGenerator {
                 ))
                 .ledger(),
             },
+            true,
             None,
             Return::Total,
         )?;
@@ -398,6 +406,7 @@ impl CashFlowStatementGenerator {
                 ))
                 .ledger(),
             },
+            true,
             None,
             Return::Total,
         )?;
@@ -412,6 +421,7 @@ impl CashFlowStatementGenerator {
                 key: "s",
                 value: "non_cash_reclassification",
             },
+            true,
             None,
             RegisterOutput::Raw { width: 200 },
         )?;
@@ -422,6 +432,7 @@ impl CashFlowStatementGenerator {
                 key: "s",
                 value: "non_cash_reclassification",
             },
+            true,
             None,
             RegisterOutput::Raw { width: 200 },
         )?;
