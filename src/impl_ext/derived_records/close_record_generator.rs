@@ -47,11 +47,14 @@ impl CloseRecordGenerator {
             CriticalError::with_debug("failed to serialize close entries as JSON", &e)
         })?;
         let tag = STANDARD.encode(entries_json);
+        let closing_date = format!("{}-12-31", self.year);
+        let clipboard = format_clipboard_row(&closing_date, &tag, total_amount);
         Ok(CloseRecord {
             year: self.year,
-            closing_date: format!("{}-12-31", self.year),
+            closing_date,
             tag,
             total_amount,
+            clipboard,
         })
     }
 }
@@ -65,6 +68,10 @@ pub struct CloseRecord {
     pub closing_date: String,
     pub tag: String,
     pub total_amount: f64,
+
+    /// Pre-generated row that, if copied to clipboard, can be directly pasted
+    /// into Google Sheets / Excel.
+    pub clipboard: String,
 }
 
 impl Display for CloseRecord {
@@ -169,6 +176,14 @@ fn parse_hledger_amount(value: &str) -> Result<f64, ServerError> {
     })
 }
 
+fn format_clipboard_row(closing_date: &str, tag: &str, total_amount: f64) -> String {
+    // Google Sheets expands tab-separated values across columns on paste.
+    format!(
+        ":\t\t{}\tClose(<CloseLogic>)\t{}\t\t\t{}",
+        closing_date, tag, total_amount
+    )
+}
+
 fn output_context(line: &str) -> String {
     format!("invalid close output line: '{}'", line)
 }
@@ -195,10 +210,19 @@ mod tests {
             tag: "W1siRXhwZW5zZXM6T3BlcmF0aW5nOlNhbXBsZSIsLTEyMDAuMF0sWyJJbmNvbWU6Tm9uT3BlcmF0aW5nOk90aGVyIiwzMDAuMF1d"
                 .to_string(),
             total_amount: -900.0,
+            clipboard: ":\t\t2024-12-31\tClose(<CloseLogic>)\ttag123\t\t\t-900".to_string(),
         };
         let display = record.to_string();
         assert!(display.contains("\u{1b}[1mTag:\u{1b}[0m"));
         assert!(display.contains(&record.tag));
-        assert!(display.contains("paste the `Tag` value into the `Tag` column"));
+    }
+
+    #[test]
+    fn format_clipboard_row_is_tab_separated_for_google_sheets() {
+        let row = format_clipboard_row("2024-12-31", "abc123", -900.0);
+        assert_eq!(
+            row,
+            ":\t\t2024-12-31\tClose(<CloseLogic>)\tabc123\t\t\t-900"
+        );
     }
 }
