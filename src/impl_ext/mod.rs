@@ -6,6 +6,10 @@ pub(crate) mod custom_statements {
     mod utils;
 }
 
+pub(crate) mod derived_records {
+    pub(crate) mod close_record_generator;
+}
+
 pub(crate) mod standard_accounts {
     pub(crate) mod core;
     pub(crate) mod vat;
@@ -29,6 +33,10 @@ pub mod exports {
 
     pub mod custom_statements {
         pub use crate::impl_ext::custom_statements::cash_flow_statement_generator::*;
+    }
+
+    pub mod derived_records {
+        pub use crate::impl_ext::derived_records::close_record_generator::*;
     }
 
     pub mod standard_accounts {

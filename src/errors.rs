@@ -99,11 +99,23 @@ define_internal_error!(
 );
 define_internal_error!(
     HledgerInvalidResponse,
-    "hledger command returned an invalid response. Could not parse total change during the given period:\n\n{command:?}\n\nQuery: {query}\n\nReturn: {fetch}",
+    "hledger command returned an unexpected response. Could not parse total change during the given period:\n\n{command:?}\n\nQuery: {query}\n\nReturn: {fetch}",
     { command: &Command, query: String, fetch: String }
 );
 define_client_error!(
     HledgerInvalidPath,
     "Invalid path to hledger ledger file: '{ledger}'.",
     { ledger: &str }
+);
+
+// Derived record generation.
+define_client_error!(
+    NoAccountsToClose,
+    "No income/expense accounts to close for year {year}.",
+    { year: i32 }
+);
+define_internal_error!(
+    HledgerCloseInvalidResponse,
+    "'hledger close' returned an unexpected response: {details}.",
+    { details: String }
 );
