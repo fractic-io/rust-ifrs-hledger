@@ -2,7 +2,10 @@ use std::collections::HashSet;
 
 use iso_currency::Currency;
 
-use crate::entities::{Account, Assertion, CashflowTracingTag, FinancialRecords, Transaction};
+use crate::{
+    entities::{Account, Assertion, CashflowTracingTag, FinancialRecords, Transaction},
+    presentation::utils::header_comment,
+};
 
 use super::utils::format_amount;
 
@@ -16,33 +19,23 @@ impl HledgerPrinter {
     pub(crate) fn print_ledger(&self, financial_records: &FinancialRecords) -> String {
         let mut ledger_output = String::new();
 
-        ledger_output.push_str(
-            "; --- Accounts -------------------------------------------------------------------------------------\n\n",
-        );
+        ledger_output.push_str(&header_comment("Accounts"));
         self.print_accounts(&mut ledger_output, financial_records);
         ledger_output.push_str("\n\n");
 
-        ledger_output.push_str(
-            "; --- Commodities ----------------------------------------------------------------------------------\n\n",
-        );
+        ledger_output.push_str(&header_comment("Commodities"));
         self.print_commodities(&mut ledger_output, financial_records);
         ledger_output.push_str("\n\n");
 
-        ledger_output.push_str(
-            "; --- Payees ---------------------------------------------------------------------------------------\n\n",
-        );
+        ledger_output.push_str(&header_comment("Payees"));
         self.print_payees(&mut ledger_output, financial_records);
         ledger_output.push_str("\n\n");
 
-        ledger_output.push_str(
-            "; --- Transactions ---------------------------------------------------------------------------------\n\n",
-        );
+        ledger_output.push_str(&header_comment("Transactions"));
         self.print_transactions(&mut ledger_output, financial_records);
         ledger_output.push_str("\n\n");
 
-        ledger_output.push_str(
-            "; --- Assertions -----------------------------------------------------------------------------------\n\n",
-        );
+        ledger_output.push_str(&header_comment("Assertions"));
         self.print_assertions(&mut ledger_output, financial_records);
 
         ledger_output

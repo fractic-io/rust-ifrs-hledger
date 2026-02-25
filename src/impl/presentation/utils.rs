@@ -50,3 +50,14 @@ pub(crate) fn format_amount(amount: f64, currency: Currency, trailing_decimal: b
         )
     }
 }
+
+/// Format a 100-char comment header with the given title.
+pub(crate) fn header_comment(title: &str) -> String {
+    let mut header = format!("; --- {} ", title);
+    if header.len() < 100 {
+        header.push_str(&"-".repeat(100 - header.len()));
+    }
+    header.push('\n');
+    header.push('\n');
+    header
+}
