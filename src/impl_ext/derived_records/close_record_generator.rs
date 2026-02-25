@@ -12,23 +12,13 @@ use crate::errors::{
 // ----------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
-pub enum CloseLogic {
-    Retain,
-}
-
-#[derive(Debug, Clone)]
 pub struct CloseRecordGenerator {
     ledger_path: PathBuf,
     year: i32,
-    logic: CloseLogic,
 }
 
 impl CloseRecordGenerator {
-    pub fn new<P: AsRef<Path>>(
-        ledger_path: P,
-        year: i32,
-        logic: CloseLogic,
-    ) -> Result<Self, ServerError> {
+    pub fn new<P: AsRef<Path>>(ledger_path: P, year: i32) -> Result<Self, ServerError> {
         Ok(Self {
             ledger_path: ledger_path
                 .as_ref()
@@ -41,7 +31,6 @@ impl CloseRecordGenerator {
                 })?
                 .to_path_buf(),
             year,
-            logic,
         })
     }
 
@@ -107,15 +96,9 @@ impl CloseRecordGenerator {
             .arg(&self.ledger_path)
             .arg("-p")
             .arg(self.year.to_string())
-            .arg("close");
-
-        match self.logic {
-            CloseLogic::Retain => {
-                cmd.arg("--retain");
-            }
-        }
-
-        cmd.arg(r#"--close-desc=Auto-Generated: Temporary Close Record"#)
+            .arg("close")
+            .arg("--retain")
+            .arg(r#"--close-desc=Auto-Generated: Temporary Close Record"#)
             .arg("--close-acct=VoidOut")
             .arg("not:tag:close");
 
