@@ -53,10 +53,13 @@ impl CloseRecordGenerator {
         }
 
         let total_amount = entries.iter().map(|(_, amount)| *amount).sum::<f64>();
+        let entries_json = serde_json::to_string(&entries).map_err(|e| {
+            CriticalError::with_debug("failed to serialize close entries as JSON", &e)
+        })?;
         Ok(CloseRecord {
             year: self.year,
             closing_date: format!("{}-12-31", self.year),
-            entries,
+            entries: entries_json,
             total_amount,
         })
     }
@@ -69,19 +72,27 @@ impl CloseRecordGenerator {
 pub struct CloseRecord {
     pub year: i32,
     pub closing_date: String,
-    pub entries: Vec<(String, f64)>,
+    pub entries: String,
     pub total_amount: f64,
 }
 
 impl Display for CloseRecord {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let body = self
-            .entries
-            .iter()
-            .map(|(account, amount)| format!(r#"["{}",{}]"#, escape_json_string(account), amount))
-            .collect::<Vec<_>>()
-            .join(",");
-        write!(f, "[{}]", body)
+        const BOLD: &str = "\x1b[1m";
+        const RESET: &str = "\x1b[0m";
+        write!(
+            f,
+            "{BOLD}Year:{RESET} {}\n{BOLD}Closing Date:{RESET} {}\n{BOLD}Total Amount:{RESET} {}",
+            self.year, self.closing_date, self.total_amount
+        )?;
+        write!(f, "\n\n{BOLD}Entries:{RESET} {}", self.entries)?;
+        write!(
+            f,
+            "\n\n{BOLD}Instructions:{RESET} In the transactions CSV, create a `Close({})` record, \
+             and paste the `Entries` JSON into the `Description` column. Optionally paste the \
+             `Total Amount` value into the `Amount` column.",
+            self.year
+        )
     }
 }
 
@@ -176,15 +187,6 @@ fn output_context(line: &str) -> String {
     format!("invalid close output line: '{}'", line)
 }
 
-fn escape_json_string(value: &str) -> String {
-    value
-        .replace('\\', "\\\\")
-        .replace('"', "\\\"")
-        .replace('\n', "\\n")
-        .replace('\r', "\\r")
-        .replace('\t', "\\t")
-}
-
 // Tests.
 // ----------------------------------------------------------------------------
 
@@ -200,19 +202,21 @@ mod tests {
     }
 
     #[test]
-    fn close_record_display_is_minified_json_vector() {
+    fn close_record_display_is_multiline_with_entries_json() {
         let record = CloseRecord {
             year: 2024,
             closing_date: "2024-12-31".to_string(),
-            entries: vec![
-                ("Expenses:Operating:Sample".to_string(), -1200.0),
-                ("Income:NonOperating:Other".to_string(), 300.0),
-            ],
+            entries:
+                r#"[["Expenses:Operating:Sample",-1200.0],["Income:NonOperating:Other",300.0]]"#
+                    .to_string(),
             total_amount: -900.0,
         };
         assert_eq!(
             record.to_string(),
-            r#"[["Expenses:Operating:Sample",-1200],["Income:NonOperating:Other",300]]"#
+            "\u{1b}[1mYear:\u{1b}[0m 2024\n\u{1b}[1mClosing Date:\u{1b}[0m \
+             2024-12-31\n\u{1b}[1mEntries:\u{1b}[0m \
+             [[\"Expenses:Operating:Sample\",-1200.0],[\"Income:NonOperating:Other\",300.0]]\n\\
+             u{1b}[1mTotal Amount:\u{1b}[0m -900"
         );
     }
 }
