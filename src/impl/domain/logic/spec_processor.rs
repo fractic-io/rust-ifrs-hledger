@@ -1638,8 +1638,8 @@ impl<H: Handlers> SpecProcessor<H> {
             operation_logic,
             arguments,
             description,
-            amount: _amount,
-            commodity: _commodity,
+            amount,
+            commodity,
         } = spec;
         match operation_logic {
             OperationLogic::Close(logic) => {
@@ -1683,6 +1683,8 @@ impl<H: Handlers> SpecProcessor<H> {
                     date,
                     entries,
                     logic,
+                    total: amount,
+                    currency: commodity.unwrap_or_else(|| H::M::default()).currency()?,
                 })
             }
             OperationLogic::Correction(logic) => Ok(Operation::Correction {

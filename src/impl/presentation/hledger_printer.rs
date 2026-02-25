@@ -1,9 +1,13 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use iso_currency::Currency;
 
 use crate::{
-    entities::{Account, Assertion, CashflowTracingTag, FinancialRecords, Transaction},
+    entities::{
+        Account, Assertion, CashflowTracingTag, CloseLogic, FinancialRecords, Operation,
+        Transaction,
+    },
+    ext::standard_accounts::RETAINED_EARNINGS,
     presentation::utils::header_comment,
 };
 
@@ -21,22 +25,28 @@ impl HledgerPrinter {
 
         ledger_output.push_str(&header_comment("Accounts"));
         self.print_accounts(&mut ledger_output, financial_records);
-        ledger_output.push_str("\n\n");
 
+        ledger_output.push_str("\n\n");
         ledger_output.push_str(&header_comment("Commodities"));
         self.print_commodities(&mut ledger_output, financial_records);
-        ledger_output.push_str("\n\n");
 
+        ledger_output.push_str("\n\n");
         ledger_output.push_str(&header_comment("Payees"));
         self.print_payees(&mut ledger_output, financial_records);
-        ledger_output.push_str("\n\n");
 
+        ledger_output.push_str("\n\n");
         ledger_output.push_str(&header_comment("Transactions"));
         self.print_transactions(&mut ledger_output, financial_records);
-        ledger_output.push_str("\n\n");
 
+        ledger_output.push_str("\n\n");
         ledger_output.push_str(&header_comment("Assertions"));
         self.print_assertions(&mut ledger_output, financial_records);
+
+        for (year, operations) in operations_by_year(&financial_records.operations) {
+            ledger_output.push_str("\n\n");
+            ledger_output.push_str(&header_comment(&format!("{} Operations", year)));
+            self.print_operations(&mut ledger_output, operations);
+        }
 
         ledger_output
     }
@@ -49,16 +59,7 @@ impl HledgerPrinter {
             .chain(financial_records.assertions.iter().map(|a| &a.account))
             .collect();
         let sorted_account_declarations = {
-            let mut v: Vec<String> = accounts
-                .iter()
-                .map(|account| {
-                    format!(
-                        "account {:81}  ; type: {}\n",
-                        account.ledger(),
-                        account.type_tag()
-                    )
-                })
-                .collect();
+            let mut v: Vec<String> = accounts.into_iter().map(account_declaration).collect();
             v.sort();
             v
         };
@@ -182,4 +183,186 @@ impl HledgerPrinter {
             ledger_output.push('\n');
         }
     }
+
+    fn print_operations(&self, ledger_output: &mut String, mut operations: Vec<&Operation>) {
+        operations.sort_by_key(|operation| *operation.date());
+
+        // Extract (and dedup) account declarations from each operation, to
+        // print them once at the start of the section.
+        let account_statements = operations
+            .iter()
+            .flat_map(|operation| accounts_used_by(operation))
+            .collect::<BTreeSet<_>>();
+        for account_statement in account_statements {
+            ledger_output.push_str(&format!("{}\n", account_statement));
+        }
+        if !operations.is_empty() {
+            ledger_output.push('\n');
+        }
+
+        // Build ledger entries for each operation.
+        for (i, operation) in operations.iter().enumerate() {
+            match operation {
+                Operation::Close {
+                    date,
+                    entries,
+                    total,
+                    logic,
+                    currency,
+                } => {
+                    let (title, destination_account): (&str, Account) = match logic {
+                        CloseLogic::Retain => ("Retain Earnings", RETAINED_EARNINGS.clone().into()),
+                    };
+
+                    // Write title.
+                    ledger_output.push_str(&format!(
+                        "{} {}  ; close:{}\n",
+                        date,
+                        title,
+                        date.format("%Y")
+                    ));
+
+                    // Write debit entries.
+                    for (account, amount) in entries {
+                        let right = format!(
+                            "{} = {}",
+                            format_amount(*amount, *currency, true),
+                            format_amount(0.0, *currency, true)
+                        );
+                        ledger_output.push_str(&format!(
+                            "{}\n",
+                            format_posting_line_width_100(account, &right)
+                        ));
+                    }
+
+                    // Write credit entry.
+                    if let Some(total) = total {
+                        ledger_output.push_str(&format!(
+                            "{}\n",
+                            format_posting_line_width_100(
+                                &destination_account.ledger(),
+                                &format_amount(*total, *currency, true),
+                            )
+                        ));
+                    } else {
+                        ledger_output.push_str(&format!("    {}\n", destination_account.ledger()));
+                    }
+                }
+                Operation::Correction { result, .. } => {
+                    let normalized = normalize_formatting(result)
+                        .join("\n")
+                        .trim_end()
+                        .to_string();
+                    ledger_output.push_str(&normalized);
+                }
+            }
+
+            if i + 1 < operations.len() {
+                ledger_output.push('\n');
+            }
+        }
+        ledger_output.push('\n');
+    }
+}
+
+// Helpers.
+// ----------------------------------------------------------------------------
+
+fn account_declaration(account: &Account) -> String {
+    format!(
+        "account {:81}  ; type: {}\n",
+        account.ledger(),
+        account.type_tag()
+    )
+}
+
+fn operations_by_year(operations: &Vec<Operation>) -> BTreeMap<i32, Vec<&Operation>> {
+    operations.iter().fold(
+        BTreeMap::<i32, Vec<&Operation>>::new(),
+        |mut acc: BTreeMap<i32, Vec<&Operation>>, operation: &Operation| {
+            acc.entry(operation.year()).or_default().push(operation);
+            acc
+        },
+    )
+}
+
+fn accounts_used_by(operation: &Operation) -> Vec<String> {
+    match operation {
+        Operation::Close { logic, .. } => match logic {
+            CloseLogic::Retain => {
+                vec![account_declaration(&(RETAINED_EARNINGS.clone().into()))]
+            }
+        },
+        Operation::Correction { result, .. } => result
+            .lines()
+            .filter(|line| line.trim_start().starts_with("account "))
+            .map(|line| line.to_string())
+            .collect(),
+    }
+}
+
+fn normalize_formatting(entry: &str) -> Vec<String> {
+    entry
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("account "))
+        .map(|line| {
+            if is_resizable_posting_line(line) {
+                resize_posting_line_to_width(line, 100)
+            } else {
+                line.to_string()
+            }
+        })
+        .collect()
+}
+
+fn is_resizable_posting_line(line: &str) -> bool {
+    line.starts_with("    ")
+        && !line.trim_start().starts_with(';')
+        && split_posting_line(line).is_some()
+}
+
+fn resize_posting_line_to_width(line: &str, width: usize) -> String {
+    if char_width(line) >= width {
+        return line.to_string();
+    }
+    let Some((left, right)) = split_posting_line(line) else {
+        return line.to_string();
+    };
+    format_posting_line_with_width(left, right, width)
+}
+
+fn format_posting_line_width_100(left: &str, right: &str) -> String {
+    format_posting_line_with_width(left, right, 100)
+}
+
+fn format_posting_line_with_width(left: &str, right: &str, width: usize) -> String {
+    const INDENT: &str = "    ";
+    let content_width = width.saturating_sub(char_width(INDENT));
+    let body = pad_between(left, right, content_width, 2);
+    format!("{}{}", INDENT, body)
+}
+
+fn split_posting_line(line: &str) -> Option<(&str, &str)> {
+    let body = line.strip_prefix("    ")?;
+    let split_at = body.match_indices("  ").last().map(|(idx, _)| idx)?;
+    let left = body[..split_at].trim_end();
+    let right = body[split_at..].trim();
+    if left.is_empty() || right.is_empty() {
+        return None;
+    }
+    Some((left, right))
+}
+
+fn pad_between(left: &str, right: &str, total_width: usize, min_gap: usize) -> String {
+    let min_width = char_width(left) + char_width(right) + min_gap;
+    let gap = if min_width >= total_width {
+        min_gap
+    } else {
+        total_width - char_width(left) - char_width(right)
+    };
+    format!("{}{}{}", left, " ".repeat(gap), right)
+}
+
+fn char_width(s: &str) -> usize {
+    s.chars().count()
 }
