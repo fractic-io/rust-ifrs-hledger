@@ -245,7 +245,7 @@ impl HledgerPrinter {
                             "{}\n",
                             format_posting_line(
                                 &destination_account.ledger(),
-                                &format_amount(*total, *currency, true),
+                                &format_amount(-*total, *currency, true),
                             )
                         ));
                     } else {

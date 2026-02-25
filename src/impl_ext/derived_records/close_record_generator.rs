@@ -109,8 +109,7 @@ impl CloseRecordGenerator {
             .arg("close")
             .arg("--retain")
             .arg(r#"--close-desc=Auto-Generated: Temporary Close Record"#)
-            .arg("--close-acct=VoidOut")
-            .arg("not:tag:close");
+            .arg("--close-acct=VoidOut");
 
         let output = cmd.output().map_err(|e| {
             HledgerCommandFailed::with_debug(&self.ledger_path.display().to_string(), &cmd, &e)

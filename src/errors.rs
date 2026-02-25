@@ -111,7 +111,7 @@ define_client_error!(
 // Derived record generation.
 define_client_error!(
     NoAccountsToClose,
-    "No income/expense accounts to close for year {year}.",
+    "No income/expense accounts to close for year {year}. Does the ledger already have a close entry for {year}?",
     { year: i32 }
 );
 define_internal_error!(
