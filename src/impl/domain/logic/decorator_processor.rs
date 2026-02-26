@@ -21,7 +21,7 @@ impl<H: Handlers> DecoratorProcessor<H> {
     pub(crate) async fn process(self) -> Result<FinancialRecords_Intermediate1<H>, ServerError> {
         let FinancialRecordSpecs {
             transaction_specs,
-            commands: operation_specs,
+            commands,
             assertion_specs,
         } = self.specs;
 
@@ -80,7 +80,7 @@ impl<H: Handlers> DecoratorProcessor<H> {
 
         Ok(FinancialRecords_Intermediate1 {
             transaction_specs: decorated_transaction_specs,
-            commands: operation_specs,
+            commands,
             assertion_specs,
         })
     }
