@@ -36,9 +36,14 @@ where
         transactions_csv: &str,
         balances_csv: &str,
     ) -> Result<FinancialRecordSpecs<H>, ServerError> {
+        let ((transaction_specs, commands), assertion_specs) = (
+            self.transactions_datasource.from_string(transactions_csv)?,
+            self.balances_datasource.from_string(balances_csv)?,
+        );
         Ok(FinancialRecordSpecs {
-            transaction_specs: self.transactions_datasource.from_string(transactions_csv)?,
-            assertion_specs: self.balances_datasource.from_string(balances_csv)?,
+            transaction_specs,
+            commands,
+            assertion_specs,
         })
     }
 
@@ -50,12 +55,16 @@ where
     where
         P: AsRef<std::path::Path> + Send,
     {
-        Ok(FinancialRecordSpecs {
-            transaction_specs: self
-                .transactions_datasource
+        let ((transaction_specs, commands), assertion_specs) = (
+            self.transactions_datasource
                 .from_file(transactions_csv)
                 .await?,
-            assertion_specs: self.balances_datasource.from_file(balances_csv).await?,
+            self.balances_datasource.from_file(balances_csv).await?,
+        );
+        Ok(FinancialRecordSpecs {
+            transaction_specs,
+            commands,
+            assertion_specs,
         })
     }
 }

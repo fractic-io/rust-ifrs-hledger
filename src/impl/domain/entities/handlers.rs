@@ -1,8 +1,12 @@
-use fractic_server_error::ServerError;
+use chrono::NaiveDate;
+use fractic_server_error::{NotImplementedError, ServerError};
 use iso_currency::Currency;
 use serde::Deserialize;
 
-use crate::errors::InvalidIsoCurrencyCode;
+use crate::{
+    entities::{expense_tl, income_tl, ExpenseClassification, IncomeClassification},
+    errors::InvalidIsoCurrencyCode,
+};
 
 use super::{
     account::{
@@ -11,10 +15,11 @@ use super::{
         LiabilityAccount, LiabilityClassification,
     },
     decorator_logic::DecoratorLogic,
+    transaction::Transaction,
 };
 
 // Account handlers.
-// ---
+// ----------------------------------------------------------------------------
 
 pub trait AssetHandler:
     for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
@@ -104,7 +109,7 @@ pub trait ShareholderHandler:
 }
 
 // Other.
-// ---
+// ----------------------------------------------------------------------------
 
 pub trait PayeeHandler:
     for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
@@ -145,9 +150,28 @@ pub trait CommodityHandler:
     }
 }
 
+#[derive(Debug, Default)]
+pub struct MacroContext {
+    pub description: Option<String>,
+    pub amount: Option<f64>,
+    pub currency: Option<Currency>,
+}
+
+pub trait MacroHandler:
+    for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
+{
+    fn compile(
+        &self,
+        date: NaiveDate,
+        args: Vec<String>,
+        spec_context: Option<MacroContext>,
+        ledger_context: Option<&Vec<Transaction>>,
+    ) -> Result<String, ServerError>;
+}
+
 // Some type-magic to combine all handlers into a single type, greatly
 // shortening type parameters throughout the repo.
-// ---
+// ----------------------------------------------------------------------------
 
 pub trait Handlers: std::fmt::Debug + Send + Sync + 'static {
     type A: AssetHandler;
@@ -159,14 +183,15 @@ pub trait Handlers: std::fmt::Debug + Send + Sync + 'static {
     type D: DecoratorHandler;
     type M: CommodityHandler;
     type P: PayeeHandler;
+    type F: MacroHandler;
 }
 
 #[derive(Debug)]
-pub(crate) struct HandlersImpl<A, I, E, R, C, S, D, M, P> {
-    pub _phantom: std::marker::PhantomData<(A, I, E, R, C, S, D, M, P)>,
+pub(crate) struct HandlersImpl<A, I, E, R, C, S, D, M, P, F> {
+    pub _phantom: std::marker::PhantomData<(A, I, E, R, C, S, D, M, P, F)>,
 }
 
-impl<A, I, E, R, C, S, D, M, P> Handlers for HandlersImpl<A, I, E, R, C, S, D, M, P>
+impl<A, I, E, R, C, S, D, M, P, F> Handlers for HandlersImpl<A, I, E, R, C, S, D, M, P, F>
 where
     A: AssetHandler,
     I: IncomeHandler,
@@ -177,6 +202,7 @@ where
     D: DecoratorHandler,
     M: CommodityHandler,
     P: PayeeHandler,
+    F: MacroHandler,
 {
     type A = A;
     type I = I;
@@ -187,4 +213,78 @@ where
     type D = D;
     type M = M;
     type P = P;
+    type F = F;
+}
+
+// Make () implement all handlers, so clients can easily opt out of certain
+// handler types.
+// ----------------------------------------------------------------------------
+
+impl AssetHandler for () {
+    fn account(&self) -> AssetAccount {
+        asset_tl(AssetClassification::OtherCurrentAssets)
+    }
+}
+
+impl IncomeHandler for () {
+    fn account(&self) -> IncomeAccount {
+        income_tl(IncomeClassification::OtherNonOperatingIncome)
+    }
+}
+
+impl ExpenseHandler for () {
+    fn account(&self) -> ExpenseAccount {
+        expense_tl(ExpenseClassification::OtherNonOperatingCashExpense)
+    }
+}
+
+impl ReimbursableEntityHandler for () {
+    fn account(&self) -> LiabilityAccount {
+        liability_tl(LiabilityClassification::OtherCurrentLiabilities)
+    }
+}
+
+impl CashHandler for () {
+    fn account(&self) -> AssetAccount {
+        asset_tl(AssetClassification::CashAndCashEquivalents)
+    }
+}
+
+impl ShareholderHandler for () {
+    fn account(&self) -> EquityAccount {
+        equity_tl(EquityClassification::CommonStock)
+    }
+}
+
+impl DecoratorHandler for () {
+    fn logic<H: Handlers>(&self) -> Result<Box<dyn DecoratorLogic<H>>, ServerError> {
+        Err(NotImplementedError::new())
+    }
+}
+
+impl CommodityHandler for () {
+    fn iso_symbol(&self) -> String {
+        "USD".into()
+    }
+    fn default() -> Self {
+        ()
+    }
+}
+
+impl PayeeHandler for () {
+    fn name(&self) -> String {
+        String::new()
+    }
+}
+
+impl MacroHandler for () {
+    fn compile(
+        &self,
+        _date: NaiveDate,
+        _args: Vec<String>,
+        _spec_context: Option<MacroContext>,
+        _ledger_context: Option<&Vec<Transaction>>,
+    ) -> Result<String, ServerError> {
+        Err(NotImplementedError::new())
+    }
 }

@@ -2,7 +2,9 @@ use fractic_server_error::{CriticalError, ServerError};
 use regex::Regex;
 use std::{collections::HashMap, path::PathBuf, process::Command};
 
-use crate::errors::{HledgerCommandFailed, HledgerInvalidResponse, UnreplacedPlaceholdersRemain};
+use crate::errors::{
+    HledgerCommandFailed, HledgerQueryInvalidResponse, UnreplacedPlaceholdersRemain,
+};
 
 pub(crate) fn replace_all_placeholders_in_string(
     content: String,
@@ -73,6 +75,7 @@ pub(crate) fn hledger(
     ledger_path: &PathBuf,
     period: &str,
     query: Query,
+    ignore_closing_entries: bool,
     pivot: Option<&'static str>,
     fetch: Return,
 ) -> Result<f64, ServerError> {
@@ -99,6 +102,10 @@ pub(crate) fn hledger(
             let account_query = format!("^{}($|:)", account);
             cmd.arg("balance").arg(account_query).arg("-H");
         }
+    }
+
+    if ignore_closing_entries {
+        cmd.arg("not:tag:close");
     }
 
     if let Some(pivot) = pivot {
@@ -128,10 +135,15 @@ pub(crate) fn hledger(
                 .and_then(|r| r.ok())
                 .and_then(|r| r.iter().last().map(|s| s.to_owned()))
                 .ok_or_else(|| {
-                    HledgerInvalidResponse::with_debug(&cmd, query.dbg(), fetch.dbg(), &out_csv)
+                    HledgerQueryInvalidResponse::with_debug(
+                        &cmd,
+                        query.dbg(),
+                        fetch.dbg(),
+                        &out_csv,
+                    )
                 })?;
             amount_str.parse::<f64>().map_err(|e| {
-                HledgerInvalidResponse::with_debug(&cmd, query.dbg(), fetch.dbg(), &e)
+                HledgerQueryInvalidResponse::with_debug(&cmd, query.dbg(), fetch.dbg(), &e)
             })?
         }
         Return::SearchRowOrZero(search) => {
@@ -142,7 +154,7 @@ pub(crate) fn hledger(
                 .and_then(|r| r.iter().last().map(|s| s.to_owned()))
                 .unwrap_or("0".to_string());
             amount_str.parse::<f64>().map_err(|e| {
-                HledgerInvalidResponse::with_debug(&cmd, query.dbg(), fetch.dbg(), &e)
+                HledgerQueryInvalidResponse::with_debug(&cmd, query.dbg(), fetch.dbg(), &e)
             })?
         }
     };
@@ -170,6 +182,7 @@ pub(crate) fn hledger_register(
     ledger_path: &PathBuf,
     period: &str,
     query: RegisterQuery,
+    ignore_closing_entries: bool,
     pivot: Option<&'static str>,
     format: RegisterOutput,
 ) -> Result<Vec<String>, ServerError> {
@@ -193,6 +206,10 @@ pub(crate) fn hledger_register(
             let tag_query = format!("tag:{}={}", key, value);
             cmd.arg(tag_query).arg("-r");
         }
+    }
+
+    if ignore_closing_entries {
+        cmd.arg("not:tag:close");
     }
 
     if let Some(pivot) = pivot {

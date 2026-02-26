@@ -10,7 +10,7 @@ use super::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TransactionSpecId(pub(crate) u64);
 
-#[derive(Debug, serde_derive::Deserialize)]
+#[derive(Debug)]
 pub enum CommonStockWhileUnpaid {
     ReceivableAsset,
     NegativeEquity,
@@ -80,6 +80,7 @@ pub struct DecoratedTransactionSpec<H: Handlers> {
     pub annotations: Vec<Annotation>,
     pub ext_transactions: Vec<Transaction>,
     pub ext_assertions: Vec<Assertion>,
+    pub ext_raw: Vec<String>,
 }
 
 // --

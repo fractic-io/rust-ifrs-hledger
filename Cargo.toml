@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 async-trait = "^0.1.88"
+base64 = "0.22.1"
 chrono = "^0.4.40"
 csv = "^1.3.1"
 fractic-core = { git = "https://github.com/fractic-io/rust-core.git" }
@@ -17,5 +18,6 @@ regex = "^1.11.1"
 ron = "^0.8.1"
 serde = "^1.0.218"
 serde_derive = "^1.0.218"
+serde_json = "^1.0.140"
 textwrap = "^0.16.2"
 tokio = { version = "^1.43.0", features = ["fs"] }

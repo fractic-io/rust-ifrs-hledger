@@ -5,8 +5,8 @@ use futures::{
 };
 
 use crate::entities::{
-    DecoratedFinancialRecordSpecs, DecoratedTransactionSpec, DecoratorHandler,
-    FinancialRecordSpecs, Handlers,
+    DecoratedTransactionSpec, DecoratorHandler, FinancialRecordSpecs,
+    FinancialRecords_Intermediate1, Handlers,
 };
 
 pub(crate) struct DecoratorProcessor<H: Handlers> {
@@ -18,9 +18,10 @@ impl<H: Handlers> DecoratorProcessor<H> {
         Self { specs }
     }
 
-    pub(crate) async fn process(self) -> Result<DecoratedFinancialRecordSpecs<H>, ServerError> {
+    pub(crate) async fn process(self) -> Result<FinancialRecords_Intermediate1<H>, ServerError> {
         let FinancialRecordSpecs {
             transaction_specs,
+            commands,
             assertion_specs,
         } = self.specs;
 
@@ -64,6 +65,7 @@ impl<H: Handlers> DecoratorProcessor<H> {
                     annotations: tx.annotations,
                     ext_transactions: Default::default(),
                     ext_assertions: Default::default(),
+                    ext_raw: Default::default(),
                 };
 
                 stream::iter(tx.decorators.into_iter().map(Ok))
@@ -76,8 +78,9 @@ impl<H: Handlers> DecoratorProcessor<H> {
             .try_collect::<Vec<_>>()
             .await?;
 
-        Ok(DecoratedFinancialRecordSpecs {
+        Ok(FinancialRecords_Intermediate1 {
             transaction_specs: decorated_transaction_specs,
+            commands,
             assertion_specs,
         })
     }

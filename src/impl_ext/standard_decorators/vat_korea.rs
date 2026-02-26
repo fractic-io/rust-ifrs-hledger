@@ -87,6 +87,7 @@ impl StandardDecoratorVatKorea {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = tx;
 
         // IMPORTANT NOTE:
@@ -134,6 +135,7 @@ impl StandardDecoratorVatKorea {
                 .chain(vat_transactions)
                 .collect(),
             ext_assertions,
+            ext_raw,
         })
     }
 
@@ -156,6 +158,7 @@ impl StandardDecoratorVatKorea {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = tx;
 
         // IMPORTANT NOTE:
@@ -226,6 +229,7 @@ impl StandardDecoratorVatKorea {
                 .chain(vat_transactions)
                 .collect(),
             ext_assertions,
+            ext_raw,
         })
     }
 
@@ -268,6 +272,7 @@ impl StandardDecoratorVatKorea {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = tx;
 
         // Infer the sign of core_amount based on the sign of cleared_amount.
@@ -323,6 +328,7 @@ impl StandardDecoratorVatKorea {
                 .chain(vat_transactions)
                 .collect(),
             ext_assertions,
+            ext_raw,
         })
     }
 }

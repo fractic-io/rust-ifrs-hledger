@@ -5,8 +5,8 @@ use crate::{
     data::repositories::records_repository_impl::RecordsRepositoryImpl,
     domain::{
         logic::{
-            annotation_processor::AnnotationProcessor, decorator_processor::DecoratorProcessor,
-            spec_processor::SpecProcessor,
+            annotation_processor::AnnotationProcessor, command_processor::CommandProcessor,
+            decorator_processor::DecoratorProcessor, spec_processor::SpecProcessor,
         },
         repositories::records_repository::RecordsRepository,
     },
@@ -52,13 +52,14 @@ where
         transactions_csv: &str,
         balances_csv: &str,
     ) -> Result<(FinancialRecords, NotesToFinancialRecords), ServerError> {
-        let specs = self
+        let input = self
             .records_repository
             .from_string(transactions_csv, balances_csv)?;
-        let decorated_specs = DecoratorProcessor::new(specs).process().await?;
-        let financial_records = SpecProcessor::new(decorated_specs).process()?;
-        let notes_to_financial_records = AnnotationProcessor::new(&financial_records).process()?;
-        Ok((financial_records, notes_to_financial_records))
+        let intermediate_1 = DecoratorProcessor::new(input).process().await?;
+        let intermediate_2 = SpecProcessor::new(intermediate_1).process()?;
+        let output = CommandProcessor::new(intermediate_2).process()?;
+        let output_notes = AnnotationProcessor::new(&output).process()?;
+        Ok((output, output_notes))
     }
 
     async fn from_file<P>(
@@ -69,14 +70,15 @@ where
     where
         P: AsRef<std::path::Path> + Send,
     {
-        let specs = self
+        let input = self
             .records_repository
             .from_file(transactions_csv, balances_csv)
             .await?;
-        let decorated_specs = DecoratorProcessor::new(specs).process().await?;
-        let financial_records = SpecProcessor::new(decorated_specs).process()?;
-        let notes_to_financial_records = AnnotationProcessor::new(&financial_records).process()?;
-        Ok((financial_records, notes_to_financial_records))
+        let intermediate_1 = DecoratorProcessor::new(input).process().await?;
+        let intermediate_2 = SpecProcessor::new(intermediate_1).process()?;
+        let output = CommandProcessor::new(intermediate_2).process()?;
+        let output_notes = AnnotationProcessor::new(&output).process()?;
+        Ok((output, output_notes))
     }
 }
 

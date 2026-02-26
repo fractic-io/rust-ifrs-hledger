@@ -4,16 +4,27 @@ use crate::{
     domain::usecases::process_usecase::{ProcessUsecase as _, ProcessUsecaseImpl},
     entities::{
         AssetHandler, CashHandler, CommodityHandler, DecoratorHandler, ExpenseHandler,
-        FinancialRecords, HandlersImpl, IncomeHandler, NotesToFinancialRecords, PayeeHandler,
-        ReimbursableEntityHandler, ShareholderHandler,
+        FinancialRecords, HandlersImpl, IncomeHandler, MacroHandler, NotesToFinancialRecords,
+        PayeeHandler, ReimbursableEntityHandler, ShareholderHandler,
     },
     presentation::hledger_printer::HledgerPrinter,
 };
 
 pub type Ledger = String;
 
-pub struct IfrsHledgerUtil<A, I, E, C, S, R, D, M, P>
-where
+pub struct IfrsHledgerUtil<
+    // `()` provides default (placeholder) implementations for all handlers.
+    A = (),
+    I = (),
+    E = (),
+    C = (),
+    S = (),
+    R = (),
+    D = (),
+    M = (), // (USD)
+    P = (),
+    F = (),
+> where
     A: AssetHandler,
     I: IncomeHandler,
     E: ExpenseHandler,
@@ -23,12 +34,13 @@ where
     D: DecoratorHandler,
     M: CommodityHandler,
     P: PayeeHandler,
+    F: MacroHandler,
 {
-    process_usecase: ProcessUsecaseImpl<HandlersImpl<A, I, E, R, C, S, D, M, P>>,
+    process_usecase: ProcessUsecaseImpl<HandlersImpl<A, I, E, R, C, S, D, M, P, F>>,
     printer: HledgerPrinter,
 }
 
-impl<A, I, E, C, S, R, D, M, P> IfrsHledgerUtil<A, I, E, C, S, R, D, M, P>
+impl<A, I, E, C, S, R, D, M, P, F> IfrsHledgerUtil<A, I, E, C, S, R, D, M, P, F>
 where
     A: AssetHandler,
     I: IncomeHandler,
@@ -39,6 +51,7 @@ where
     D: DecoratorHandler,
     M: CommodityHandler,
     P: PayeeHandler,
+    F: MacroHandler,
 {
     pub fn new() -> Self {
         Self {

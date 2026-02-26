@@ -13,8 +13,8 @@ use crate::{
     },
     entities::{
         Account, AccountingLogic, Annotation, Assertion, AssetHandler, BackingAccount, CashHandler,
-        CommodityHandler, CommonStockWhileUnpaid, DecoratedFinancialRecordSpecs,
-        DecoratedTransactionSpec, ExpenseAccount, ExpenseHandler, FinancialRecords, Handlers,
+        CommodityHandler, CommonStockWhileUnpaid, DecoratedTransactionSpec, ExpenseAccount,
+        ExpenseHandler, FinancialRecords_Intermediate1, FinancialRecords_Intermediate2, Handlers,
         IncomeHandler, LiabilityAccount, PayeeHandler, ReimbursableEntityHandler,
         ShareholderHandler, Transaction, TransactionLabel, TransactionPosting, TransactionSpecId,
     },
@@ -34,7 +34,7 @@ use crate::{
 use super::utils::PopByAmount;
 
 pub(crate) struct SpecProcessor<H: Handlers> {
-    specs: DecoratedFinancialRecordSpecs<H>,
+    specs: FinancialRecords_Intermediate1<H>,
 }
 
 /// Store historical information of variables expenses, to use for making
@@ -78,12 +78,13 @@ pub(crate) enum ReimbursementStateDelta {
     },
 }
 
-struct Transformation {
+struct Delta {
     spec_id: TransactionSpecId,
     label: TransactionLabel,
     transactions: Vec<Transaction>,
     ext_transactions: Vec<Transaction>,
     ext_assertions: Vec<Assertion>,
+    ext_raw: Vec<String>,
     expense_history_delta: Option<ExpenseHistoryDelta>,
     reimbursement_state_delta: Option<ReimbursementStateDelta>,
     annotations: Vec<Annotation>,
@@ -92,6 +93,7 @@ struct Transformation {
 struct FoldState {
     transactions: Vec<Transaction>,
     assertions: Vec<Assertion>,
+    ledger_extensions: Vec<String>,
     expense_history_lookup: HashMap<ExpenseAccount, ExpenseHistory>,
     label_lookup: HashMap<TransactionSpecId, TransactionLabel>,
     annotations_lookup: HashMap<TransactionSpecId, Vec<Annotation>>,
@@ -103,6 +105,7 @@ impl FoldState {
         Self {
             transactions: Vec::new(),
             assertions: Vec::new(),
+            ledger_extensions: Vec::new(),
             expense_history_lookup: HashMap::new(),
             label_lookup: HashMap::new(),
             annotations_lookup: HashMap::new(),
@@ -111,10 +114,11 @@ impl FoldState {
     }
 
     /// Update current state with the given transformation.
-    fn step(self, t: Transformation) -> Result<Self, ServerError> {
+    fn step(self, t: Delta) -> Result<Self, ServerError> {
         let FoldState {
             mut transactions,
             mut assertions,
+            mut ledger_extensions,
             mut expense_history_lookup,
             mut label_lookup,
             mut annotations_lookup,
@@ -144,6 +148,7 @@ impl FoldState {
         transactions.extend(t.transactions);
         transactions.extend(t.ext_transactions);
         assertions.extend(t.ext_assertions);
+        ledger_extensions.extend(t.ext_raw);
 
         if let Some(delta) = t.expense_history_delta {
             let expense_history = expense_history_lookup.entry(delta.account).or_default();
@@ -165,6 +170,7 @@ impl FoldState {
         Ok(Self {
             transactions,
             assertions,
+            ledger_extensions,
             expense_history_lookup,
             label_lookup,
             annotations_lookup,
@@ -190,14 +196,15 @@ macro_rules! amount_should_be_positive {
 }
 
 impl<H: Handlers> SpecProcessor<H> {
-    pub(crate) fn new(specs: DecoratedFinancialRecordSpecs<H>) -> Self {
+    pub(crate) fn new(specs: FinancialRecords_Intermediate1<H>) -> Self {
         Self { specs }
     }
 
-    pub(crate) fn process(self) -> Result<FinancialRecords, ServerError> {
-        let DecoratedFinancialRecordSpecs {
+    pub(crate) fn process(self) -> Result<FinancialRecords_Intermediate2<H>, ServerError> {
+        let FinancialRecords_Intermediate1 {
             mut transaction_specs,
             assertion_specs,
+            commands,
         } = self.specs;
 
         // Important for reimbursement tracking.
@@ -207,7 +214,7 @@ impl<H: Handlers> SpecProcessor<H> {
             transaction_specs
                 .into_iter()
                 .try_fold(FoldState::new(), |state, spec| {
-                    let transformation = match &spec.accounting_logic {
+                    let delta = match &spec.accounting_logic {
                         AccountingLogic::CommonStock { .. } => Self::process_common_stock(spec)?,
                         AccountingLogic::ShareIssuanceCost => Self::process_cost_of_equity(spec)?,
                         AccountingLogic::SimpleExpense(..) => Self::process_simple_expense(spec)?,
@@ -234,7 +241,7 @@ impl<H: Handlers> SpecProcessor<H> {
                         }
                         AccountingLogic::ClearVat { .. } => Self::process_clear_vat(spec)?,
                     };
-                    state.step(transformation)
+                    state.step(delta)
                 })?;
 
         let assertions = assertion_specs
@@ -252,9 +259,11 @@ impl<H: Handlers> SpecProcessor<H> {
             .chain(transactions_fold_result.assertions.into_iter())
             .collect();
 
-        Ok(FinancialRecords {
+        Ok(FinancialRecords_Intermediate2 {
             transactions: transactions_fold_result.transactions,
             assertions,
+            commands,
+            ledger_extensions: transactions_fold_result.ledger_extensions,
             label_lookup: transactions_fold_result.label_lookup,
             annotations_lookup: transactions_fold_result.annotations_lookup,
             unreimbursed_entries: transactions_fold_result
@@ -269,9 +278,7 @@ impl<H: Handlers> SpecProcessor<H> {
         })
     }
 
-    fn process_common_stock(
-        spec: DecoratedTransactionSpec<H>,
-    ) -> Result<Transformation, ServerError> {
+    fn process_common_stock(spec: DecoratedTransactionSpec<H>) -> Result<Delta, ServerError> {
         let DecoratedTransactionSpec {
             id,
             accrual_start: accrual_date,
@@ -290,6 +297,7 @@ impl<H: Handlers> SpecProcessor<H> {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -368,7 +376,7 @@ impl<H: Handlers> SpecProcessor<H> {
             return Err(CommonStockCannotBePrepaid::new(&description));
         };
 
-        Ok(Transformation {
+        Ok(Delta {
             spec_id: id,
             label: TransactionLabel {
                 payee: payee.name(),
@@ -383,13 +391,12 @@ impl<H: Handlers> SpecProcessor<H> {
             transactions,
             ext_transactions,
             ext_assertions,
+            ext_raw,
             annotations,
         })
     }
 
-    fn process_cost_of_equity(
-        spec: DecoratedTransactionSpec<H>,
-    ) -> Result<Transformation, ServerError> {
+    fn process_cost_of_equity(spec: DecoratedTransactionSpec<H>) -> Result<Delta, ServerError> {
         let DecoratedTransactionSpec {
             id,
             accrual_start: accrual_date,
@@ -404,6 +411,7 @@ impl<H: Handlers> SpecProcessor<H> {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -514,7 +522,7 @@ impl<H: Handlers> SpecProcessor<H> {
         // the financial records.
         let note = Annotation::ShareIssuanceCostsDirectedToRetainedEarnings;
 
-        Ok(Transformation {
+        Ok(Delta {
             spec_id: id,
             label: TransactionLabel {
                 payee: payee.name(),
@@ -529,13 +537,12 @@ impl<H: Handlers> SpecProcessor<H> {
             transactions,
             ext_transactions,
             ext_assertions,
+            ext_raw,
             annotations: annotations.into_iter().chain(once(note)).collect(),
         })
     }
 
-    fn process_simple_expense(
-        spec: DecoratedTransactionSpec<H>,
-    ) -> Result<Transformation, ServerError> {
+    fn process_simple_expense(spec: DecoratedTransactionSpec<H>) -> Result<Delta, ServerError> {
         let DecoratedTransactionSpec {
             id,
             accrual_start: accrual_date,
@@ -550,6 +557,7 @@ impl<H: Handlers> SpecProcessor<H> {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -656,7 +664,7 @@ impl<H: Handlers> SpecProcessor<H> {
             ]
         };
 
-        Ok(Transformation {
+        Ok(Delta {
             spec_id: id,
             label: TransactionLabel {
                 payee: payee.name(),
@@ -671,13 +679,12 @@ impl<H: Handlers> SpecProcessor<H> {
             transactions,
             ext_transactions,
             ext_assertions,
+            ext_raw,
             annotations,
         })
     }
 
-    fn process_capitalize(
-        spec: DecoratedTransactionSpec<H>,
-    ) -> Result<Transformation, ServerError> {
+    fn process_capitalize(spec: DecoratedTransactionSpec<H>) -> Result<Delta, ServerError> {
         let DecoratedTransactionSpec {
             id,
             accrual_start: accrual_date,
@@ -692,6 +699,7 @@ impl<H: Handlers> SpecProcessor<H> {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -806,7 +814,7 @@ impl<H: Handlers> SpecProcessor<H> {
             ]
         };
 
-        Ok(Transformation {
+        Ok(Delta {
             spec_id: id,
             label: TransactionLabel {
                 payee: payee.name(),
@@ -821,11 +829,12 @@ impl<H: Handlers> SpecProcessor<H> {
             transactions,
             ext_transactions,
             ext_assertions,
+            ext_raw,
             annotations,
         })
     }
 
-    fn process_amortize(spec: DecoratedTransactionSpec<H>) -> Result<Transformation, ServerError> {
+    fn process_amortize(spec: DecoratedTransactionSpec<H>) -> Result<Delta, ServerError> {
         let DecoratedTransactionSpec {
             id,
             accrual_start,
@@ -840,6 +849,7 @@ impl<H: Handlers> SpecProcessor<H> {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -849,7 +859,7 @@ impl<H: Handlers> SpecProcessor<H> {
         let mut transactions = Vec::new();
 
         // Record the capitalization.
-        let cap_transformation = Self::process_capitalize(DecoratedTransactionSpec {
+        let cap_delta = Self::process_capitalize(DecoratedTransactionSpec {
             id,
             accrual_start,
             accrual_end: None,
@@ -863,8 +873,9 @@ impl<H: Handlers> SpecProcessor<H> {
             annotations: annotations.clone(),
             ext_transactions: Default::default(),
             ext_assertions: Default::default(),
+            ext_raw: ext_raw.clone(),
         })?;
-        transactions.extend(cap_transformation.transactions);
+        transactions.extend(cap_delta.transactions);
 
         let accrual_account = a_handler
             .upon_accrual()
@@ -905,7 +916,7 @@ impl<H: Handlers> SpecProcessor<H> {
             });
         }
 
-        Ok(Transformation {
+        Ok(Delta {
             spec_id: id,
             label: TransactionLabel {
                 payee: payee.name(),
@@ -920,13 +931,12 @@ impl<H: Handlers> SpecProcessor<H> {
             transactions,
             ext_transactions,
             ext_assertions,
+            ext_raw,
             annotations,
         })
     }
 
-    fn process_fixed_expense(
-        spec: DecoratedTransactionSpec<H>,
-    ) -> Result<Transformation, ServerError> {
+    fn process_fixed_expense(spec: DecoratedTransactionSpec<H>) -> Result<Delta, ServerError> {
         let DecoratedTransactionSpec {
             id,
             accrual_start,
@@ -941,6 +951,7 @@ impl<H: Handlers> SpecProcessor<H> {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -1045,7 +1056,7 @@ impl<H: Handlers> SpecProcessor<H> {
             ],
         });
 
-        Ok(Transformation {
+        Ok(Delta {
             spec_id: id,
             label: TransactionLabel {
                 payee: payee.name(),
@@ -1060,6 +1071,7 @@ impl<H: Handlers> SpecProcessor<H> {
             transactions,
             ext_transactions,
             ext_assertions,
+            ext_raw,
             annotations,
         })
     }
@@ -1067,7 +1079,7 @@ impl<H: Handlers> SpecProcessor<H> {
     /// Initiates variable expense calculations with a manual estimate.
     fn process_variable_expense_init(
         spec: DecoratedTransactionSpec<H>,
-    ) -> Result<Transformation, ServerError> {
+    ) -> Result<Delta, ServerError> {
         let DecoratedTransactionSpec {
             accrual_start,
             accrual_end: Some(accrual_end),
@@ -1099,7 +1111,7 @@ impl<H: Handlers> SpecProcessor<H> {
     fn process_variable_expense(
         spec: DecoratedTransactionSpec<H>,
         history_lookup: &HashMap<ExpenseAccount, ExpenseHistory>,
-    ) -> Result<Transformation, ServerError> {
+    ) -> Result<Delta, ServerError> {
         let DecoratedTransactionSpec {
             accrual_start,
             accounting_logic: AccountingLogic::VariableExpense(ref e_handler),
@@ -1139,7 +1151,7 @@ impl<H: Handlers> SpecProcessor<H> {
         e_handler: H::E,
         estimated_daily_rate: f64,
         is_init: bool,
-    ) -> Result<Transformation, ServerError> {
+    ) -> Result<Delta, ServerError> {
         let DecoratedTransactionSpec {
             id,
             accrual_start,
@@ -1154,6 +1166,7 @@ impl<H: Handlers> SpecProcessor<H> {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -1253,7 +1266,7 @@ impl<H: Handlers> SpecProcessor<H> {
         // the financial records.
         let note = Annotation::VariableExpense;
 
-        Ok(Transformation {
+        Ok(Delta {
             spec_id: id,
             label: TransactionLabel {
                 payee: payee.name(),
@@ -1268,13 +1281,12 @@ impl<H: Handlers> SpecProcessor<H> {
             transactions,
             ext_transactions,
             ext_assertions,
+            ext_raw,
             annotations: annotations.into_iter().chain(once(note)).collect(),
         })
     }
 
-    fn process_immaterial_income(
-        spec: DecoratedTransactionSpec<H>,
-    ) -> Result<Transformation, ServerError> {
+    fn process_immaterial_income(spec: DecoratedTransactionSpec<H>) -> Result<Delta, ServerError> {
         let DecoratedTransactionSpec {
             id,
             accrual_start: _, // Ignored.
@@ -1289,6 +1301,7 @@ impl<H: Handlers> SpecProcessor<H> {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -1317,7 +1330,7 @@ impl<H: Handlers> SpecProcessor<H> {
         // the financial records.
         let note = Annotation::ImmaterialIncome;
 
-        Ok(Transformation {
+        Ok(Delta {
             spec_id: id,
             label: TransactionLabel {
                 payee: payee.name(),
@@ -1326,15 +1339,14 @@ impl<H: Handlers> SpecProcessor<H> {
             transactions: vec![tx],
             ext_transactions,
             ext_assertions,
+            ext_raw,
             expense_history_delta: None,
             reimbursement_state_delta: None,
             annotations: annotations.into_iter().chain(once(note)).collect(),
         })
     }
 
-    fn process_immaterial_expense(
-        spec: DecoratedTransactionSpec<H>,
-    ) -> Result<Transformation, ServerError> {
+    fn process_immaterial_expense(spec: DecoratedTransactionSpec<H>) -> Result<Delta, ServerError> {
         let DecoratedTransactionSpec {
             id,
             accrual_start: _, // Ignored.
@@ -1349,6 +1361,7 @@ impl<H: Handlers> SpecProcessor<H> {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -1378,7 +1391,7 @@ impl<H: Handlers> SpecProcessor<H> {
         let note = Annotation::ImmaterialExpense;
 
         let transactions = vec![tx];
-        Ok(Transformation {
+        Ok(Delta {
             spec_id: id,
             label: TransactionLabel {
                 payee: payee.name(),
@@ -1393,6 +1406,7 @@ impl<H: Handlers> SpecProcessor<H> {
             transactions,
             ext_transactions,
             ext_assertions,
+            ext_raw,
             annotations: annotations.into_iter().chain(once(note)).collect(),
         })
     }
@@ -1400,7 +1414,7 @@ impl<H: Handlers> SpecProcessor<H> {
     fn process_reimburse(
         spec: DecoratedTransactionSpec<H>,
         reimbursement_state: &ReimbursementState,
-    ) -> Result<Transformation, ServerError> {
+    ) -> Result<Delta, ServerError> {
         let AccountingLogic::Reimburse(ref r_handler) = spec.accounting_logic else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
         };
@@ -1411,7 +1425,7 @@ impl<H: Handlers> SpecProcessor<H> {
     fn process_reimburse_partial(
         spec: DecoratedTransactionSpec<H>,
         reimbursement_state: &ReimbursementState,
-    ) -> Result<Transformation, ServerError> {
+    ) -> Result<Delta, ServerError> {
         let AccountingLogic::ReimbursePartial(ref r_handler) = spec.accounting_logic else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
         };
@@ -1424,7 +1438,7 @@ impl<H: Handlers> SpecProcessor<H> {
         r_account: LiabilityAccount,
         expect_remaining: bool,
         reimbursement_state: &ReimbursementState,
-    ) -> Result<Transformation, ServerError> {
+    ) -> Result<Delta, ServerError> {
         let DecoratedTransactionSpec {
             id,
             accrual_start: _,
@@ -1439,6 +1453,7 @@ impl<H: Handlers> SpecProcessor<H> {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -1495,7 +1510,7 @@ impl<H: Handlers> SpecProcessor<H> {
             currency: commodity.currency()?,
         };
 
-        Ok(Transformation {
+        Ok(Delta {
             spec_id: id,
             label: TransactionLabel {
                 payee: payee.name(),
@@ -1504,6 +1519,7 @@ impl<H: Handlers> SpecProcessor<H> {
             transactions: vec![tx],
             ext_transactions,
             ext_assertions: ext_assertions.into_iter().chain(once(assrt)).collect(),
+            ext_raw,
             expense_history_delta: None,
             reimbursement_state_delta: Some(ReimbursementStateDelta::Pop {
                 date: payment_date,
@@ -1514,7 +1530,7 @@ impl<H: Handlers> SpecProcessor<H> {
         })
     }
 
-    fn process_clear_vat(spec: DecoratedTransactionSpec<H>) -> Result<Transformation, ServerError> {
+    fn process_clear_vat(spec: DecoratedTransactionSpec<H>) -> Result<Delta, ServerError> {
         let DecoratedTransactionSpec {
             id,
             accrual_start: accrual_date,
@@ -1529,6 +1545,7 @@ impl<H: Handlers> SpecProcessor<H> {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -1603,7 +1620,7 @@ impl<H: Handlers> SpecProcessor<H> {
             ]
         };
 
-        Ok(Transformation {
+        Ok(Delta {
             spec_id: id,
             label: TransactionLabel {
                 payee: payee.name(),
@@ -1612,6 +1629,7 @@ impl<H: Handlers> SpecProcessor<H> {
             transactions: vec![tx],
             ext_transactions,
             ext_assertions: ext_assertions.into_iter().chain(assrt).collect(),
+            ext_raw,
             expense_history_delta: None,
             reimbursement_state_delta: None,
             annotations,

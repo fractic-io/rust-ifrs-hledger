@@ -86,11 +86,11 @@ define_client_error!(
     { spec_id: &TransactionSpecId, account: &LiabilityAccount, amount: f64 }
 );
 
-// Custom statement generation.
-define_internal_error!(
-    UnreplacedPlaceholdersRemain,
-    "Unexpected placeholders remain: {unreplaced:?}.",
-    { unreplaced: &Vec<String> }
+// Hledger-related.
+define_client_error!(
+    HledgerInvalidPath,
+    "Invalid path to hledger ledger file: '{ledger}'.",
+    { ledger: &str }
 );
 define_internal_error!(
     HledgerCommandFailed,
@@ -98,12 +98,26 @@ define_internal_error!(
     { ledger: &str, command: &Command }
 );
 define_internal_error!(
-    HledgerInvalidResponse,
-    "hledger command returned an invalid response. Could not parse total change during the given period:\n\n{command:?}\n\nQuery: {query}\n\nReturn: {fetch}",
+    HledgerQueryInvalidResponse,
+    "hledger command returned an unexpected response. Could not parse total change during the given period:\n\n{command:?}\n\nQuery: {query}\n\nReturn: {fetch}",
     { command: &Command, query: String, fetch: String }
 );
+define_internal_error!(
+    HledgerCloseInvalidResponse,
+    "'hledger close' returned an unexpected response: {details}.",
+    { details: String }
+);
+
+// Custom statement generation.
+define_internal_error!(
+    UnreplacedPlaceholdersRemain,
+    "Unexpected placeholders remain: {unreplaced:?}.",
+    { unreplaced: &Vec<String> }
+);
+
+// Derived record generation.
 define_client_error!(
-    HledgerInvalidPath,
-    "Invalid path to hledger ledger file: '{ledger}'.",
-    { ledger: &str }
+    NoAccountsToClose,
+    "No income/expense accounts to close for year {year}. Does the ledger already have a close entry for {year}?",
+    { year: i32 }
 );

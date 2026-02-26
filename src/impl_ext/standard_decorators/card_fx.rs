@@ -115,6 +115,7 @@ impl StandardDecoratorCardFx {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = tx;
 
         // IMPORTANT NOTE:
@@ -193,6 +194,7 @@ impl StandardDecoratorCardFx {
                 .chain(vat_transactions)
                 .collect(),
             ext_assertions,
+            ext_raw,
         })
     }
 
@@ -216,6 +218,7 @@ impl StandardDecoratorCardFx {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = tx;
 
         // IMPORTANT NOTE:
@@ -322,6 +325,7 @@ impl StandardDecoratorCardFx {
                 )
                 .collect(),
             ext_assertions,
+            ext_raw,
         })
     }
 }
