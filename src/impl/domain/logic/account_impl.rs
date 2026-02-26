@@ -128,9 +128,10 @@ impl Account {
                     Direction::Inflow => Some(CashflowTracingTag::CashInflowIssuanceShares),
                     Direction::Outflow => None,
                 },
-                EquityClassification::TreasuryStock => match direction.into() {
-                    Direction::Inflow => None,
-                    Direction::Outflow => Some(CashflowTracingTag::CashOutflowShareBuybacks),
+                EquityClassification::UnpaidShareCapital => None,
+                EquityClassification::SharePremium => match direction.into() {
+                    Direction::Inflow => Some(CashflowTracingTag::CashInflowIssuanceShares),
+                    Direction::Outflow => Some(CashflowTracingTag::CashOutflowShareIssuanceCosts),
                 },
                 EquityClassification::ContributedSurplus => match direction.into() {
                     // We must also track 'cash inflows' that actually come from
@@ -139,12 +140,22 @@ impl Account {
                     Direction::Inflow => Some(CashflowTracingTag::NonCashPayment),
                     Direction::Outflow => None,
                 },
-                EquityClassification::RetainedEarnings => None,
-                EquityClassification::ShareIssuanceCosts => match direction.into() {
+                EquityClassification::TreasuryStock => match direction.into() {
+                    Direction::Inflow => None,
+                    Direction::Outflow => Some(CashflowTracingTag::CashOutflowShareBuybacks),
+                },
+                EquityClassification::DiscountOnStockIssuance => match direction.into() {
                     Direction::Inflow => None,
                     Direction::Outflow => Some(CashflowTracingTag::CashOutflowShareIssuanceCosts),
                 },
-                EquityClassification::UnpaidShareCapital => None,
+                EquityClassification::RetainedEarnings => None,
+                EquityClassification::RetainedEarningsOpt {
+                    on_inflow,
+                    on_outflow,
+                } => match direction.into() {
+                    Direction::Inflow => on_inflow.clone(),
+                    Direction::Outflow => on_outflow.clone(),
+                },
             },
         }
     }

@@ -1,3 +1,5 @@
+use crate::entities::CashflowTracingTag;
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Account {
     Asset(AssetAccount),
@@ -155,35 +157,47 @@ pub enum ExpenseClassification {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, PartialOrd, Ord)]
 pub enum EquityClassification {
-    // Contributed capital.
+    // Share capital.
     // =========================================================================
     //
     CommonStock,
     PreferredStock,
-    TreasuryStock,
+    //
+    /// Some accounting standards (e.g. certain EU) require unpaid share capital
+    /// to be recorded as negative equity (instead of a receivable asset).
+    UnpaidShareCapital,
+
+    // Capital surplus.
+    // =========================================================================
+    //
+    /// Excess paid over the par-value of shares issued.
+    SharePremium,
     //
     /// Surplus payments made by shareholders without expectation of
     /// reimbursement or share issuance.
     ContributedSurplus,
 
+    // Capital adjustments.
+    // =========================================================================
+    //
+    TreasuryStock,
+    //
+    /// Costs directly associated with issuing shares, such as legal and
+    /// registration fees. Such costs are generally first debited against
+    /// SharePremium, and any remainder (under some standards, e.g. Korea) must
+    /// be debited against this contra-equity account. Note that other standards
+    /// may permit debiting such costs directly against RetainedEarnings.
+    DiscountOnStockIssuance,
+
     // Earned capital.
     // =========================================================================
     //
     RetainedEarnings,
-    //
-    /// Costs directly associated with issuing shares, such as legal and
-    /// registration fees. IMPORTANT: Since share premium is currently not
-    /// supported, these costs are directly fed into RetainedEarnings. They have
-    /// a separate classification here since they should trigger different cash
-    /// flow tagging.
-    ShareIssuanceCosts,
-
-    // Other.
-    // =========================================================================
-    //
-    /// Some accounting standards require unpaid share capital to be recorded as
-    /// negative equity (instead of a receivable asset).
-    UnpaidShareCapital,
+    RetainedEarningsOpt {
+        // Allow overriding the default cashflow tagging.
+        on_inflow: Option<CashflowTracingTag>,
+        on_outflow: Option<CashflowTracingTag>,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]

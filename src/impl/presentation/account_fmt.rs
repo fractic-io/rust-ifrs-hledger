@@ -129,19 +129,24 @@ impl Account {
             Account::Equity(s) => format!(
                 "Equity:{}{}",
                 match &s.1 {
-                    // Contributed capital.
-                    EquityClassification::CommonStock => "ContributedCapital:CommonStock",
-                    EquityClassification::PreferredStock => "ContributedCapital:PreferredStock",
-                    EquityClassification::TreasuryStock => "ContributedCapital:TreasuryStock",
-                    EquityClassification::ContributedSurplus =>
-                        "ContributedCapital:ContributedSurplus",
+                    // Share capital.
+                    EquityClassification::CommonStock => "ShareCapital:CommonStock",
+                    EquityClassification::PreferredStock => "ShareCapital:PreferredStock",
+                    EquityClassification::UnpaidShareCapital => "Other:UnpaidShareCapital",
+
+                    // Capital surplus.
+                    EquityClassification::SharePremium => "CapitalSurplus:SharePremium",
+                    EquityClassification::ContributedSurplus => "CapitalSurplus:ContributedSurplus",
+
+                    // Capital adjustments.
+                    EquityClassification::TreasuryStock => "CapitalAdjustments:TreasuryStock",
+                    EquityClassification::DiscountOnStockIssuance =>
+                        "CapitalAdjustments:DiscountOnStockIssuance",
 
                     // Earned capital.
                     EquityClassification::RetainedEarnings
-                    | EquityClassification::ShareIssuanceCosts => "EarnedCapital:RetainedEarnings",
-
-                    // Other.
-                    EquityClassification::UnpaidShareCapital => "Other:UnpaidShareCapital",
+                    | EquityClassification::RetainedEarningsOpt { .. } =>
+                        "EarnedCapital:RetainedEarnings",
                 },
                 match &s.0 {
                     Some(name) => format!(":{}", name),
@@ -160,5 +165,11 @@ impl Account {
             Account::Expense(_) => 'X',
             Account::Equity(_) => 'E',
         }
+    }
+}
+
+impl std::fmt::Display for Account {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.ledger())
     }
 }
