@@ -16,7 +16,7 @@ use crate::{
         Account, AccountingLogic, Annotation, Assertion, AssetHandler, BackingAccount, CashHandler,
         Command, CommandLogic, CommodityHandler, CommonStockWhileUnpaid,
         DecoratedFinancialRecordSpecs, DecoratedTransactionSpec, ExpenseAccount, ExpenseHandler,
-        FinancialRecords, Handlers, IncomeHandler, LiabilityAccount, MacroHandler, MacroInputs,
+        FinancialRecords, Handlers, IncomeHandler, LiabilityAccount, MacroContext, MacroHandler,
         MetaEntry, PayeeHandler, ReimbursableEntityHandler, ShareholderHandler, Transaction,
         TransactionLabel, TransactionPosting, TransactionSpecId,
     },
@@ -1693,14 +1693,14 @@ impl<H: Handlers> SpecProcessor<H> {
             CommandLogic::Correction(logic) => Ok(MetaEntry::Correction {
                 date,
                 macro_output: logic.compile(
-                    MacroInputs {
-                        date,
-                        arguments,
+                    date,
+                    arguments,
+                    Some(MacroContext {
                         description,
                         amount,
                         currency: commodity.map(|c| c.currency()).transpose()?,
-                    },
-                    transactions,
+                    }),
+                    Some(transactions),
                 )?,
             }),
         }

@@ -150,9 +150,8 @@ pub trait CommodityHandler:
     }
 }
 
-pub struct MacroInputs {
-    pub date: NaiveDate,
-    pub arguments: Vec<String>,
+#[derive(Debug, Default)]
+pub struct MacroContext {
     pub description: Option<String>,
     pub amount: Option<f64>,
     pub currency: Option<Currency>,
@@ -163,8 +162,10 @@ pub trait MacroHandler:
 {
     fn compile(
         &self,
-        inputs: MacroInputs,
-        transactions: &Vec<Transaction>,
+        date: NaiveDate,
+        args: Vec<String>,
+        spec_context: Option<MacroContext>,
+        ledger_context: Option<&Vec<Transaction>>,
     ) -> Result<String, ServerError>;
 }
 
@@ -279,8 +280,10 @@ impl PayeeHandler for () {
 impl MacroHandler for () {
     fn compile(
         &self,
-        _inputs: MacroInputs,
-        _transactions: &Vec<Transaction>,
+        _date: NaiveDate,
+        _args: Vec<String>,
+        _spec_context: Option<MacroContext>,
+        _ledger_context: Option<&Vec<Transaction>>,
     ) -> Result<String, ServerError> {
         Err(NotImplementedError::new())
     }
