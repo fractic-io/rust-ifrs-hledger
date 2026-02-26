@@ -72,6 +72,7 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                         // Parse command entry.
                         // --
 
+                        // Extract from CSV record.
                         let raw_date = r.get(2).unwrap_or("").trim();
                         let raw_exec = r.get(3).unwrap_or("").trim();
                         let raw_arguments = r.get(4).unwrap_or("").trim();
@@ -80,6 +81,7 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                         let raw_commodity = r.get(8).unwrap_or("").trim();
                         let raw_notes = r.get(10).unwrap_or("");
 
+                        // Parse.
                         let date: ISODateModel = ISODateModel::from_str(raw_date)?;
                         let exec: CommandLogicModel<H::F> = from_str(raw_exec)
                             .map_err(|e| InvalidRon::with_debug("CommandLogic", &e))?;
@@ -109,6 +111,7 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                             raw_notes.lines().map(|n| n.into()).collect()
                         };
 
+                        // Build.
                         commands.push(Command {
                             id: CommandSpecId((i + 2) as u64),
                             date: date.into(),
