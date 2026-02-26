@@ -430,7 +430,7 @@ fn extract_and_normalize_non_account_lines(ledger_content: &str) -> String {
 /// Attach a tag to all transaction entries detected in the ledger content.
 fn attach_transaction_tag(ledger_content: String, tag: &str) -> String {
     let lines: Vec<&str> = ledger_content.lines().collect();
-    lines
+    let out = lines
         .iter()
         .enumerate()
         .map(|(idx, line)| {
@@ -445,7 +445,8 @@ fn attach_transaction_tag(ledger_content: String, tag: &str) -> String {
             }
         })
         .collect::<Vec<_>>()
-        .join("\n")
+        .join("\n");
+    format!("{}\n", out)
 }
 
 /// Attach notes to all transaction entries detected in the ledger content.
@@ -470,7 +471,11 @@ fn attach_transaction_notes(ledger_content: String, notes: &[String]) -> String 
             }
 
             for note in notes {
-                output_lines.extend(format_note(note));
+                output_lines.extend(
+                    format_note(note)
+                        .into_iter()
+                        .map(|line| line.trim_end().to_string()),
+                );
             }
             continue;
         }
@@ -479,7 +484,8 @@ fn attach_transaction_notes(ledger_content: String, notes: &[String]) -> String 
         index += 1;
     }
 
-    output_lines.join("\n")
+    let out = output_lines.join("\n");
+    format!("{}\n", out)
 }
 
 // EOY-entry helpers.
