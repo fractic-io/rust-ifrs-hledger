@@ -4,7 +4,7 @@ use crate::{
     domain::usecases::process_usecase::{ProcessUsecase as _, ProcessUsecaseImpl},
     entities::{
         AssetHandler, CashHandler, CommodityHandler, DecoratorHandler, ExpenseHandler,
-        FinancialRecords, HandlersImpl, IncomeHandler, NotesToFinancialRecords, OperationHandler,
+        FinancialRecords, HandlersImpl, IncomeHandler, MacroHandler, NotesToFinancialRecords,
         PayeeHandler, ReimbursableEntityHandler, ShareholderHandler,
     },
     presentation::hledger_printer::HledgerPrinter,
@@ -23,7 +23,7 @@ pub struct IfrsHledgerUtil<
     D = (),
     M = (), // (USD)
     P = (),
-    O = (),
+    F = (),
 > where
     A: AssetHandler,
     I: IncomeHandler,
@@ -34,13 +34,13 @@ pub struct IfrsHledgerUtil<
     D: DecoratorHandler,
     M: CommodityHandler,
     P: PayeeHandler,
-    O: OperationHandler,
+    F: MacroHandler,
 {
-    process_usecase: ProcessUsecaseImpl<HandlersImpl<A, I, E, R, C, S, D, M, P, O>>,
+    process_usecase: ProcessUsecaseImpl<HandlersImpl<A, I, E, R, C, S, D, M, P, F>>,
     printer: HledgerPrinter,
 }
 
-impl<A, I, E, C, S, R, D, M, P, O> IfrsHledgerUtil<A, I, E, C, S, R, D, M, P, O>
+impl<A, I, E, C, S, R, D, M, P, F> IfrsHledgerUtil<A, I, E, C, S, R, D, M, P, F>
 where
     A: AssetHandler,
     I: IncomeHandler,
@@ -51,7 +51,7 @@ where
     D: DecoratorHandler,
     M: CommodityHandler,
     P: PayeeHandler,
-    O: OperationHandler,
+    F: MacroHandler,
 {
     pub fn new() -> Self {
         Self {

@@ -13,12 +13,12 @@ use crate::errors::{
 // ----------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
-pub struct CloseRecordGenerator {
+pub struct CloseEntryGenerator {
     ledger_path: PathBuf,
     year: i32,
 }
 
-impl CloseRecordGenerator {
+impl CloseEntryGenerator {
     pub fn new<P: AsRef<Path>>(ledger_path: P, year: i32) -> Result<Self, ServerError> {
         Ok(Self {
             ledger_path: ledger_path
@@ -35,21 +35,21 @@ impl CloseRecordGenerator {
         })
     }
 
-    pub fn generate(&self) -> Result<CloseRecord, ServerError> {
+    pub fn generate(&self) -> Result<CloseEntry, ServerError> {
         let output = self.run_hledger_close()?;
-        let entries = parse_close_entries(&output)?;
-        if entries.is_empty() {
+        let postings = parse_close_postings(&output)?;
+        if postings.is_empty() {
             return Err(NoAccountsToClose::new(self.year));
         }
 
-        let total_amount = entries.iter().map(|(_, amount)| *amount).sum::<f64>();
-        let entries_json = serde_json::to_string(&entries).map_err(|e| {
-            CriticalError::with_debug("failed to serialize close entries as JSON", &e)
+        let total_amount = postings.iter().map(|(_, amount)| *amount).sum::<f64>();
+        let postings_json = serde_json::to_string(&postings).map_err(|e| {
+            CriticalError::with_debug("failed to serialize close postings as JSON", &e)
         })?;
-        let tag = STANDARD.encode(entries_json);
+        let tag = STANDARD.encode(postings_json);
         let closing_date = format!("{}-12-31", self.year);
         let clipboard = format_clipboard_row(&closing_date, &tag, total_amount);
-        Ok(CloseRecord {
+        Ok(CloseEntry {
             year: self.year,
             closing_date,
             tag,
@@ -63,7 +63,7 @@ impl CloseRecordGenerator {
 // ----------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
-pub struct CloseRecord {
+pub struct CloseEntry {
     pub year: i32,
     pub closing_date: String,
     pub tag: String,
@@ -74,7 +74,7 @@ pub struct CloseRecord {
     pub clipboard: String,
 }
 
-impl Display for CloseRecord {
+impl Display for CloseEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         const BOLD: &str = "\x1b[1m";
         const RESET: &str = "\x1b[0m";
@@ -87,10 +87,10 @@ impl Display for CloseRecord {
         write!(
             f,
             "\n\n{BOLD}Instructions:{RESET} In the transactions CSV, create a \
-             'Close(<CLOSE_LOGIC>)' record by setting the first column to ':' (to indicate an \
-             operation record), the `Accounting Logic` column to the desired close logic (for \
-             example 'Close(Retain)'), the `Decorators` column to the `Tag` value, and the \
-             `Amount` column to the `Total Amount` value.",
+             'Close(<CLOSE_LOGIC>)' entry by setting the first column to ':' (to indicate a \
+             command), the `Accounting Logic` column to the desired close logic (for example \
+             'Close(Retain)'), the `Decorators` column to the `Tag` value, and the `Amount` \
+             column to the `Total Amount` value.",
         )
     }
 }
@@ -98,7 +98,7 @@ impl Display for CloseRecord {
 // Private.
 // ----------------------------------------------------------------------------
 
-impl CloseRecordGenerator {
+impl CloseEntryGenerator {
     fn run_hledger_close(&self) -> Result<String, ServerError> {
         let mut cmd = Command::new("hledger");
         cmd.arg("--strict")
@@ -108,7 +108,7 @@ impl CloseRecordGenerator {
             .arg(self.year.to_string())
             .arg("close")
             .arg("--retain")
-            .arg(r#"--close-desc=Auto-Generated: Temporary Close Record"#)
+            .arg(r#"--close-desc=Auto-Generated: Temporary Close Entry"#)
             .arg("--close-acct=VoidOut");
 
         let output = cmd.output().map_err(|e| {
@@ -129,16 +129,16 @@ impl CloseRecordGenerator {
 // Helpers.
 // ----------------------------------------------------------------------------
 
-fn parse_close_entries(output: &str) -> Result<Vec<(String, f64)>, ServerError> {
+fn parse_close_postings(output: &str) -> Result<Vec<(String, f64)>, ServerError> {
     output.lines().try_fold(Vec::new(), |mut acc, line| {
-        if let Some(entry) = parse_close_entry(line)? {
-            acc.push(entry);
+        if let Some(posting) = parse_close_posting(line)? {
+            acc.push(posting);
         }
         Ok(acc)
     })
 }
 
-fn parse_close_entry(raw_line: &str) -> Result<Option<(String, f64)>, ServerError> {
+fn parse_close_posting(raw_line: &str) -> Result<Option<(String, f64)>, ServerError> {
     let line = raw_line.trim();
     if line.is_empty() || line == "VoidOut" {
         return Ok(None);
@@ -202,8 +202,8 @@ mod tests {
     }
 
     #[test]
-    fn close_record_display_is_multiline_with_base64_tag() {
-        let record = CloseRecord {
+    fn close_entry_display_is_multiline_with_base64_tag() {
+        let entry = CloseEntry {
             year: 2024,
             closing_date: "2024-12-31".to_string(),
             tag: "W1siRXhwZW5zZXM6T3BlcmF0aW5nOlNhbXBsZSIsLTEyMDAuMF0sWyJJbmNvbWU6Tm9uT3BlcmF0aW5nOk90aGVyIiwzMDAuMF1d"
@@ -211,9 +211,9 @@ mod tests {
             total_amount: -900.0,
             clipboard: ":\t\t2024-12-31\tClose(<CloseLogic>)\ttag123\t\t\t-900".to_string(),
         };
-        let display = record.to_string();
+        let display = entry.to_string();
         assert!(display.contains("\u{1b}[1mTag:\u{1b}[0m"));
-        assert!(display.contains(&record.tag));
+        assert!(display.contains(&entry.tag));
     }
 
     #[test]

@@ -1,4 +1,4 @@
-use crate::entities::{CloseLogic, OperationLogic};
+use crate::entities::{CloseLogic, CommandLogic};
 
 #[derive(Debug, serde_derive::Deserialize)]
 pub enum CloseLogicModel {
@@ -6,7 +6,7 @@ pub enum CloseLogicModel {
 }
 
 #[derive(Debug, serde_derive::Deserialize)]
-pub enum OperationLogicModel<O> {
+pub enum CommandLogicModel<O> {
     Close(CloseLogicModel),
     Correction(O),
 }
@@ -19,11 +19,11 @@ impl Into<CloseLogic> for CloseLogicModel {
     }
 }
 
-impl<O> Into<OperationLogic<O>> for OperationLogicModel<O> {
-    fn into(self) -> OperationLogic<O> {
+impl<O> Into<CommandLogic<O>> for CommandLogicModel<O> {
+    fn into(self) -> CommandLogic<O> {
         match self {
-            OperationLogicModel::Close(logic) => OperationLogic::Close(logic.into()),
-            OperationLogicModel::Correction(logic) => OperationLogic::Correction(logic),
+            CommandLogicModel::Close(logic) => CommandLogic::Close(logic.into()),
+            CommandLogicModel::Correction(logic) => CommandLogic::Correction(logic),
         }
     }
 }

@@ -1,4 +1,5 @@
-use fractic_server_error::ServerError;
+use chrono::NaiveDate;
+use fractic_server_error::{NotImplementedError, ServerError};
 use iso_currency::Currency;
 use serde::Deserialize;
 
@@ -149,10 +150,15 @@ pub trait CommodityHandler:
     }
 }
 
-pub trait OperationHandler:
+pub trait MacroHandler:
     for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
 {
-    fn run(&self, transactions: &Vec<Transaction>) -> String;
+    fn run(
+        &self,
+        date: NaiveDate,
+        args: Vec<String>,
+        transactions: &Vec<Transaction>,
+    ) -> Result<String, ServerError>;
 }
 
 // Some type-magic to combine all handlers into a single type, greatly
@@ -169,7 +175,7 @@ pub trait Handlers: std::fmt::Debug + Send + Sync + 'static {
     type D: DecoratorHandler;
     type M: CommodityHandler;
     type P: PayeeHandler;
-    type O: OperationHandler;
+    type F: MacroHandler;
 }
 
 #[derive(Debug)]
@@ -177,7 +183,7 @@ pub(crate) struct HandlersImpl<A, I, E, R, C, S, D, M, P, O> {
     pub _phantom: std::marker::PhantomData<(A, I, E, R, C, S, D, M, P, O)>,
 }
 
-impl<A, I, E, R, C, S, D, M, P, O> Handlers for HandlersImpl<A, I, E, R, C, S, D, M, P, O>
+impl<A, I, E, R, C, S, D, M, P, F> Handlers for HandlersImpl<A, I, E, R, C, S, D, M, P, F>
 where
     A: AssetHandler,
     I: IncomeHandler,
@@ -188,7 +194,7 @@ where
     D: DecoratorHandler,
     M: CommodityHandler,
     P: PayeeHandler,
-    O: OperationHandler,
+    F: MacroHandler,
 {
     type A = A;
     type I = I;
@@ -199,7 +205,7 @@ where
     type D = D;
     type M = M;
     type P = P;
-    type O = O;
+    type F = F;
 }
 
 // Make () implement all handlers, so clients can easily opt out of certain
@@ -263,8 +269,13 @@ impl PayeeHandler for () {
     }
 }
 
-impl OperationHandler for () {
-    fn run(&self, _transactions: &Vec<Transaction>) -> String {
-        String::new()
+impl MacroHandler for () {
+    fn run(
+        &self,
+        _date: NaiveDate,
+        _args: Vec<String>,
+        _transactions: &Vec<Transaction>,
+    ) -> Result<String, ServerError> {
+        Err(NotImplementedError::new())
     }
 }

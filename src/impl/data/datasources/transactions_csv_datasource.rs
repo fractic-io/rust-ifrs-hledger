@@ -8,11 +8,9 @@ use crate::{
     data::models::{
         accounting_amount_model::AccountingAmountModel,
         accounting_logic_model::AccountingLogicModel, backing_account_model::BackingAccountModel,
-        iso_date_model::ISODateModel, operation_logic_model::OperationLogicModel,
+        command_logic_model::CommandLogicModel, iso_date_model::ISODateModel,
     },
-    entities::{
-        Annotation, Handlers, OperationSpec, OperationSpecId, TransactionSpec, TransactionSpecId,
-    },
+    entities::{Annotation, Command, CommandSpecId, Handlers, TransactionSpec, TransactionSpecId},
     errors::{InvalidCsv, InvalidCsvContent, InvalidRon, ReadError},
 };
 
@@ -21,12 +19,12 @@ pub(crate) trait TransactionsCsvDatasource<H: Handlers>: Send + Sync {
     fn from_string(
         &self,
         s: &str,
-    ) -> Result<(Vec<TransactionSpec<H>>, Vec<OperationSpec<H>>), ServerError>;
+    ) -> Result<(Vec<TransactionSpec<H>>, Vec<Command<H>>), ServerError>;
 
     async fn from_file<P>(
         &self,
         path: P,
-    ) -> Result<(Vec<TransactionSpec<H>>, Vec<OperationSpec<H>>), ServerError>
+    ) -> Result<(Vec<TransactionSpec<H>>, Vec<Command<H>>), ServerError>
     where
         P: AsRef<std::path::Path> + Send;
 }
@@ -48,13 +46,13 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
     fn from_string(
         &self,
         s: &str,
-    ) -> Result<(Vec<TransactionSpec<H>>, Vec<OperationSpec<H>>), ServerError> {
+    ) -> Result<(Vec<TransactionSpec<H>>, Vec<Command<H>>), ServerError> {
         csv::Reader::from_reader(s.as_bytes())
             .records()
             .enumerate()
             .try_fold(
                 (Vec::new(), Vec::new()),
-                |(mut transaction_specs, mut operation_specs), (i, r)| {
+                |(mut transaction_specs, mut commands), (i, r)| {
                     let r = r.map_err(|e| InvalidCsv::with_debug(&e))?;
                     let first_char = r
                         .get(0)
@@ -63,28 +61,27 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
 
                     // Skip empty/whitespace-only lines.
                     if r.iter().all(|cell| cell.trim().is_empty()) {
-                        return Ok((transaction_specs, operation_specs));
+                        return Ok((transaction_specs, commands));
                     }
                     // Skip comment lines.
                     if first_char == ';' {
-                        return Ok((transaction_specs, operation_specs));
+                        return Ok((transaction_specs, commands));
                     }
 
                     if first_char == ':' {
-                        // Parse operation entry.
+                        // Parse command entry.
                         // --
 
                         let raw_date = r.get(2).unwrap_or("").trim();
-                        let raw_operation_logic = r.get(3).unwrap_or("").trim();
+                        let raw_exec = r.get(3).unwrap_or("").trim();
                         let raw_arguments = r.get(4).unwrap_or("").trim();
                         let raw_description = r.get(6).unwrap_or("").trim();
                         let raw_amount = r.get(7).unwrap_or("").trim();
                         let raw_commodity = r.get(8).unwrap_or("").trim();
 
                         let date: ISODateModel = ISODateModel::from_str(raw_date)?;
-                        let operation_logic: OperationLogicModel<H::O> =
-                            from_str(raw_operation_logic)
-                                .map_err(|e| InvalidRon::with_debug("OperationLogic", &e))?;
+                        let exec: CommandLogicModel<H::F> = from_str(raw_exec)
+                            .map_err(|e| InvalidRon::with_debug("CommandLogic", &e))?;
                         let arguments: Vec<String> =
                             raw_arguments.split(',').map(|s| s.to_string()).collect();
                         let amount: Option<AccountingAmountModel> = if raw_amount.is_empty() {
@@ -101,10 +98,10 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                             )
                         };
 
-                        operation_specs.push(OperationSpec {
-                            id: OperationSpecId((i + 2) as u64),
+                        commands.push(Command {
+                            id: CommandSpecId((i + 2) as u64),
                             date: date.into(),
-                            operation_logic: operation_logic.into(),
+                            exec: exec.into(),
                             arguments,
                             description: raw_description.into(),
                             amount: amount.map(Into::into),
@@ -180,7 +177,7 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                         transaction_specs.push(spec);
                     }
 
-                    Ok((transaction_specs, operation_specs))
+                    Ok((transaction_specs, commands))
                 },
             )
     }
@@ -188,7 +185,7 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
     async fn from_file<P>(
         &self,
         path: P,
-    ) -> Result<(Vec<TransactionSpec<H>>, Vec<OperationSpec<H>>), ServerError>
+    ) -> Result<(Vec<TransactionSpec<H>>, Vec<Command<H>>), ServerError>
     where
         P: AsRef<std::path::Path> + Send,
     {

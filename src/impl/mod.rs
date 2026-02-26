@@ -10,8 +10,8 @@ pub(crate) mod data {
         pub(crate) mod accounting_amount_model;
         pub(crate) mod accounting_logic_model;
         pub(crate) mod backing_account_model;
+        pub(crate) mod command_logic_model;
         pub(crate) mod iso_date_model;
-        pub(crate) mod operation_logic_model;
     }
     pub(crate) mod repositories {
         pub(crate) mod records_repository_impl;
@@ -25,11 +25,11 @@ pub(crate) mod domain {
         pub(crate) mod assertion;
         pub(crate) mod assertion_spec;
         pub(crate) mod cashflow_tracing_tag;
+        pub(crate) mod command;
         pub(crate) mod decorator_logic;
         pub(crate) mod financial_records;
         pub(crate) mod handlers;
-        pub(crate) mod operation;
-        pub(crate) mod operation_spec;
+        pub(crate) mod meta_entry;
         pub(crate) mod transaction;
         pub(crate) mod transaction_spec;
     }
@@ -72,11 +72,11 @@ pub mod exports {
         pub use crate::domain::entities::assertion::*;
         pub use crate::domain::entities::assertion_spec::*;
         pub use crate::domain::entities::cashflow_tracing_tag::*;
+        pub use crate::domain::entities::command::*;
         pub use crate::domain::entities::decorator_logic::*;
         pub use crate::domain::entities::financial_records::*;
         pub use crate::domain::entities::handlers::*;
-        pub use crate::domain::entities::operation::*;
-        pub use crate::domain::entities::operation_spec::*;
+        pub use crate::domain::entities::meta_entry::*;
         pub use crate::domain::entities::transaction::*;
         pub use crate::domain::entities::transaction_spec::*;
     }

@@ -4,7 +4,7 @@ use iso_currency::Currency;
 
 use crate::{
     entities::{
-        Account, Assertion, CashflowTracingTag, CloseLogic, FinancialRecords, Operation,
+        Account, Assertion, CashflowTracingTag, CloseLogic, FinancialRecords, MetaEntry,
         Transaction,
     },
     ext::standard_accounts::RETAINED_EARNINGS,
@@ -46,10 +46,10 @@ impl HledgerPrinter {
         ledger_output.push_str(&header_comment("Assertions"));
         self.print_assertions(&mut ledger_output, financial_records);
 
-        for (year, operations) in operations_by_year(&financial_records.operations) {
+        for (year, entries) in meta_entries_by_year(&financial_records.meta_entries) {
             ledger_output.push_str("\n\n");
-            ledger_output.push_str(&header_comment(&format!("{} Operations", year)));
-            self.print_operations(&mut ledger_output, operations);
+            ledger_output.push_str(&header_comment(&format!("{} Corrections / Closing", year)));
+            self.print_meta_entries(&mut ledger_output, entries);
         }
 
         ledger_output
@@ -190,28 +190,28 @@ impl HledgerPrinter {
         }
     }
 
-    fn print_operations(&self, ledger_output: &mut String, mut operations: Vec<&Operation>) {
-        operations.sort_by_key(|operation| *operation.date());
+    fn print_meta_entries(&self, ledger_output: &mut String, mut entries: Vec<&MetaEntry>) {
+        entries.sort_by_key(|e| *e.date());
 
-        // Extract (and dedup) account declarations from each operation, to
-        // print them once at the start of the section.
-        let account_statements = operations
+        // Extract (and dedup) account declarations from each entry, to print
+        // them once at the start of the section.
+        let account_statements = entries
             .iter()
-            .flat_map(|operation| account_declarations_for_operation(operation))
+            .flat_map(|e| account_declarations_for(e))
             .collect::<BTreeSet<_>>();
         for account_statement in account_statements {
             ledger_output.push_str(&account_statement);
         }
-        if !operations.is_empty() {
+        if !entries.is_empty() {
             ledger_output.push('\n');
         }
 
-        // Build ledger entries for each operation.
-        for (i, operation) in operations.iter().enumerate() {
-            match operation {
-                Operation::Close {
+        // Build ledger entries for each entry.
+        for (i, entry) in entries.iter().enumerate() {
+            match entry {
+                MetaEntry::Close {
                     date,
-                    entries,
+                    postings,
                     total,
                     logic,
                     currency,
@@ -229,7 +229,7 @@ impl HledgerPrinter {
                     ));
 
                     // Write debit entries.
-                    for (account, amount) in entries {
+                    for (account, amount) in postings {
                         let right = format!(
                             "{} = {}",
                             format_amount(*amount, *currency, true),
@@ -256,8 +256,8 @@ impl HledgerPrinter {
                         ));
                     }
                 }
-                Operation::Correction { result, .. } => {
-                    let normalized = normalize_posting_lines_spacing(result)
+                MetaEntry::Correction { macro_output, .. } => {
+                    let normalized = normalize_posting_lines_spacing(macro_output)
                         .join("\n")
                         .trim_end()
                         .to_string();
@@ -265,7 +265,7 @@ impl HledgerPrinter {
                 }
             }
 
-            if i + 1 < operations.len() {
+            if i + 1 < entries.len() {
                 ledger_output.push('\n');
             }
         }
@@ -350,27 +350,27 @@ fn normalize_posting_lines_spacing(ledger_content: &str) -> Vec<String> {
         .collect()
 }
 
-// Operation-related helpers.
+// Meta-entry helpers.
 // ----------------------------------------------------------------------------
 
-fn operations_by_year(operations: &Vec<Operation>) -> BTreeMap<i32, Vec<&Operation>> {
-    operations.iter().fold(
-        BTreeMap::<i32, Vec<&Operation>>::new(),
-        |mut acc: BTreeMap<i32, Vec<&Operation>>, operation: &Operation| {
-            acc.entry(operation.year()).or_default().push(operation);
+fn meta_entries_by_year(entries: &Vec<MetaEntry>) -> BTreeMap<i32, Vec<&MetaEntry>> {
+    entries.iter().fold(
+        BTreeMap::<i32, Vec<&MetaEntry>>::new(),
+        |mut acc: BTreeMap<i32, Vec<&MetaEntry>>, entry: &MetaEntry| {
+            acc.entry(entry.year()).or_default().push(entry);
             acc
         },
     )
 }
 
-fn account_declarations_for_operation(operation: &Operation) -> Vec<String> {
-    match operation {
-        Operation::Close { logic, .. } => match logic {
+fn account_declarations_for(entry: &MetaEntry) -> Vec<String> {
+    match entry {
+        MetaEntry::Close { logic, .. } => match logic {
             CloseLogic::Retain => {
                 vec![account_declaration(&(RETAINED_EARNINGS.clone().into()))]
             }
         },
-        Operation::Correction { result, .. } => result
+        MetaEntry::Correction { macro_output, .. } => macro_output
             .lines()
             .filter(|line| is_account_declaration(line))
             .filter_map(parse_account_declaration)

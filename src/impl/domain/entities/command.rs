@@ -3,7 +3,7 @@ use chrono::NaiveDate;
 use super::handlers::Handlers;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct OperationSpecId(pub(crate) u64);
+pub struct CommandSpecId(pub(crate) u64);
 
 #[derive(Debug, Clone, serde_derive::Deserialize)]
 pub enum CloseLogic {
@@ -11,16 +11,16 @@ pub enum CloseLogic {
 }
 
 #[derive(Debug, serde_derive::Deserialize)]
-pub enum OperationLogic<O> {
+pub enum CommandLogic<F> {
     Close(CloseLogic),
-    Correction(O),
+    Correction(F),
 }
 
 #[derive(Debug)]
-pub(crate) struct OperationSpec<H: Handlers> {
-    pub id: OperationSpecId,
+pub(crate) struct Command<H: Handlers> {
+    pub id: CommandSpecId,
     pub date: NaiveDate,
-    pub operation_logic: OperationLogic<H::O>,
+    pub exec: CommandLogic<H::F>,
     pub arguments: Vec<String>,
     pub description: String,
     pub amount: Option<f64>,
@@ -29,7 +29,7 @@ pub(crate) struct OperationSpec<H: Handlers> {
 
 // --
 
-impl std::fmt::Display for OperationSpecId {
+impl std::fmt::Display for CommandSpecId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }

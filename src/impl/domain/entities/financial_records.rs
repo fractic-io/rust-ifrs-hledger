@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use crate::{
     domain::logic::spec_processor::UnreimbursedEntry,
     entities::{
-        Annotation, Assertion, AssertionSpec, DecoratedTransactionSpec, Operation, OperationSpec,
+        Annotation, Assertion, AssertionSpec, Command, DecoratedTransactionSpec, MetaEntry,
         Transaction, TransactionLabel, TransactionSpec, TransactionSpecId,
     },
 };
@@ -17,7 +17,7 @@ use super::{account::LiabilityAccount, handlers::Handlers};
 pub(crate) struct FinancialRecordSpecs<H: Handlers> {
     pub transaction_specs: Vec<TransactionSpec<H>>,
     pub assertion_specs: Vec<AssertionSpec<H>>,
-    pub operation_specs: Vec<OperationSpec<H>>,
+    pub commands: Vec<Command<H>>,
 }
 
 // After decorator processing.
@@ -27,7 +27,7 @@ pub(crate) struct FinancialRecordSpecs<H: Handlers> {
 pub(crate) struct DecoratedFinancialRecordSpecs<H: Handlers> {
     pub transaction_specs: Vec<DecoratedTransactionSpec<H>>,
     pub assertion_specs: Vec<AssertionSpec<H>>,
-    pub operation_specs: Vec<OperationSpec<H>>,
+    pub commands: Vec<Command<H>>,
 }
 
 // After spec + note processing.
@@ -37,7 +37,7 @@ pub(crate) struct DecoratedFinancialRecordSpecs<H: Handlers> {
 pub struct FinancialRecords {
     pub transactions: Vec<Transaction>,
     pub assertions: Vec<Assertion>,
-    pub operations: Vec<Operation>,
+    pub meta_entries: Vec<MetaEntry>,
     pub label_lookup: HashMap<TransactionSpecId, TransactionLabel>,
     pub annotations_lookup: HashMap<TransactionSpecId, Vec<Annotation>>,
     pub unreimbursed_entries: Vec<(LiabilityAccount, UnreimbursedEntry)>,

@@ -14,11 +14,11 @@ use crate::{
     },
     entities::{
         Account, AccountingLogic, Annotation, Assertion, AssetHandler, BackingAccount, CashHandler,
-        CommodityHandler, CommonStockWhileUnpaid, DecoratedFinancialRecordSpecs,
-        DecoratedTransactionSpec, ExpenseAccount, ExpenseHandler, FinancialRecords, Handlers,
-        IncomeHandler, LiabilityAccount, Operation, OperationHandler, OperationLogic,
-        OperationSpec, PayeeHandler, ReimbursableEntityHandler, ShareholderHandler, Transaction,
-        TransactionLabel, TransactionPosting, TransactionSpecId,
+        Command, CommandLogic, CommodityHandler, CommonStockWhileUnpaid,
+        DecoratedFinancialRecordSpecs, DecoratedTransactionSpec, ExpenseAccount, ExpenseHandler,
+        FinancialRecords, Handlers, IncomeHandler, LiabilityAccount, MacroHandler, MetaEntry,
+        PayeeHandler, ReimbursableEntityHandler, ShareholderHandler, Transaction, TransactionLabel,
+        TransactionPosting, TransactionSpecId,
     },
     errors::{
         CommonStockCannotBePrepaid, InvalidArgumentsForAccountingLogic, InvalidCsvContent,
@@ -201,7 +201,7 @@ impl<H: Handlers> SpecProcessor<H> {
         let DecoratedFinancialRecordSpecs {
             mut transaction_specs,
             assertion_specs,
-            operation_specs,
+            commands: operation_specs,
         } = self.specs;
 
         // Important for reimbursement tracking.
@@ -259,12 +259,12 @@ impl<H: Handlers> SpecProcessor<H> {
         let operations = operation_specs
             .into_iter()
             .map(|spec| Self::process_operation(spec, &transactions_fold_result.transactions))
-            .collect::<Result<Vec<Operation>, ServerError>>()?;
+            .collect::<Result<Vec<MetaEntry>, ServerError>>()?;
 
         Ok(FinancialRecords {
             transactions: transactions_fold_result.transactions,
             assertions,
-            operations,
+            meta_entries: operations,
             label_lookup: transactions_fold_result.label_lookup,
             annotations_lookup: transactions_fold_result.annotations_lookup,
             unreimbursed_entries: transactions_fold_result
@@ -1629,20 +1629,20 @@ impl<H: Handlers> SpecProcessor<H> {
     }
 
     fn process_operation(
-        spec: OperationSpec<H>,
+        spec: Command<H>,
         transactions: &Vec<Transaction>,
-    ) -> Result<Operation, ServerError> {
-        let OperationSpec {
+    ) -> Result<MetaEntry, ServerError> {
+        let Command {
             id,
             date,
-            operation_logic,
+            exec: operation_logic,
             arguments,
             description,
             amount,
             commodity,
         } = spec;
         match operation_logic {
-            OperationLogic::Close(logic) => {
+            CommandLogic::Close(logic) => {
                 if date.month() != 12 || date.day() != 31 {
                     return Err(InvalidCsvContent::with_debug(
                         &format!(
@@ -1679,17 +1679,17 @@ impl<H: Handlers> SpecProcessor<H> {
                             &e,
                         )
                     })?;
-                Ok(Operation::Close {
+                Ok(MetaEntry::Close {
                     date,
-                    entries,
+                    postings: entries,
                     logic,
                     total: amount,
                     currency: commodity.unwrap_or_else(|| H::M::default()).currency()?,
                 })
             }
-            OperationLogic::Correction(logic) => Ok(Operation::Correction {
+            CommandLogic::Correction(logic) => Ok(MetaEntry::Correction {
                 date,
-                result: logic.run(transactions),
+                macro_output: logic.run(date, arguments, transactions)?,
             }),
         }
     }
