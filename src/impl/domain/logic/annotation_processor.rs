@@ -1,8 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use chrono::Datelike;
 use fractic_server_error::ServerError;
 
-use crate::entities::{FinancialRecords, NotesToFinancialRecords};
+use crate::entities::{EndOfYearEntry, FinancialRecords, NotesToFinancialRecords};
 
 pub(crate) struct AnnotationProcessor<'a> {
     records: &'a FinancialRecords,
@@ -47,7 +48,12 @@ impl<'a> AnnotationProcessor<'a> {
             })
             .collect::<Vec<_>>();
 
-        let general_notes = self.unreimbursed_transaction_notes()?;
+        let general_notes = {
+            let mut v = Vec::new();
+            v.extend(self.unreimbursed_transaction_notes()?);
+            v.extend(self.manual_correction_notes());
+            v
+        };
 
         Ok(NotesToFinancialRecords {
             transaction_notes,
@@ -121,5 +127,32 @@ impl<'a> AnnotationProcessor<'a> {
             }
         }
         Ok(n)
+    }
+
+    fn manual_correction_notes(&self) -> Vec<(String, String)> {
+        let mut examples_by_year: BTreeMap<i32, BTreeSet<String>> = BTreeMap::new();
+        for entry in &self.records.eoy_entries {
+            if let EndOfYearEntry::Correction {
+                date, description, ..
+            } = entry
+            {
+                examples_by_year.entry(date.year()).or_default().insert(
+                    description
+                        .as_ref()
+                        .filter(|s| !s.trim().is_empty())
+                        .cloned()
+                        .unwrap_or_else(|| date.format("%F").to_string()),
+                );
+            }
+        }
+        examples_by_year
+            .into_iter()
+            .map(|(year, examples)| {
+                (
+                    format!("WARNING: {} had manual corrections.", year),
+                    examples.into_iter().collect::<Vec<_>>().join(", "),
+                )
+            })
+            .collect()
     }
 }

@@ -22,6 +22,8 @@ pub enum EndOfYearEntry {
     Correction {
         /// Date on which to apply the correction entry.
         date: NaiveDate,
+        /// Description from original command properties (if any).
+        description: Option<String>,
         /// Ledger content to be inserted verbatim (although formatting may be
         /// altered).
         macro_output: String,

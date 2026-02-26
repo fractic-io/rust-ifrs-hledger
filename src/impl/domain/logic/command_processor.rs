@@ -169,6 +169,7 @@ impl<H: Handlers> CommandProcessor<H> {
 
         let eoy_entry = EndOfYearEntry::Correction {
             date,
+            description: description.clone(),
             macro_output: logic.compile(
                 date,
                 arguments,
