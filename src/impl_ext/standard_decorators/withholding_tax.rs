@@ -49,6 +49,7 @@ impl StandardDecoratorWithholdingTax {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = tx;
 
         // IMPORTANT NOTE:
@@ -99,6 +100,7 @@ impl StandardDecoratorWithholdingTax {
                 .chain(once(withholding_transaction))
                 .collect(),
             ext_assertions,
+            ext_raw,
         })
     }
 }

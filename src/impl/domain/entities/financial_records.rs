@@ -13,6 +13,9 @@ use crate::{
 
 use super::{account::LiabilityAccount, handlers::Handlers};
 
+// 0. Before processing.
+// ---
+
 #[derive(Debug)]
 pub(crate) struct FinancialRecordSpecs<H: Handlers> {
     pub transaction_specs: Vec<TransactionSpec<H>>,
@@ -20,17 +23,33 @@ pub(crate) struct FinancialRecordSpecs<H: Handlers> {
     pub commands: Vec<Command<H>>,
 }
 
-// After decorator processing.
+// 1. After decorator processing.
 // ---
 
 #[derive(Debug)]
-pub(crate) struct DecoratedFinancialRecordSpecs<H: Handlers> {
+#[allow(non_camel_case_types)]
+pub(crate) struct FinancialRecords_Intermediate1<H: Handlers> {
     pub transaction_specs: Vec<DecoratedTransactionSpec<H>>,
     pub assertion_specs: Vec<AssertionSpec<H>>,
     pub commands: Vec<Command<H>>,
 }
 
-// After spec + note processing.
+// 2. After spec processing.
+// ---
+
+#[derive(Debug)]
+#[allow(non_camel_case_types)]
+pub(crate) struct FinancialRecords_Intermediate2<H: Handlers> {
+    pub transactions: Vec<Transaction>,
+    pub assertions: Vec<Assertion>,
+    pub commands: Vec<Command<H>>,
+    pub ext_raw: Vec<String>,
+    pub label_lookup: HashMap<TransactionSpecId, TransactionLabel>,
+    pub annotations_lookup: HashMap<TransactionSpecId, Vec<Annotation>>,
+    pub unreimbursed_entries: Vec<(LiabilityAccount, UnreimbursedEntry)>,
+}
+
+// 3. After command processing.
 // ---
 
 #[derive(Debug, Clone)]
@@ -38,6 +57,7 @@ pub struct FinancialRecords {
     pub transactions: Vec<Transaction>,
     pub assertions: Vec<Assertion>,
     pub meta_entries: Vec<MetaEntry>,
+    pub ext_raw: Vec<String>,
     pub label_lookup: HashMap<TransactionSpecId, TransactionLabel>,
     pub annotations_lookup: HashMap<TransactionSpecId, Vec<Annotation>>,
     pub unreimbursed_entries: Vec<(LiabilityAccount, UnreimbursedEntry)>,

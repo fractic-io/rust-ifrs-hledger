@@ -46,6 +46,12 @@ impl HledgerPrinter {
         ledger_output.push_str(&header_comment("Assertions"));
         self.print_assertions(&mut ledger_output, financial_records);
 
+        if !financial_records.ext_raw.is_empty() {
+            ledger_output.push_str("\n\n");
+            ledger_output.push_str(&header_comment("Custom Ledger Extensions"));
+            self.print_ext_raw(&mut ledger_output, financial_records);
+        }
+
         for (year, entries) in meta_entries_by_year(&financial_records.meta_entries) {
             ledger_output.push_str("\n\n");
             ledger_output.push_str(&header_comment(&format!("{} Corrections / Closing", year)));
@@ -190,6 +196,34 @@ impl HledgerPrinter {
         }
     }
 
+    fn print_ext_raw(&self, ledger_output: &mut String, financial_records: &FinancialRecords) {
+        // Extract/dedup account declarations across all raw extension chunks,
+        // and print once at the start of this section.
+        let account_statements = financial_records
+            .ext_raw
+            .iter()
+            .flat_map(|entry| extract_and_normalize_account_declarations(entry))
+            .collect::<BTreeSet<_>>();
+        for account_statement in account_statements {
+            ledger_output.push_str(&account_statement);
+        }
+        if !financial_records.ext_raw.is_empty() {
+            ledger_output.push('\n');
+        }
+
+        // Print each raw chunk verbatim except:
+        // - account declarations are removed (already printed above),
+        // - posting lines are spacing-normalized.
+        for raw in financial_records.ext_raw.iter() {
+            let normalized = extract_and_normalize_non_account_lines(raw);
+            if normalized.is_empty() {
+                continue;
+            }
+            ledger_output.push_str(&normalized);
+            ledger_output.push('\n');
+        }
+    }
+
     fn print_meta_entries(&self, ledger_output: &mut String, mut entries: Vec<&MetaEntry>) {
         entries.sort_by_key(|e| *e.date());
 
@@ -197,7 +231,7 @@ impl HledgerPrinter {
         // them once at the start of the section.
         let account_statements = entries
             .iter()
-            .flat_map(|e| account_declarations_for(e))
+            .flat_map(|e| account_declarations_from_meta_entry(e))
             .collect::<BTreeSet<_>>();
         for account_statement in account_statements {
             ledger_output.push_str(&account_statement);
@@ -207,7 +241,7 @@ impl HledgerPrinter {
         }
 
         // Build ledger entries for each entry.
-        for (i, entry) in entries.iter().enumerate() {
+        for entry in entries.iter() {
             match entry {
                 MetaEntry::Close {
                     date,
@@ -257,19 +291,12 @@ impl HledgerPrinter {
                     }
                 }
                 MetaEntry::Correction { macro_output, .. } => {
-                    let normalized = normalize_posting_lines_spacing(macro_output)
-                        .join("\n")
-                        .trim_end()
-                        .to_string();
-                    ledger_output.push_str(&normalized);
+                    ledger_output.push_str(&extract_and_normalize_non_account_lines(macro_output));
                 }
             }
 
-            if i + 1 < entries.len() {
-                ledger_output.push('\n');
-            }
+            ledger_output.push('\n');
         }
-        ledger_output.push('\n');
     }
 }
 
@@ -310,6 +337,17 @@ fn parse_account_declaration(line: &str) -> Option<(&str, char)> {
     Some((name, ch)).filter(|(n, _)| !n.is_empty() && is_single)
 }
 
+/// Normalize the inner padding of *existing* account declarations, as detected
+/// from the raw ledger content.
+fn extract_and_normalize_account_declarations(ledger_content: &str) -> Vec<String> {
+    ledger_content
+        .lines()
+        .filter(|line| is_account_declaration(line))
+        .filter_map(parse_account_declaration)
+        .map(|(name, tag)| account_declaration_raw(name, tag))
+        .collect()
+}
+
 // Building / manipulating indented posting lines. Ex:
 // "    Account Name      Amount"
 // ----------------------------------------------------------------------------
@@ -321,6 +359,9 @@ fn format_posting_line(left: &str, right: &str) -> String {
 }
 
 fn parse_posting_line(line: &str) -> Option<(&str, &str)> {
+    if is_account_declaration(line) {
+        return None;
+    }
     let body = line.strip_prefix(POSTING_INDENT)?;
     if body.trim_start().starts_with(';') {
         return None;
@@ -336,7 +377,7 @@ fn parse_posting_line(line: &str) -> Option<(&str, &str)> {
 
 /// Normalize the inner padding of *existing* posting lines, as detected from
 /// the raw ledger content.
-fn normalize_posting_lines_spacing(ledger_content: &str) -> Vec<String> {
+fn extract_and_normalize_non_account_lines(ledger_content: &str) -> String {
     ledger_content
         .lines()
         .filter(|line| !is_account_declaration(line))
@@ -347,7 +388,11 @@ fn normalize_posting_lines_spacing(ledger_content: &str) -> Vec<String> {
                 line.to_string()
             }
         })
-        .collect()
+        .map(|line| format!("{}\n", line))
+        .collect::<Vec<_>>()
+        .join("")
+        .trim()
+        .to_string()
 }
 
 // Meta-entry helpers.
@@ -363,19 +408,16 @@ fn meta_entries_by_year(entries: &Vec<MetaEntry>) -> BTreeMap<i32, Vec<&MetaEntr
     )
 }
 
-fn account_declarations_for(entry: &MetaEntry) -> Vec<String> {
+fn account_declarations_from_meta_entry(entry: &MetaEntry) -> Vec<String> {
     match entry {
         MetaEntry::Close { logic, .. } => match logic {
             CloseLogic::Retain => {
                 vec![account_declaration(&(RETAINED_EARNINGS.clone().into()))]
             }
         },
-        MetaEntry::Correction { macro_output, .. } => macro_output
-            .lines()
-            .filter(|line| is_account_declaration(line))
-            .filter_map(parse_account_declaration)
-            .map(|(name, tag)| account_declaration_raw(name, tag))
-            .collect(),
+        MetaEntry::Correction { macro_output, .. } => {
+            extract_and_normalize_account_declarations(macro_output)
+        }
     }
 }
 

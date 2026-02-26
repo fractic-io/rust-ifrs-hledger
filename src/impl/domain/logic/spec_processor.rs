@@ -3,8 +3,7 @@ use std::{
     iter::once,
 };
 
-use base64::{engine::general_purpose::STANDARD, Engine as _};
-use chrono::{Datelike, Duration, NaiveDate};
+use chrono::{Duration, NaiveDate};
 use fractic_server_error::ServerError;
 
 use crate::{
@@ -14,18 +13,16 @@ use crate::{
     },
     entities::{
         Account, AccountingLogic, Annotation, Assertion, AssetHandler, BackingAccount, CashHandler,
-        Command, CommandLogic, CommodityHandler, CommonStockWhileUnpaid,
-        DecoratedFinancialRecordSpecs, DecoratedTransactionSpec, ExpenseAccount, ExpenseHandler,
-        FinancialRecords, Handlers, IncomeHandler, LiabilityAccount, MacroContext, MacroHandler,
-        MetaEntry, PayeeHandler, ReimbursableEntityHandler, ShareholderHandler, Transaction,
-        TransactionLabel, TransactionPosting, TransactionSpecId,
+        CommodityHandler, CommonStockWhileUnpaid, DecoratedTransactionSpec, ExpenseAccount,
+        ExpenseHandler, FinancialRecords_Intermediate1, FinancialRecords_Intermediate2, Handlers,
+        IncomeHandler, LiabilityAccount, PayeeHandler, ReimbursableEntityHandler,
+        ShareholderHandler, Transaction, TransactionLabel, TransactionPosting, TransactionSpecId,
     },
     errors::{
-        CommonStockCannotBePrepaid, InvalidArgumentsForAccountingLogic, InvalidCsvContent,
-        NoTransactionsToReimburse, NonAmortizableAsset, UnexpectedNegativeValue,
-        UnexpectedPartialReimbursement, UnexpectedPositiveValue, VariableExpenseDoubleInit,
-        VariableExpenseInvalidPaymentDate, VariableExpenseNoInit,
-        VariableExpenseNotEnoughHistoricalData,
+        CommonStockCannotBePrepaid, InvalidArgumentsForAccountingLogic, NoTransactionsToReimburse,
+        NonAmortizableAsset, UnexpectedNegativeValue, UnexpectedPartialReimbursement,
+        UnexpectedPositiveValue, VariableExpenseDoubleInit, VariableExpenseInvalidPaymentDate,
+        VariableExpenseNoInit, VariableExpenseNotEnoughHistoricalData,
     },
     ext::standard_accounts::{
         PREPAID_SHARE_ISSUANCE_COSTS, SHARE_ISSUANCE_COSTS, SHARE_ISSUANCE_COSTS_PAYABLE,
@@ -37,7 +34,7 @@ use crate::{
 use super::utils::PopByAmount;
 
 pub(crate) struct SpecProcessor<H: Handlers> {
-    specs: DecoratedFinancialRecordSpecs<H>,
+    specs: FinancialRecords_Intermediate1<H>,
 }
 
 /// Store historical information of variables expenses, to use for making
@@ -87,6 +84,7 @@ struct Transformation {
     transactions: Vec<Transaction>,
     ext_transactions: Vec<Transaction>,
     ext_assertions: Vec<Assertion>,
+    ext_raw: Vec<String>,
     expense_history_delta: Option<ExpenseHistoryDelta>,
     reimbursement_state_delta: Option<ReimbursementStateDelta>,
     annotations: Vec<Annotation>,
@@ -95,6 +93,7 @@ struct Transformation {
 struct FoldState {
     transactions: Vec<Transaction>,
     assertions: Vec<Assertion>,
+    raw: Vec<String>,
     expense_history_lookup: HashMap<ExpenseAccount, ExpenseHistory>,
     label_lookup: HashMap<TransactionSpecId, TransactionLabel>,
     annotations_lookup: HashMap<TransactionSpecId, Vec<Annotation>>,
@@ -106,6 +105,7 @@ impl FoldState {
         Self {
             transactions: Vec::new(),
             assertions: Vec::new(),
+            raw: Vec::new(),
             expense_history_lookup: HashMap::new(),
             label_lookup: HashMap::new(),
             annotations_lookup: HashMap::new(),
@@ -118,6 +118,7 @@ impl FoldState {
         let FoldState {
             mut transactions,
             mut assertions,
+            mut raw,
             mut expense_history_lookup,
             mut label_lookup,
             mut annotations_lookup,
@@ -147,6 +148,7 @@ impl FoldState {
         transactions.extend(t.transactions);
         transactions.extend(t.ext_transactions);
         assertions.extend(t.ext_assertions);
+        raw.extend(t.ext_raw);
 
         if let Some(delta) = t.expense_history_delta {
             let expense_history = expense_history_lookup.entry(delta.account).or_default();
@@ -168,6 +170,7 @@ impl FoldState {
         Ok(Self {
             transactions,
             assertions,
+            raw,
             expense_history_lookup,
             label_lookup,
             annotations_lookup,
@@ -193,15 +196,15 @@ macro_rules! amount_should_be_positive {
 }
 
 impl<H: Handlers> SpecProcessor<H> {
-    pub(crate) fn new(specs: DecoratedFinancialRecordSpecs<H>) -> Self {
+    pub(crate) fn new(specs: FinancialRecords_Intermediate1<H>) -> Self {
         Self { specs }
     }
 
-    pub(crate) fn process(self) -> Result<FinancialRecords, ServerError> {
-        let DecoratedFinancialRecordSpecs {
+    pub(crate) fn process(self) -> Result<FinancialRecords_Intermediate2<H>, ServerError> {
+        let FinancialRecords_Intermediate1 {
             mut transaction_specs,
             assertion_specs,
-            commands: operation_specs,
+            commands,
         } = self.specs;
 
         // Important for reimbursement tracking.
@@ -256,15 +259,11 @@ impl<H: Handlers> SpecProcessor<H> {
             .chain(transactions_fold_result.assertions.into_iter())
             .collect();
 
-        let operations = operation_specs
-            .into_iter()
-            .map(|spec| Self::process_operation(spec, &transactions_fold_result.transactions))
-            .collect::<Result<Vec<MetaEntry>, ServerError>>()?;
-
-        Ok(FinancialRecords {
+        Ok(FinancialRecords_Intermediate2 {
             transactions: transactions_fold_result.transactions,
             assertions,
-            meta_entries: operations,
+            commands,
+            ext_raw: transactions_fold_result.raw,
             label_lookup: transactions_fold_result.label_lookup,
             annotations_lookup: transactions_fold_result.annotations_lookup,
             unreimbursed_entries: transactions_fold_result
@@ -300,6 +299,7 @@ impl<H: Handlers> SpecProcessor<H> {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -393,6 +393,7 @@ impl<H: Handlers> SpecProcessor<H> {
             transactions,
             ext_transactions,
             ext_assertions,
+            ext_raw,
             annotations,
         })
     }
@@ -414,6 +415,7 @@ impl<H: Handlers> SpecProcessor<H> {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -539,6 +541,7 @@ impl<H: Handlers> SpecProcessor<H> {
             transactions,
             ext_transactions,
             ext_assertions,
+            ext_raw,
             annotations: annotations.into_iter().chain(once(note)).collect(),
         })
     }
@@ -560,6 +563,7 @@ impl<H: Handlers> SpecProcessor<H> {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -681,6 +685,7 @@ impl<H: Handlers> SpecProcessor<H> {
             transactions,
             ext_transactions,
             ext_assertions,
+            ext_raw,
             annotations,
         })
     }
@@ -702,6 +707,7 @@ impl<H: Handlers> SpecProcessor<H> {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -831,6 +837,7 @@ impl<H: Handlers> SpecProcessor<H> {
             transactions,
             ext_transactions,
             ext_assertions,
+            ext_raw,
             annotations,
         })
     }
@@ -850,6 +857,7 @@ impl<H: Handlers> SpecProcessor<H> {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -873,6 +881,7 @@ impl<H: Handlers> SpecProcessor<H> {
             annotations: annotations.clone(),
             ext_transactions: Default::default(),
             ext_assertions: Default::default(),
+            ext_raw: ext_raw.clone(),
         })?;
         transactions.extend(cap_transformation.transactions);
 
@@ -930,6 +939,7 @@ impl<H: Handlers> SpecProcessor<H> {
             transactions,
             ext_transactions,
             ext_assertions,
+            ext_raw,
             annotations,
         })
     }
@@ -951,6 +961,7 @@ impl<H: Handlers> SpecProcessor<H> {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -1070,6 +1081,7 @@ impl<H: Handlers> SpecProcessor<H> {
             transactions,
             ext_transactions,
             ext_assertions,
+            ext_raw,
             annotations,
         })
     }
@@ -1164,6 +1176,7 @@ impl<H: Handlers> SpecProcessor<H> {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -1278,6 +1291,7 @@ impl<H: Handlers> SpecProcessor<H> {
             transactions,
             ext_transactions,
             ext_assertions,
+            ext_raw,
             annotations: annotations.into_iter().chain(once(note)).collect(),
         })
     }
@@ -1299,6 +1313,7 @@ impl<H: Handlers> SpecProcessor<H> {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -1336,6 +1351,7 @@ impl<H: Handlers> SpecProcessor<H> {
             transactions: vec![tx],
             ext_transactions,
             ext_assertions,
+            ext_raw,
             expense_history_delta: None,
             reimbursement_state_delta: None,
             annotations: annotations.into_iter().chain(once(note)).collect(),
@@ -1359,6 +1375,7 @@ impl<H: Handlers> SpecProcessor<H> {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -1403,6 +1420,7 @@ impl<H: Handlers> SpecProcessor<H> {
             transactions,
             ext_transactions,
             ext_assertions,
+            ext_raw,
             annotations: annotations.into_iter().chain(once(note)).collect(),
         })
     }
@@ -1449,6 +1467,7 @@ impl<H: Handlers> SpecProcessor<H> {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -1514,6 +1533,7 @@ impl<H: Handlers> SpecProcessor<H> {
             transactions: vec![tx],
             ext_transactions,
             ext_assertions: ext_assertions.into_iter().chain(once(assrt)).collect(),
+            ext_raw,
             expense_history_delta: None,
             reimbursement_state_delta: Some(ReimbursementStateDelta::Pop {
                 date: payment_date,
@@ -1539,6 +1559,7 @@ impl<H: Handlers> SpecProcessor<H> {
             annotations,
             ext_transactions,
             ext_assertions,
+            ext_raw,
         } = spec
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
@@ -1622,87 +1643,10 @@ impl<H: Handlers> SpecProcessor<H> {
             transactions: vec![tx],
             ext_transactions,
             ext_assertions: ext_assertions.into_iter().chain(assrt).collect(),
+            ext_raw,
             expense_history_delta: None,
             reimbursement_state_delta: None,
             annotations,
         })
-    }
-
-    fn process_operation(
-        spec: Command<H>,
-        transactions: &Vec<Transaction>,
-    ) -> Result<MetaEntry, ServerError> {
-        let Command {
-            id,
-            date,
-            exec: operation_logic,
-            arguments,
-            description,
-            amount,
-            commodity,
-        } = spec;
-        match operation_logic {
-            CommandLogic::Close(logic) => {
-                if date.month() != 12 || date.day() != 31 {
-                    return Err(InvalidCsvContent::with_debug(
-                        &format!(
-                            "Close entry for {} (id {}) date must be December 31.",
-                            date.year(),
-                            id
-                        ),
-                        &date,
-                    ));
-                }
-                let Some(argument) = arguments.into_iter().next() else {
-                    return Err(InvalidCsvContent::new(&format!(
-                        "Close entry for {} (id {}) must have argument field set to the closing \
-                         tag, as output by the CloseRecordGenerator.",
-                        date.year(),
-                        id
-                    )));
-                };
-                let content = STANDARD.decode(argument).map_err(|e| {
-                    InvalidCsvContent::with_debug(
-                        &format!(
-                            "Close entry for {} (id {}) argument is not valid base64.",
-                            date.year(),
-                            id
-                        ),
-                        &e,
-                    )
-                })?;
-                let entries =
-                    serde_json::from_slice::<Vec<(String, f64)>>(&content).map_err(|e| {
-                        InvalidCsvContent::with_debug(
-                            &format!(
-                                "Close entry for {} (id {}) argument is not valid postings JSON.",
-                                date.year(),
-                                id
-                            ),
-                            &e,
-                        )
-                    })?;
-                Ok(MetaEntry::Close {
-                    date,
-                    postings: entries,
-                    logic,
-                    total: amount,
-                    currency: commodity.unwrap_or_else(|| H::M::default()).currency()?,
-                })
-            }
-            CommandLogic::Correction(logic) => Ok(MetaEntry::Correction {
-                date,
-                macro_output: logic.compile(
-                    date,
-                    arguments,
-                    Some(MacroContext {
-                        description,
-                        amount,
-                        currency: commodity.map(|c| c.currency()).transpose()?,
-                    }),
-                    Some(transactions),
-                )?,
-            }),
-        }
     }
 }

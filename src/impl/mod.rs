@@ -36,6 +36,7 @@ pub(crate) mod domain {
     pub(crate) mod logic {
         pub(crate) mod account_impl;
         pub(crate) mod annotation_processor;
+        pub(crate) mod command_processor;
         pub(crate) mod decorator_processor;
         pub(crate) mod spec_processor;
         mod utils;

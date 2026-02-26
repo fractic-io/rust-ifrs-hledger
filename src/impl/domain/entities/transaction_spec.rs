@@ -80,6 +80,7 @@ pub struct DecoratedTransactionSpec<H: Handlers> {
     pub annotations: Vec<Annotation>,
     pub ext_transactions: Vec<Transaction>,
     pub ext_assertions: Vec<Assertion>,
+    pub ext_raw: Vec<String>,
 }
 
 // --
