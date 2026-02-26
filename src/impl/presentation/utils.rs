@@ -15,7 +15,7 @@ fn decimal_places(currency: Currency) -> usize {
 ///
 /// For currencies with 0 decimal places, a decimal mark is always included if
 /// 'trailing_decimal' is true. For other currencies, this flag has no effect.
-pub(crate) fn format_amount(amount: f64, currency: Currency, trailing_decimal: bool) -> String {
+pub fn format_amount(amount: f64, currency: Currency, trailing_decimal: bool) -> String {
     let decimal_places = decimal_places(currency);
     if decimal_places == 0 {
         let amount_rounded = (amount.round() as i64).to_formatted_string(&Locale::en);

@@ -81,4 +81,8 @@ pub mod exports {
         pub use crate::domain::entities::transaction::*;
         pub use crate::domain::entities::transaction_spec::*;
     }
+
+    pub mod utils {
+        pub use crate::presentation::utils::format_amount;
+    }
 }
