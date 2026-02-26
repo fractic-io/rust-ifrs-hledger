@@ -84,6 +84,11 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                             .map_err(|e| InvalidRon::with_debug("CommandLogic", &e))?;
                         let arguments: Vec<String> =
                             raw_arguments.split(',').map(|s| s.to_string()).collect();
+                        let description: Option<String> = if raw_description.is_empty() {
+                            None
+                        } else {
+                            Some(raw_description.into())
+                        };
                         let amount: Option<AccountingAmountModel> = if raw_amount.is_empty() {
                             None
                         } else {
@@ -103,7 +108,7 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                             date: date.into(),
                             exec: exec.into(),
                             arguments,
-                            description: raw_description.into(),
+                            description,
                             amount: amount.map(Into::into),
                             commodity,
                         });

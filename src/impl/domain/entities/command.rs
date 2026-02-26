@@ -22,7 +22,7 @@ pub(crate) struct Command<H: Handlers> {
     pub date: NaiveDate,
     pub exec: CommandLogic<H::F>,
     pub arguments: Vec<String>,
-    pub description: String,
+    pub description: Option<String>,
     pub amount: Option<f64>,
     pub commodity: Option<H::M>,
 }

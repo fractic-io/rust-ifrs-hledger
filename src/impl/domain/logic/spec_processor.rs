@@ -16,9 +16,9 @@ use crate::{
         Account, AccountingLogic, Annotation, Assertion, AssetHandler, BackingAccount, CashHandler,
         Command, CommandLogic, CommodityHandler, CommonStockWhileUnpaid,
         DecoratedFinancialRecordSpecs, DecoratedTransactionSpec, ExpenseAccount, ExpenseHandler,
-        FinancialRecords, Handlers, IncomeHandler, LiabilityAccount, MacroHandler, MetaEntry,
-        PayeeHandler, ReimbursableEntityHandler, ShareholderHandler, Transaction, TransactionLabel,
-        TransactionPosting, TransactionSpecId,
+        FinancialRecords, Handlers, IncomeHandler, LiabilityAccount, MacroHandler, MacroInputs,
+        MetaEntry, PayeeHandler, ReimbursableEntityHandler, ShareholderHandler, Transaction,
+        TransactionLabel, TransactionPosting, TransactionSpecId,
     },
     errors::{
         CommonStockCannotBePrepaid, InvalidArgumentsForAccountingLogic, InvalidCsvContent,
@@ -1646,24 +1646,27 @@ impl<H: Handlers> SpecProcessor<H> {
                 if date.month() != 12 || date.day() != 31 {
                     return Err(InvalidCsvContent::with_debug(
                         &format!(
-                            "Close operation '{}' (id {}) date must be December 31.",
-                            description, id
+                            "Close entry for {} (id {}) date must be December 31.",
+                            date.year(),
+                            id
                         ),
                         &date,
                     ));
                 }
                 let Some(argument) = arguments.into_iter().next() else {
                     return Err(InvalidCsvContent::new(&format!(
-                        "Close operation '{}' (id {}) must have argument field set to the closing \
+                        "Close entry for {} (id {}) must have argument field set to the closing \
                          tag, as output by the CloseRecordGenerator.",
-                        description, id
+                        date.year(),
+                        id
                     )));
                 };
                 let content = STANDARD.decode(argument).map_err(|e| {
                     InvalidCsvContent::with_debug(
                         &format!(
-                            "Close operation '{}' (id {}) argument is not valid base64.",
-                            description, id
+                            "Close entry for {} (id {}) argument is not valid base64.",
+                            date.year(),
+                            id
                         ),
                         &e,
                     )
@@ -1672,9 +1675,9 @@ impl<H: Handlers> SpecProcessor<H> {
                     serde_json::from_slice::<Vec<(String, f64)>>(&content).map_err(|e| {
                         InvalidCsvContent::with_debug(
                             &format!(
-                                "Close operation '{}' (id {}) argument is not valid close-entry \
-                                 JSON.",
-                                description, id
+                                "Close entry for {} (id {}) argument is not valid postings JSON.",
+                                date.year(),
+                                id
                             ),
                             &e,
                         )
@@ -1689,7 +1692,16 @@ impl<H: Handlers> SpecProcessor<H> {
             }
             CommandLogic::Correction(logic) => Ok(MetaEntry::Correction {
                 date,
-                macro_output: logic.run(date, arguments, transactions)?,
+                macro_output: logic.compile(
+                    MacroInputs {
+                        date,
+                        arguments,
+                        description,
+                        amount,
+                        currency: commodity.map(|c| c.currency()).transpose()?,
+                    },
+                    transactions,
+                )?,
             }),
         }
     }

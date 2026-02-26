@@ -4,7 +4,7 @@ use iso_currency::Currency;
 use serde::Deserialize;
 
 use crate::{
-    entities::{expense_tl, income_tl, ExpenseClassification, IncomeClassification, NoOpDecorator},
+    entities::{expense_tl, income_tl, ExpenseClassification, IncomeClassification},
     errors::InvalidIsoCurrencyCode,
 };
 
@@ -150,13 +150,20 @@ pub trait CommodityHandler:
     }
 }
 
+pub struct MacroInputs {
+    pub date: NaiveDate,
+    pub arguments: Vec<String>,
+    pub description: Option<String>,
+    pub amount: Option<f64>,
+    pub currency: Option<Currency>,
+}
+
 pub trait MacroHandler:
     for<'de> Deserialize<'de> + std::fmt::Debug + Clone + Send + Sync + 'static
 {
-    fn run(
+    fn compile(
         &self,
-        date: NaiveDate,
-        args: Vec<String>,
+        inputs: MacroInputs,
         transactions: &Vec<Transaction>,
     ) -> Result<String, ServerError>;
 }
@@ -250,7 +257,7 @@ impl ShareholderHandler for () {
 
 impl DecoratorHandler for () {
     fn logic<H: Handlers>(&self) -> Result<Box<dyn DecoratorLogic<H>>, ServerError> {
-        Ok(Box::new(NoOpDecorator::new()))
+        Err(NotImplementedError::new())
     }
 }
 
@@ -270,10 +277,9 @@ impl PayeeHandler for () {
 }
 
 impl MacroHandler for () {
-    fn run(
+    fn compile(
         &self,
-        _date: NaiveDate,
-        _args: Vec<String>,
+        _inputs: MacroInputs,
         _transactions: &Vec<Transaction>,
     ) -> Result<String, ServerError> {
         Err(NotImplementedError::new())
