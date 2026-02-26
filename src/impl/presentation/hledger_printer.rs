@@ -78,6 +78,7 @@ impl HledgerPrinter {
         };
         for d in sorted_account_declarations {
             ledger_output.push_str(&d);
+            ledger_output.push('\n');
         }
     }
 
@@ -91,7 +92,7 @@ impl HledgerPrinter {
         let sorted_commodity_declarations = {
             let mut v: Vec<String> = currencies
                 .iter()
-                .map(|c| format!("commodity {}\n", format_amount(SAMPLE_AMOUNT, *c, true)))
+                .map(|c| format!("commodity {}", format_amount(SAMPLE_AMOUNT, *c, true)))
                 .collect();
             v.sort();
             v
@@ -99,6 +100,7 @@ impl HledgerPrinter {
         ledger_output.push_str("decimal-mark .\n");
         for d in sorted_commodity_declarations {
             ledger_output.push_str(&d);
+            ledger_output.push('\n');
         }
     }
 
@@ -109,12 +111,13 @@ impl HledgerPrinter {
             .map(|label| &label.payee)
             .collect();
         let sorted_payee_declarations = {
-            let mut v: Vec<String> = payees.iter().map(|p| format!("payee {}\n", p)).collect();
+            let mut v: Vec<String> = payees.iter().map(|p| format!("payee {}", p)).collect();
             v.sort();
             v
         };
         for p in sorted_payee_declarations {
             ledger_output.push_str(&p);
+            ledger_output.push('\n');
         }
     }
 
@@ -169,7 +172,10 @@ impl HledgerPrinter {
             {
                 format_note(&annotation.to_string())
                     .iter()
-                    .for_each(|line| ledger_output.push_str(&line));
+                    .for_each(|line| {
+                        ledger_output.push_str(line);
+                        ledger_output.push('\n');
+                    });
             }
             ledger_output.push('\n');
         }
@@ -209,6 +215,7 @@ impl HledgerPrinter {
             .collect::<BTreeSet<_>>();
         for account_statement in account_statements {
             ledger_output.push_str(&account_statement);
+            ledger_output.push('\n');
         }
         if !financial_records.ledger_extensions.is_empty() {
             ledger_output.push('\n');
@@ -238,6 +245,7 @@ impl HledgerPrinter {
             .collect::<BTreeSet<_>>();
         for account_statement in account_statements {
             ledger_output.push_str(&account_statement);
+            ledger_output.push('\n');
         }
         if !entries.is_empty() {
             ledger_output.push('\n');
@@ -302,6 +310,7 @@ impl HledgerPrinter {
                     let tagged = attach_transaction_tag(normalized, "correction:");
                     let with_notes = attach_transaction_notes(tagged, notes);
                     ledger_output.push_str(&with_notes);
+                    ledger_output.push('\n');
                 }
             }
 
@@ -314,14 +323,12 @@ impl HledgerPrinter {
 // "account Assets:Cash     ; type: C"
 // ----------------------------------------------------------------------------
 
-/// (newlines included)
 fn format_account_declaration(account: &Account) -> String {
     format_account_declaration_raw(&account.ledger(), account.type_tag())
 }
 
-/// (newlines included)
 fn format_account_declaration_raw(ledger: &str, type_tag: char) -> String {
-    format!("account {:81}  ; type: {}\n", ledger, type_tag)
+    format!("account {:81}  ; type: {}", ledger, type_tag)
 }
 
 fn is_account_declaration(line: &str) -> bool {
@@ -353,7 +360,6 @@ fn parse_account_declaration(line: &str) -> Option<(&str, char)> {
 // "    Account Name      Amount"
 // ----------------------------------------------------------------------------
 
-/// (newlines included)
 fn format_posting_line(left: &str, right: &str) -> String {
     let content_width = POSTING_TOTAL_WIDTH.saturating_sub(char_width(POSTING_INDENT));
     let body = join_and_pad_between(left, right, content_width, POSTING_MIN_GAP);
@@ -381,14 +387,13 @@ fn parse_posting_line(line: &str) -> Option<(&str, &str)> {
 // "    ; Note"
 // ----------------------------------------------------------------------------
 
-/// (newlines included)
 fn format_note(note: &str) -> Vec<String> {
     let wrapped = textwrap::wrap(note, 94);
     let prefix = "    ;";
 
-    let mut lines = vec![format!("{}\n", prefix)];
+    let mut lines = vec![prefix.to_string()];
     for line in wrapped {
-        lines.push(format!("{} {}\n", prefix, line));
+        lines.push(format!("{} {}", prefix, line));
     }
     lines
 }
@@ -430,7 +435,7 @@ fn extract_and_normalize_non_account_lines(ledger_content: &str) -> String {
 /// Attach a tag to all transaction entries detected in the ledger content.
 fn attach_transaction_tag(ledger_content: String, tag: &str) -> String {
     let lines: Vec<&str> = ledger_content.lines().collect();
-    let out = lines
+    lines
         .iter()
         .enumerate()
         .map(|(idx, line)| {
@@ -445,8 +450,7 @@ fn attach_transaction_tag(ledger_content: String, tag: &str) -> String {
             }
         })
         .collect::<Vec<_>>()
-        .join("\n");
-    format!("{}\n", out)
+        .join("\n")
 }
 
 /// Attach notes to all transaction entries detected in the ledger content.
@@ -471,11 +475,7 @@ fn attach_transaction_notes(ledger_content: String, notes: &[String]) -> String 
             }
 
             for note in notes {
-                output_lines.extend(
-                    format_note(note)
-                        .into_iter()
-                        .map(|line| line.trim_end().to_string()),
-                );
+                output_lines.extend(format_note(note));
             }
             continue;
         }
@@ -484,8 +484,7 @@ fn attach_transaction_notes(ledger_content: String, notes: &[String]) -> String 
         index += 1;
     }
 
-    let out = output_lines.join("\n");
-    format!("{}\n", out)
+    output_lines.join("\n")
 }
 
 // EOY-entry helpers.
