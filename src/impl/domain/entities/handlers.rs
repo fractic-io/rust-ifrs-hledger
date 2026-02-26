@@ -187,8 +187,8 @@ pub trait Handlers: std::fmt::Debug + Send + Sync + 'static {
 }
 
 #[derive(Debug)]
-pub(crate) struct HandlersImpl<A, I, E, R, C, S, D, M, P, O> {
-    pub _phantom: std::marker::PhantomData<(A, I, E, R, C, S, D, M, P, O)>,
+pub(crate) struct HandlersImpl<A, I, E, R, C, S, D, M, P, F> {
+    pub _phantom: std::marker::PhantomData<(A, I, E, R, C, S, D, M, P, F)>,
 }
 
 impl<A, I, E, R, C, S, D, M, P, F> Handlers for HandlersImpl<A, I, E, R, C, S, D, M, P, F>
