@@ -24,6 +24,8 @@ pub enum EndOfYearEntry {
         date: NaiveDate,
         /// Description from original command properties (if any).
         description: Option<String>,
+        /// Notes from the original command properties (if any).
+        notes: Vec<String>,
         /// Ledger content to be inserted verbatim (although formatting may be
         /// altered).
         macro_output: String,

@@ -78,6 +78,7 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                         let raw_description = r.get(6).unwrap_or("").trim();
                         let raw_amount = r.get(7).unwrap_or("").trim();
                         let raw_commodity = r.get(8).unwrap_or("").trim();
+                        let raw_notes = r.get(10).unwrap_or("");
 
                         let date: ISODateModel = ISODateModel::from_str(raw_date)?;
                         let exec: CommandLogicModel<H::F> = from_str(raw_exec)
@@ -102,6 +103,11 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                                     .map_err(|e| InvalidRon::with_debug("Commodity", &e))?,
                             )
                         };
+                        let notes: Vec<String> = if raw_notes.is_empty() {
+                            vec![]
+                        } else {
+                            raw_notes.lines().map(|n| n.into()).collect()
+                        };
 
                         commands.push(Command {
                             id: CommandSpecId((i + 2) as u64),
@@ -111,6 +117,7 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                             description,
                             amount: amount.map(Into::into),
                             commodity,
+                            notes,
                         });
                     } else {
                         // Parse transaction entry.

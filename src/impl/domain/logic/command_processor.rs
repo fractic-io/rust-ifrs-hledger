@@ -159,6 +159,7 @@ impl<H: Handlers> CommandProcessor<H> {
             description,
             amount,
             commodity,
+            notes,
             ..
         } = spec
         else {
@@ -170,6 +171,7 @@ impl<H: Handlers> CommandProcessor<H> {
         let eoy_entry = EndOfYearEntry::Correction {
             date,
             description: description.clone(),
+            notes,
             macro_output: logic.compile(
                 date,
                 arguments,

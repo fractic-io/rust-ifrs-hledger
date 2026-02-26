@@ -25,6 +25,7 @@ pub(crate) struct Command<H: Handlers> {
     pub description: Option<String>,
     pub amount: Option<f64>,
     pub commodity: Option<H::M>,
+    pub notes: Vec<String>,
 }
 
 // --

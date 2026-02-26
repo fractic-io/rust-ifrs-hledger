@@ -69,7 +69,10 @@ impl HledgerPrinter {
             .chain(financial_records.assertions.iter().map(|a| &a.account))
             .collect();
         let sorted_account_declarations = {
-            let mut v: Vec<String> = accounts.into_iter().map(account_declaration).collect();
+            let mut v: Vec<String> = accounts
+                .into_iter()
+                .map(format_account_declaration)
+                .collect();
             v.sort();
             v
         };
@@ -164,13 +167,9 @@ impl HledgerPrinter {
                 .get(&tx.spec_id)
                 .unwrap_or(&vec![])
             {
-                let s = annotation.to_string();
-                let wrapped = textwrap::wrap(&s, 94);
-                let prefix = "    ;";
-                ledger_output.push_str(&format!("{}\n", prefix));
-                for line in wrapped {
-                    ledger_output.push_str(&format!("{} {}\n", prefix, line));
-                }
+                format_note(&annotation.to_string())
+                    .iter()
+                    .for_each(|line| ledger_output.push_str(&line));
             }
             ledger_output.push('\n');
         }
@@ -294,8 +293,15 @@ impl HledgerPrinter {
                         ));
                     }
                 }
-                EndOfYearEntry::Correction { macro_output, .. } => {
-                    ledger_output.push_str(&extract_and_normalize_non_account_lines(macro_output));
+                EndOfYearEntry::Correction {
+                    macro_output,
+                    notes,
+                    ..
+                } => {
+                    let normalized = extract_and_normalize_non_account_lines(macro_output);
+                    let tagged = attach_transaction_tag(normalized, "correction:");
+                    let with_notes = attach_transaction_notes(tagged, notes);
+                    ledger_output.push_str(&with_notes);
                 }
             }
 
@@ -308,11 +314,13 @@ impl HledgerPrinter {
 // "account Assets:Cash     ; type: C"
 // ----------------------------------------------------------------------------
 
-fn account_declaration(account: &Account) -> String {
-    account_declaration_raw(&account.ledger(), account.type_tag())
+/// (newlines included)
+fn format_account_declaration(account: &Account) -> String {
+    format_account_declaration_raw(&account.ledger(), account.type_tag())
 }
 
-fn account_declaration_raw(ledger: &str, type_tag: char) -> String {
+/// (newlines included)
+fn format_account_declaration_raw(ledger: &str, type_tag: char) -> String {
     format!("account {:81}  ; type: {}\n", ledger, type_tag)
 }
 
@@ -341,21 +349,11 @@ fn parse_account_declaration(line: &str) -> Option<(&str, char)> {
     Some((name, ch)).filter(|(n, _)| !n.is_empty() && is_single)
 }
 
-/// Normalize the inner padding of *existing* account declarations, as detected
-/// from the raw ledger content.
-fn extract_and_normalize_account_declarations(ledger_content: &str) -> Vec<String> {
-    ledger_content
-        .lines()
-        .filter(|line| is_account_declaration(line))
-        .filter_map(parse_account_declaration)
-        .map(|(name, tag)| account_declaration_raw(name, tag))
-        .collect()
-}
-
 // Building / manipulating indented posting lines. Ex:
 // "    Account Name      Amount"
 // ----------------------------------------------------------------------------
 
+/// (newlines included)
 fn format_posting_line(left: &str, right: &str) -> String {
     let content_width = POSTING_TOTAL_WIDTH.saturating_sub(char_width(POSTING_INDENT));
     let body = join_and_pad_between(left, right, content_width, POSTING_MIN_GAP);
@@ -379,6 +377,36 @@ fn parse_posting_line(line: &str) -> Option<(&str, &str)> {
     Some((left, right))
 }
 
+// Building / manipulating indented note lines. Ex:
+// "    ; Note"
+// ----------------------------------------------------------------------------
+
+/// (newlines included)
+fn format_note(note: &str) -> Vec<String> {
+    let wrapped = textwrap::wrap(note, 94);
+    let prefix = "    ;";
+
+    let mut lines = vec![format!("{}\n", prefix)];
+    for line in wrapped {
+        lines.push(format!("{} {}\n", prefix, line));
+    }
+    lines
+}
+
+// Helpers for manipulating existing ledger content.
+// ----------------------------------------------------------------------------
+
+/// Normalize the inner padding of *existing* account declarations, as detected
+/// from the raw ledger content.
+fn extract_and_normalize_account_declarations(ledger_content: &str) -> Vec<String> {
+    ledger_content
+        .lines()
+        .filter(|line| is_account_declaration(line))
+        .filter_map(parse_account_declaration)
+        .map(|(name, tag)| format_account_declaration_raw(name, tag))
+        .collect()
+}
+
 /// Normalize the inner padding of *existing* posting lines, as detected from
 /// the raw ledger content.
 fn extract_and_normalize_non_account_lines(ledger_content: &str) -> String {
@@ -399,6 +427,61 @@ fn extract_and_normalize_non_account_lines(ledger_content: &str) -> String {
         .to_string()
 }
 
+/// Attach a tag to all transaction entries detected in the ledger content.
+fn attach_transaction_tag(ledger_content: String, tag: &str) -> String {
+    let lines: Vec<&str> = ledger_content.lines().collect();
+    lines
+        .iter()
+        .enumerate()
+        .map(|(idx, line)| {
+            if is_transaction_header_line(&lines, idx) {
+                if line.contains(&format!("; {}", tag)) {
+                    (*line).to_string()
+                } else {
+                    format!("{}  ; {}", line, tag)
+                }
+            } else {
+                (*line).to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Attach notes to all transaction entries detected in the ledger content.
+fn attach_transaction_notes(ledger_content: String, notes: &[String]) -> String {
+    if notes.is_empty() {
+        return ledger_content.to_string();
+    }
+
+    let lines: Vec<&str> = ledger_content.lines().collect();
+    let mut output_lines = Vec::new();
+    let mut index = 0;
+
+    while index < lines.len() {
+        let line = lines[index];
+        if is_transaction_header_line(&lines, index) {
+            output_lines.push(line.to_string());
+            index += 1;
+
+            while index < lines.len() && is_indented_line(lines[index]) {
+                output_lines.push(lines[index].to_string());
+                index += 1;
+            }
+
+            for note in notes {
+                output_lines.extend(format_note(note));
+            }
+            continue;
+        }
+
+        output_lines.push(line.to_string());
+        index += 1;
+    }
+
+    output_lines.join("\n")
+}
+
 // EOY-entry helpers.
 // ----------------------------------------------------------------------------
 
@@ -416,7 +499,9 @@ fn account_declarations_from_eoy_entry(entry: &EndOfYearEntry) -> Vec<String> {
     match entry {
         EndOfYearEntry::Close { logic, .. } => match logic {
             CloseLogic::Retain => {
-                vec![account_declaration(&(RETAINED_EARNINGS.clone().into()))]
+                vec![format_account_declaration(
+                    &(RETAINED_EARNINGS.clone().into()),
+                )]
             }
         },
         EndOfYearEntry::Correction { macro_output, .. } => {
@@ -440,4 +525,37 @@ fn join_and_pad_between(left: &str, right: &str, total_width: usize, min_gap: us
 
 fn char_width(s: &str) -> usize {
     s.chars().count()
+}
+
+fn is_indented_line(line: &str) -> bool {
+    line.starts_with(POSTING_INDENT)
+}
+
+fn is_transaction_header_line(lines: &[&str], index: usize) -> bool {
+    let starts_with_date = |line: &str| {
+        let bytes = line.as_bytes();
+        if bytes.len() < 10 {
+            return false;
+        }
+        if !bytes[0..4].iter().all(u8::is_ascii_digit) {
+            return false;
+        }
+        if bytes[4] != b'-' {
+            return false;
+        }
+        if !bytes[5..7].iter().all(u8::is_ascii_digit) {
+            return false;
+        }
+        if bytes[7] != b'-' {
+            return false;
+        }
+        if !bytes[8..10].iter().all(u8::is_ascii_digit) {
+            return false;
+        }
+        if bytes.len() == 10 {
+            return true;
+        }
+        bytes[10].is_ascii_whitespace()
+    };
+    lines.len() > index + 1 && starts_with_date(lines[index]) && is_indented_line(lines[index + 1])
 }
