@@ -17,12 +17,20 @@ pub enum CommonStockWhileUnpaid {
 }
 
 #[derive(Debug)]
+pub enum ShareIssuanceCostBookTo {
+    RetainedEarnings,
+    DiscountOnStockIssuance,
+}
+
+#[derive(Debug)]
 pub enum AccountingLogic<E, A, I, R, S> {
     CommonStock {
         subscriber: S,
         while_unpaid: CommonStockWhileUnpaid,
     },
-    ShareIssuanceCost,
+    ShareIssuanceCost {
+        book_to: ShareIssuanceCostBookTo,
+    },
     SimpleExpense(E),
     Capitalize(A),
     Amortize(A),

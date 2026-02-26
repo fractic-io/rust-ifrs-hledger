@@ -11,18 +11,12 @@ pub enum CommandLogicModel<O> {
     Correction(O),
 }
 
-impl Into<CloseLogic> for CloseLogicModel {
-    fn into(self) -> CloseLogic {
-        match self {
-            CloseLogicModel::Retain => CloseLogic::Retain,
-        }
-    }
-}
-
 impl<O> Into<CommandLogic<O>> for CommandLogicModel<O> {
     fn into(self) -> CommandLogic<O> {
         match self {
-            CommandLogicModel::Close(logic) => CommandLogic::Close(logic.into()),
+            CommandLogicModel::Close(logic) => CommandLogic::Close(match logic {
+                CloseLogicModel::Retain => CloseLogic::Retain,
+            }),
             CommandLogicModel::Correction(logic) => CommandLogic::Correction(logic),
         }
     }
