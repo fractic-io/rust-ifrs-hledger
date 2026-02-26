@@ -2,7 +2,9 @@ use fractic_server_error::{CriticalError, ServerError};
 use regex::Regex;
 use std::{collections::HashMap, path::PathBuf, process::Command};
 
-use crate::errors::{HledgerCommandFailed, HledgerInvalidResponse, UnreplacedPlaceholdersRemain};
+use crate::errors::{
+    HledgerCommandFailed, HledgerQueryInvalidResponse, UnreplacedPlaceholdersRemain,
+};
 
 pub(crate) fn replace_all_placeholders_in_string(
     content: String,
@@ -133,10 +135,15 @@ pub(crate) fn hledger(
                 .and_then(|r| r.ok())
                 .and_then(|r| r.iter().last().map(|s| s.to_owned()))
                 .ok_or_else(|| {
-                    HledgerInvalidResponse::with_debug(&cmd, query.dbg(), fetch.dbg(), &out_csv)
+                    HledgerQueryInvalidResponse::with_debug(
+                        &cmd,
+                        query.dbg(),
+                        fetch.dbg(),
+                        &out_csv,
+                    )
                 })?;
             amount_str.parse::<f64>().map_err(|e| {
-                HledgerInvalidResponse::with_debug(&cmd, query.dbg(), fetch.dbg(), &e)
+                HledgerQueryInvalidResponse::with_debug(&cmd, query.dbg(), fetch.dbg(), &e)
             })?
         }
         Return::SearchRowOrZero(search) => {
@@ -147,7 +154,7 @@ pub(crate) fn hledger(
                 .and_then(|r| r.iter().last().map(|s| s.to_owned()))
                 .unwrap_or("0".to_string());
             amount_str.parse::<f64>().map_err(|e| {
-                HledgerInvalidResponse::with_debug(&cmd, query.dbg(), fetch.dbg(), &e)
+                HledgerQueryInvalidResponse::with_debug(&cmd, query.dbg(), fetch.dbg(), &e)
             })?
         }
     };
