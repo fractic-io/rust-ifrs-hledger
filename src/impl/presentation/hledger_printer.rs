@@ -270,7 +270,7 @@ impl HledgerPrinter {
                         "{} {}  ; close:{}\n",
                         date,
                         title,
-                        date.format("%Y")
+                        entry.year()
                     ));
 
                     // Write debit entries.
@@ -307,7 +307,8 @@ impl HledgerPrinter {
                     ..
                 } => {
                     let normalized = extract_and_normalize_non_account_lines(macro_output);
-                    let tagged = attach_transaction_tag(normalized, "correction:");
+                    let tagged =
+                        attach_transaction_tag(normalized, &format!("correction:{}", entry.year()));
                     let with_notes = attach_transaction_notes(tagged, notes);
                     ledger_output.push_str(&with_notes);
                     ledger_output.push('\n');
