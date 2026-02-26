@@ -139,40 +139,69 @@ fn parse_close_postings(output: &str) -> Result<Vec<(String, f64)>, ServerError>
 }
 
 fn parse_close_posting(raw_line: &str) -> Result<Option<(String, f64)>, ServerError> {
-    let line = raw_line.trim();
-    if line.is_empty() || line == "VoidOut" {
-        return Ok(None);
-    }
+    // We are looking for lines like:
+    //     Expenses:NonOperating:Other:Incidental       -10,000. ₩ = 0. ₩
+
     if !raw_line.starts_with("    ") {
         // Header line: "YYYY-12-31 ... ; retain:"
+        return Ok(None);
+    }
+
+    let line = raw_line.trim();
+
+    if line.is_empty() || line == "VoidOut" {
         return Ok(None);
     }
     if !line.contains(" = ") {
         return Err(HledgerCloseInvalidResponse::new(output_context(raw_line)));
     }
 
-    let left = line
-        .split(" = ")
-        .next()
+    let (debit_expr, _assertion_expr) = line
+        .split_once(" = ")
         .ok_or_else(|| HledgerCloseInvalidResponse::new(output_context(raw_line)))?;
-    let mut sections = left.split_whitespace();
-    let account = sections
-        .next()
+    let (account, amount_expr) = debit_expr
+        .split_once(char::is_whitespace)
         .ok_or_else(|| HledgerCloseInvalidResponse::new(output_context(raw_line)))?;
-    let amount_raw = sections
-        .next()
-        .ok_or_else(|| HledgerCloseInvalidResponse::new(output_context(raw_line)))?;
-
-    let amount = parse_hledger_amount(amount_raw)?;
+    let amount = parse_amount_expr(amount_expr)?;
     Ok(Some((account.to_string(), amount)))
 }
 
-fn parse_hledger_amount(value: &str) -> Result<f64, ServerError> {
+/// Parse a formatted number like:
+/// - `-4,000.`
+/// - `9,993.`
+/// - `-535`
+/// into a floating point number.
+fn parse_formatted_number(value: &str) -> Result<f64, ServerError> {
     let normalized = value.replace(",", "");
     let without_trailing_dot = normalized.strip_suffix('.').unwrap_or(&normalized);
     without_trailing_dot.parse::<f64>().map_err(|e| {
         HledgerCloseInvalidResponse::with_debug(format!("invalid close amount '{}'", value), &e)
     })
+}
+
+/// Parse an amount expression like:
+/// - `-4,000. ₩`
+/// - `USD -4,000.45`
+/// - `$4,000.45`
+/// into a floating point number.
+fn parse_amount_expr(expr: &str) -> Result<f64, ServerError> {
+    for token in expr.split_whitespace() {
+        if let Ok(amount) = parse_formatted_number(token) {
+            return Ok(amount);
+        }
+        let cleaned = token.trim_matches(|c: char| {
+            !c.is_ascii_digit() && c != '-' && c != '+' && c != ',' && c != '.'
+        });
+        if !cleaned.is_empty() {
+            if let Ok(amount) = parse_formatted_number(cleaned) {
+                return Ok(amount);
+            }
+        }
+    }
+    Err(HledgerCloseInvalidResponse::new(format!(
+        "could not parse amount from close posting expression '{}'",
+        expr
+    )))
 }
 
 fn format_clipboard_row(closing_date: &str, tag: &str, total_amount: f64) -> String {
@@ -196,9 +225,46 @@ mod tests {
 
     #[test]
     fn parse_hledger_amount_handles_commas_and_dot_suffix() {
-        assert_eq!(parse_hledger_amount("-4,000.").unwrap(), -4000.0);
-        assert_eq!(parse_hledger_amount("9,993.").unwrap(), 9993.0);
-        assert_eq!(parse_hledger_amount("-535").unwrap(), -535.0);
+        assert_eq!(parse_formatted_number("-4,000.").unwrap(), -4000.0);
+        assert_eq!(parse_formatted_number("9,993.").unwrap(), 9993.0);
+        assert_eq!(parse_formatted_number("-535").unwrap(), -535.0);
+    }
+
+    #[test]
+    fn parse_close_posting_accepts_amount_before_or_after_commodity() {
+        assert_eq!(
+            parse_close_posting("    Expenses:Ops -4,000. USD = 0").unwrap(),
+            Some(("Expenses:Ops".to_string(), -4000.0))
+        );
+        assert_eq!(
+            parse_close_posting("    Expenses:Ops USD -4,000. = 0").unwrap(),
+            Some(("Expenses:Ops".to_string(), -4000.0))
+        );
+    }
+
+    #[test]
+    fn parse_amount_expr_handles_currency_symbols_and_explicit_plus() {
+        assert_eq!(parse_amount_expr("USD +4,000.45").unwrap(), 4000.45);
+        assert_eq!(parse_amount_expr("($4,000.45)").unwrap(), 4000.45);
+        assert_eq!(parse_amount_expr("JPY -535").unwrap(), -535.0);
+    }
+
+    #[test]
+    fn parse_amount_expr_uses_first_parseable_numeric_token() {
+        assert_eq!(parse_amount_expr("KRW 1,200. note -90").unwrap(), 1200.0);
+        assert_eq!(parse_amount_expr("abc -12.5 xyz").unwrap(), -12.5);
+    }
+
+    #[test]
+    fn parse_amount_expr_rejects_empty_or_missing_numeric_tokens() {
+        assert!(parse_amount_expr("").is_err());
+        assert!(parse_amount_expr("USD KRW").is_err());
+        assert!(parse_amount_expr("...").is_err());
+    }
+
+    #[test]
+    fn parse_amount_expr_rejects_malformed_number_like_double_dot() {
+        assert!(parse_amount_expr("USD 1,234..56").is_err());
     }
 
     #[test]

@@ -85,19 +85,23 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                         let date: ISODateModel = ISODateModel::from_str(raw_date)?;
                         let exec: CommandLogicModel<H::F> = from_str(raw_exec)
                             .map_err(|e| InvalidRon::with_debug("CommandLogic", &e))?;
-                        let arguments: Vec<String> =
-                            raw_arguments.split(',').map(|s| s.to_string()).collect();
-                        let description: Option<String> = if raw_description.is_empty() {
+                        let arguments: Vec<String> = if raw_arguments.trim().is_empty() {
+                            vec![]
+                        } else {
+                            raw_arguments.split(',').map(|s| s.to_string()).collect()
+                        };
+                        let description: Option<String> = if raw_description.trim().is_empty() {
                             None
                         } else {
                             Some(raw_description.into())
                         };
-                        let amount: Option<AccountingAmountModel> = if raw_amount.is_empty() {
+                        let amount: Option<AccountingAmountModel> = if raw_amount.trim().is_empty()
+                        {
                             None
                         } else {
                             Some(AccountingAmountModel::from_str(raw_amount)?)
                         };
-                        let commodity: Option<H::M> = if raw_commodity.is_empty() {
+                        let commodity: Option<H::M> = if raw_commodity.trim().is_empty() {
                             None
                         } else {
                             Some(
@@ -105,7 +109,7 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                                     .map_err(|e| InvalidRon::with_debug("Commodity", &e))?,
                             )
                         };
-                        let notes: Vec<String> = if raw_notes.is_empty() {
+                        let notes: Vec<String> = if raw_notes.trim().is_empty() {
                             vec![]
                         } else {
                             raw_notes.lines().map(|n| n.into()).collect()
@@ -162,7 +166,7 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                         let backing_account: BackingAccountModel<H::R, H::C, H::S> =
                             from_str(raw_backing_account)
                                 .map_err(|e| InvalidRon::with_debug("BackingAccount", &e))?;
-                        let custom_notes: Vec<Annotation> = if raw_notes.is_empty() {
+                        let custom_notes: Vec<Annotation> = if raw_notes.trim().is_empty() {
                             vec![]
                         } else {
                             raw_notes
