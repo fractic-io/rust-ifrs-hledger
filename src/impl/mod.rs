@@ -27,9 +27,9 @@ pub(crate) mod domain {
         pub(crate) mod cashflow_tracing_tag;
         pub(crate) mod command;
         pub(crate) mod decorator_logic;
+        pub(crate) mod end_of_year_entry;
         pub(crate) mod financial_records;
         pub(crate) mod handlers;
-        pub(crate) mod meta_entry;
         pub(crate) mod transaction;
         pub(crate) mod transaction_spec;
     }
@@ -75,9 +75,9 @@ pub mod exports {
         pub use crate::domain::entities::cashflow_tracing_tag::*;
         pub use crate::domain::entities::command::*;
         pub use crate::domain::entities::decorator_logic::*;
+        pub use crate::domain::entities::end_of_year_entry::*;
         pub use crate::domain::entities::financial_records::*;
         pub use crate::domain::entities::handlers::*;
-        pub use crate::domain::entities::meta_entry::*;
         pub use crate::domain::entities::transaction::*;
         pub use crate::domain::entities::transaction_spec::*;
     }

@@ -93,7 +93,7 @@ struct Transformation {
 struct FoldState {
     transactions: Vec<Transaction>,
     assertions: Vec<Assertion>,
-    raw: Vec<String>,
+    ledger_extensions: Vec<String>,
     expense_history_lookup: HashMap<ExpenseAccount, ExpenseHistory>,
     label_lookup: HashMap<TransactionSpecId, TransactionLabel>,
     annotations_lookup: HashMap<TransactionSpecId, Vec<Annotation>>,
@@ -105,7 +105,7 @@ impl FoldState {
         Self {
             transactions: Vec::new(),
             assertions: Vec::new(),
-            raw: Vec::new(),
+            ledger_extensions: Vec::new(),
             expense_history_lookup: HashMap::new(),
             label_lookup: HashMap::new(),
             annotations_lookup: HashMap::new(),
@@ -118,7 +118,7 @@ impl FoldState {
         let FoldState {
             mut transactions,
             mut assertions,
-            mut raw,
+            mut ledger_extensions,
             mut expense_history_lookup,
             mut label_lookup,
             mut annotations_lookup,
@@ -148,7 +148,7 @@ impl FoldState {
         transactions.extend(t.transactions);
         transactions.extend(t.ext_transactions);
         assertions.extend(t.ext_assertions);
-        raw.extend(t.ext_raw);
+        ledger_extensions.extend(t.ext_raw);
 
         if let Some(delta) = t.expense_history_delta {
             let expense_history = expense_history_lookup.entry(delta.account).or_default();
@@ -170,7 +170,7 @@ impl FoldState {
         Ok(Self {
             transactions,
             assertions,
-            raw,
+            ledger_extensions,
             expense_history_lookup,
             label_lookup,
             annotations_lookup,
@@ -263,7 +263,7 @@ impl<H: Handlers> SpecProcessor<H> {
             transactions: transactions_fold_result.transactions,
             assertions,
             commands,
-            ext_raw: transactions_fold_result.raw,
+            ledger_extensions: transactions_fold_result.ledger_extensions,
             label_lookup: transactions_fold_result.label_lookup,
             annotations_lookup: transactions_fold_result.annotations_lookup,
             unreimbursed_entries: transactions_fold_result

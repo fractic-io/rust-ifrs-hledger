@@ -4,8 +4,8 @@ use fractic_server_error::ServerError;
 
 use crate::{
     entities::{
-        Command, CommandLogic, CommodityHandler, FinancialRecords, FinancialRecords_Intermediate2,
-        Handlers, MacroContext, MacroHandler, MetaEntry, Transaction,
+        Command, CommandLogic, CommodityHandler, EndOfYearEntry, FinancialRecords,
+        FinancialRecords_Intermediate2, Handlers, MacroContext, MacroHandler, Transaction,
     },
     errors::InvalidCsvContent,
 };
@@ -24,32 +24,32 @@ impl<H: Handlers> CommandProcessor<H> {
             transactions,
             assertions,
             commands,
-            ext_raw,
+            ledger_extensions,
             label_lookup,
             annotations_lookup,
             unreimbursed_entries,
         } = self.specs;
 
-        let meta_entries = commands
+        let eoy_entries = commands
             .into_iter()
-            .map(|spec| Self::process_operation(spec, &transactions))
-            .collect::<Result<Vec<MetaEntry>, ServerError>>()?;
+            .map(|spec| Self::process_command(spec, &transactions))
+            .collect::<Result<Vec<EndOfYearEntry>, ServerError>>()?;
 
         Ok(FinancialRecords {
             transactions,
             assertions,
-            meta_entries,
-            ext_raw,
+            eoy_entries,
+            ledger_extensions,
             label_lookup,
             annotations_lookup,
             unreimbursed_entries,
         })
     }
 
-    fn process_operation(
+    fn process_command(
         spec: Command<H>,
         transactions: &Vec<Transaction>,
-    ) -> Result<MetaEntry, ServerError> {
+    ) -> Result<EndOfYearEntry, ServerError> {
         let Command {
             id,
             date,
@@ -100,7 +100,7 @@ impl<H: Handlers> CommandProcessor<H> {
                             &e,
                         )
                     })?;
-                Ok(MetaEntry::Close {
+                Ok(EndOfYearEntry::Close {
                     date,
                     postings: entries,
                     logic,
@@ -108,7 +108,7 @@ impl<H: Handlers> CommandProcessor<H> {
                     currency: commodity.unwrap_or_else(|| H::M::default()).currency()?,
                 })
             }
-            CommandLogic::Correction(logic) => Ok(MetaEntry::Correction {
+            CommandLogic::Correction(logic) => Ok(EndOfYearEntry::Correction {
                 date,
                 macro_output: logic.compile(
                     date,

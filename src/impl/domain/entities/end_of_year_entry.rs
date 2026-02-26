@@ -4,7 +4,7 @@ use iso_currency::Currency;
 use crate::entities::CloseLogic;
 
 #[derive(Debug, Clone)]
-pub enum MetaEntry {
+pub enum EndOfYearEntry {
     Close {
         /// Date on which to apply the closing entry.
         date: NaiveDate,
@@ -30,18 +30,18 @@ pub enum MetaEntry {
 
 // --
 
-impl MetaEntry {
+impl EndOfYearEntry {
     pub fn year(&self) -> i32 {
         match self {
-            MetaEntry::Close { date, .. } => date.year(),
-            MetaEntry::Correction { date, .. } => date.year(),
+            EndOfYearEntry::Close { date, .. } => date.year(),
+            EndOfYearEntry::Correction { date, .. } => date.year(),
         }
     }
 
     pub fn date(&self) -> &NaiveDate {
         match self {
-            MetaEntry::Close { date, .. } => date,
-            MetaEntry::Correction { date, .. } => date,
+            EndOfYearEntry::Close { date, .. } => date,
+            EndOfYearEntry::Correction { date, .. } => date,
         }
     }
 }

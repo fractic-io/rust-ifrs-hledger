@@ -4,7 +4,7 @@ use iso_currency::Currency;
 
 use crate::{
     entities::{
-        Account, Assertion, CashflowTracingTag, CloseLogic, FinancialRecords, MetaEntry,
+        Account, Assertion, CashflowTracingTag, CloseLogic, EndOfYearEntry, FinancialRecords,
         Transaction,
     },
     ext::standard_accounts::RETAINED_EARNINGS,
@@ -46,16 +46,16 @@ impl HledgerPrinter {
         ledger_output.push_str(&header_comment("Assertions"));
         self.print_assertions(&mut ledger_output, financial_records);
 
-        if !financial_records.ext_raw.is_empty() {
+        if !financial_records.ledger_extensions.is_empty() {
             ledger_output.push_str("\n\n");
             ledger_output.push_str(&header_comment("Custom Ledger Extensions"));
-            self.print_ext_raw(&mut ledger_output, financial_records);
+            self.print_ledger_extensions(&mut ledger_output, financial_records);
         }
 
-        for (year, entries) in meta_entries_by_year(&financial_records.meta_entries) {
+        for (year, entries) in eoy_entries_by_year(&financial_records.eoy_entries) {
             ledger_output.push_str("\n\n");
             ledger_output.push_str(&header_comment(&format!("{} Corrections / Closing", year)));
-            self.print_meta_entries(&mut ledger_output, entries);
+            self.print_eoy_entries(&mut ledger_output, entries);
         }
 
         ledger_output
@@ -196,25 +196,29 @@ impl HledgerPrinter {
         }
     }
 
-    fn print_ext_raw(&self, ledger_output: &mut String, financial_records: &FinancialRecords) {
+    fn print_ledger_extensions(
+        &self,
+        ledger_output: &mut String,
+        financial_records: &FinancialRecords,
+    ) {
         // Extract/dedup account declarations across all raw extension chunks,
         // and print once at the start of this section.
         let account_statements = financial_records
-            .ext_raw
+            .ledger_extensions
             .iter()
             .flat_map(|entry| extract_and_normalize_account_declarations(entry))
             .collect::<BTreeSet<_>>();
         for account_statement in account_statements {
             ledger_output.push_str(&account_statement);
         }
-        if !financial_records.ext_raw.is_empty() {
+        if !financial_records.ledger_extensions.is_empty() {
             ledger_output.push('\n');
         }
 
         // Print each raw chunk verbatim except:
         // - account declarations are removed (already printed above),
         // - posting lines are spacing-normalized.
-        for raw in financial_records.ext_raw.iter() {
+        for raw in financial_records.ledger_extensions.iter() {
             let normalized = extract_and_normalize_non_account_lines(raw);
             if normalized.is_empty() {
                 continue;
@@ -224,14 +228,14 @@ impl HledgerPrinter {
         }
     }
 
-    fn print_meta_entries(&self, ledger_output: &mut String, mut entries: Vec<&MetaEntry>) {
+    fn print_eoy_entries(&self, ledger_output: &mut String, mut entries: Vec<&EndOfYearEntry>) {
         entries.sort_by_key(|e| *e.date());
 
         // Extract (and dedup) account declarations from each entry, to print
         // them once at the start of the section.
         let account_statements = entries
             .iter()
-            .flat_map(|e| account_declarations_from_meta_entry(e))
+            .flat_map(|e| account_declarations_from_eoy_entry(e))
             .collect::<BTreeSet<_>>();
         for account_statement in account_statements {
             ledger_output.push_str(&account_statement);
@@ -243,7 +247,7 @@ impl HledgerPrinter {
         // Build ledger entries for each entry.
         for entry in entries.iter() {
             match entry {
-                MetaEntry::Close {
+                EndOfYearEntry::Close {
                     date,
                     postings,
                     total,
@@ -290,7 +294,7 @@ impl HledgerPrinter {
                         ));
                     }
                 }
-                MetaEntry::Correction { macro_output, .. } => {
+                EndOfYearEntry::Correction { macro_output, .. } => {
                     ledger_output.push_str(&extract_and_normalize_non_account_lines(macro_output));
                 }
             }
@@ -319,10 +323,10 @@ fn is_account_declaration(line: &str) -> bool {
 fn parse_account_declaration(line: &str) -> Option<(&str, char)> {
     let trimmed = line.trim();
     let rest = trimmed.strip_prefix("account")?.trim_start();
-    let (name_part, meta_part) = rest.split_once(';')?;
+    let (name_part, type_part) = rest.split_once(';')?;
     let name = name_part.trim();
 
-    let type_str = meta_part
+    let type_str = type_part
         .trim()
         .strip_prefix("type")?
         .trim_start()
@@ -395,27 +399,27 @@ fn extract_and_normalize_non_account_lines(ledger_content: &str) -> String {
         .to_string()
 }
 
-// Meta-entry helpers.
+// EOY-entry helpers.
 // ----------------------------------------------------------------------------
 
-fn meta_entries_by_year(entries: &Vec<MetaEntry>) -> BTreeMap<i32, Vec<&MetaEntry>> {
+fn eoy_entries_by_year(entries: &Vec<EndOfYearEntry>) -> BTreeMap<i32, Vec<&EndOfYearEntry>> {
     entries.iter().fold(
-        BTreeMap::<i32, Vec<&MetaEntry>>::new(),
-        |mut acc: BTreeMap<i32, Vec<&MetaEntry>>, entry: &MetaEntry| {
+        BTreeMap::<i32, Vec<&EndOfYearEntry>>::new(),
+        |mut acc: BTreeMap<i32, Vec<&EndOfYearEntry>>, entry: &EndOfYearEntry| {
             acc.entry(entry.year()).or_default().push(entry);
             acc
         },
     )
 }
 
-fn account_declarations_from_meta_entry(entry: &MetaEntry) -> Vec<String> {
+fn account_declarations_from_eoy_entry(entry: &EndOfYearEntry) -> Vec<String> {
     match entry {
-        MetaEntry::Close { logic, .. } => match logic {
+        EndOfYearEntry::Close { logic, .. } => match logic {
             CloseLogic::Retain => {
                 vec![account_declaration(&(RETAINED_EARNINGS.clone().into()))]
             }
         },
-        MetaEntry::Correction { macro_output, .. } => {
+        EndOfYearEntry::Correction { macro_output, .. } => {
             extract_and_normalize_account_declarations(macro_output)
         }
     }
