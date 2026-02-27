@@ -111,7 +111,7 @@ define_internal_error!(
 // Custom statement generation.
 define_client_error!(
     InvalidCashFlowStatementPeriods,
-    "The cash flow statement currently only supports up to 2 periods (got {count}).",
+    "The cash flow statement currently supports up to 2 periods (got {count}).",
     { count: usize }
 );
 define_internal_error!(
