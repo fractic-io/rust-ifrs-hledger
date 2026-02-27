@@ -29,11 +29,11 @@ struct PeriodReport {
     non_cash_reclassifications: String,
 }
 
-const SINGLE_COLUMN_WIDTH: usize = 36;
-const COMPARABLE_COLUMN_WIDTH: usize = 16;
-const COMPARABLE_COLUMN_SEPARATOR: &str = "  | ";
+const ONE_PERIOD_COLUMN_WIDTH: usize = 36;
+const TWO_PERIOD_COLUMN_WIDTH: usize = 16;
+const COLUMN_SEPARATOR: &str = "  | ";
 
-const AMOUNT_PLACEHOLDERS: [&str; 37] = [
+const PLACEHOLDER_KEYS: [&str; 37] = [
     "net_income",
     "nce_depreciation",
     "nce_amortization",
@@ -132,10 +132,10 @@ impl CashFlowStatementGenerator {
             .iter()
             .map(|period| self.generate_period_report(period))
             .collect::<Result<Vec<PeriodReport>, ServerError>>()?;
-        let placeholders = self.build_placeholders(&reports);
-        let bytes = include_bytes!("../../../res/cash_flow_statement_template.txt");
-        let template = String::from_utf8_lossy(bytes).to_string();
-        replace_all_placeholders_in_string(template, &placeholders, true)
+        let placeholder_map = self.build_placeholder_map(&reports);
+        let template_bytes = include_bytes!("../../../res/cash_flow_statement_template.txt");
+        let template = String::from_utf8_lossy(template_bytes).to_string();
+        replace_all_placeholders_in_string(template, &placeholder_map, true)
     }
 
     fn generate_period_report(&self, period: &str) -> Result<PeriodReport, ServerError> {
@@ -332,7 +332,7 @@ impl CashFlowStatementGenerator {
         })
     }
 
-    fn build_placeholders(&self, reports: &[PeriodReport]) -> HashMap<String, String> {
+    fn build_placeholder_map(&self, reports: &[PeriodReport]) -> HashMap<String, String> {
         let mut placeholders = HashMap::new();
         let period_columns = reports
             .iter()
@@ -342,14 +342,14 @@ impl CashFlowStatementGenerator {
             "period".to_string(),
             self.format_period_columns(&period_columns),
         );
-        for key in AMOUNT_PLACEHOLDERS {
+        for key in PLACEHOLDER_KEYS {
             let values = reports
                 .iter()
                 .map(|report| {
                     *report
                         .amounts
                         .get(key)
-                        .expect("cash flow placeholder missing in report")
+                        .expect("placeholder key missing in report")
                 })
                 .collect::<Vec<f64>>();
             placeholders.insert(key.to_string(), self.format_amount_columns(&values));
@@ -365,13 +365,13 @@ impl CashFlowStatementGenerator {
 
     fn format_period_columns(&self, periods: &[String]) -> String {
         match periods {
-            [period] => format!("{:>width$}", period, width = SINGLE_COLUMN_WIDTH),
+            [period] => format!("{:>width$}", period, width = ONE_PERIOD_COLUMN_WIDTH),
             [first, second] => format!(
                 "{:>width$}{}{:>width$}",
                 first,
-                COMPARABLE_COLUMN_SEPARATOR,
+                COLUMN_SEPARATOR,
                 second,
-                width = COMPARABLE_COLUMN_WIDTH
+                width = TWO_PERIOD_COLUMN_WIDTH
             ),
             _ => unreachable!("period count validated in constructor"),
         }
@@ -383,13 +383,13 @@ impl CashFlowStatementGenerator {
             .map(|amount| format_amount(*amount, self.currency, false))
             .collect::<Vec<String>>();
         match values.as_slice() {
-            [value] => format!("{:>width$}", value, width = SINGLE_COLUMN_WIDTH),
+            [value] => format!("{:>width$}", value, width = ONE_PERIOD_COLUMN_WIDTH),
             [first, second] => format!(
                 "{:>width$}{}{:>width$}",
                 first,
-                COMPARABLE_COLUMN_SEPARATOR,
+                COLUMN_SEPARATOR,
                 second,
-                width = COMPARABLE_COLUMN_WIDTH
+                width = TWO_PERIOD_COLUMN_WIDTH
             ),
             _ => unreachable!("period count validated in constructor"),
         }
