@@ -12,10 +12,11 @@ use crate::{
         track_unreimbursed_entries, MonthlyAccrualAdjustment,
     },
     entities::{
-        Account, AccountingLogic, Annotation, Assertion, AssetHandler, BackingAccount, CashHandler,
-        CommodityHandler, CommonStockWhileUnpaid, DecoratedTransactionSpec, ExpenseAccount,
-        ExpenseHandler, FinancialRecords_Intermediate1, FinancialRecords_Intermediate2, Handlers,
-        IncomeHandler, LiabilityAccount, PayeeHandler, ReimbursableEntityHandler,
+        equity_tl, Account, AccountingLogic, Annotation, Assertion, AssetHandler, BackingAccount,
+        CashHandler, CashflowTracingTag, CommodityHandler, CommonStockWhileUnpaid,
+        DecoratedTransactionSpec, EquityClassification, ExpenseAccount, ExpenseHandler,
+        FinancialRecords_Intermediate1, FinancialRecords_Intermediate2, Handlers, IncomeHandler,
+        LiabilityAccount, PayeeHandler, ReimbursableEntityHandler, ShareIssuanceCostBookTo,
         ShareholderHandler, Transaction, TransactionLabel, TransactionPosting, TransactionSpecId,
     },
     errors::{
@@ -25,7 +26,7 @@ use crate::{
         VariableExpenseNoInit, VariableExpenseNotEnoughHistoricalData,
     },
     ext::standard_accounts::{
-        PREPAID_SHARE_ISSUANCE_COSTS, SHARE_ISSUANCE_COSTS, SHARE_ISSUANCE_COSTS_PAYABLE,
+        DISCOUNT_ON_STOCK_ISSUANCE, PREPAID_SHARE_ISSUANCE_COSTS, SHARE_ISSUANCE_COSTS_PAYABLE,
         UNPAID_SHARE_CAPITAL_AS_ASSET, UNPAID_SHARE_CAPITAL_AS_EQUITY,
     },
     impl_ext::standard_accounts::vat::{VAT_PAYABLE, VAT_RECEIVABLE},
@@ -216,7 +217,9 @@ impl<H: Handlers> SpecProcessor<H> {
                 .try_fold(FoldState::new(), |state, spec| {
                     let delta = match &spec.accounting_logic {
                         AccountingLogic::CommonStock { .. } => Self::process_common_stock(spec)?,
-                        AccountingLogic::ShareIssuanceCost => Self::process_cost_of_equity(spec)?,
+                        AccountingLogic::ShareIssuanceCost { .. } => {
+                            Self::process_share_issuance_cost(spec)?
+                        }
                         AccountingLogic::SimpleExpense(..) => Self::process_simple_expense(spec)?,
                         AccountingLogic::Capitalize(..) => Self::process_capitalize(spec)?,
                         AccountingLogic::Amortize(..) => Self::process_amortize(spec)?,
@@ -396,13 +399,15 @@ impl<H: Handlers> SpecProcessor<H> {
         })
     }
 
-    fn process_cost_of_equity(spec: DecoratedTransactionSpec<H>) -> Result<Delta, ServerError> {
+    fn process_share_issuance_cost(
+        spec: DecoratedTransactionSpec<H>,
+    ) -> Result<Delta, ServerError> {
         let DecoratedTransactionSpec {
             id,
             accrual_start: accrual_date,
             accrual_end: None,
             payment_date,
-            accounting_logic: AccountingLogic::ShareIssuanceCost,
+            accounting_logic: AccountingLogic::ShareIssuanceCost { book_to },
             payee,
             description,
             amount,
@@ -416,7 +421,23 @@ impl<H: Handlers> SpecProcessor<H> {
         else {
             return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
         };
-        amount_should_be_negative!(amount, "CostOfEquity", &id);
+        amount_should_be_negative!(amount, "ShareIssuanceCost", &id);
+
+        let destination: Account = match book_to {
+            ShareIssuanceCostBookTo::RetainedEarnings => {
+                // IMPORTANT: If we book directly to RetainedEarnings, we must
+                // override the default cashflow tagging to track the direct
+                // cash outflow.
+                equity_tl(EquityClassification::RetainedEarningsOpt {
+                    on_inflow: None,
+                    on_outflow: Some(CashflowTracingTag::CashOutflowShareIssuanceCosts),
+                })
+                .into()
+            }
+            ShareIssuanceCostBookTo::DiscountOnStockIssuance => {
+                DISCOUNT_ON_STOCK_ISSUANCE.clone().into()
+            }
+        };
 
         let transactions = if payment_date == accrual_date {
             // Record a single journal entry on the day of payment, since
@@ -431,11 +452,7 @@ impl<H: Handlers> SpecProcessor<H> {
                         -amount.abs(),
                         commodity.currency()?,
                     ),
-                    TransactionPosting::new(
-                        SHARE_ISSUANCE_COSTS.clone().into(),
-                        amount.abs(),
-                        commodity.currency()?,
-                    ),
+                    TransactionPosting::new(destination, amount.abs(), commodity.currency()?),
                 ],
             }]
         } else if payment_date < accrual_date {
@@ -453,7 +470,7 @@ impl<H: Handlers> SpecProcessor<H> {
                         ),
                         TransactionPosting::linked(
                             PREPAID_SHARE_ISSUANCE_COSTS.clone().into(),
-                            SHARE_ISSUANCE_COSTS.clone().into(),
+                            destination.clone(),
                             amount.abs(),
                             commodity.currency()?,
                         ),
@@ -469,11 +486,7 @@ impl<H: Handlers> SpecProcessor<H> {
                             -amount.abs(),
                             commodity.currency()?,
                         ),
-                        TransactionPosting::new(
-                            SHARE_ISSUANCE_COSTS.clone().into(),
-                            amount.abs(),
-                            commodity.currency()?,
-                        ),
+                        TransactionPosting::new(destination, amount.abs(), commodity.currency()?),
                     ],
                 },
             ]
@@ -491,7 +504,7 @@ impl<H: Handlers> SpecProcessor<H> {
                             commodity.currency()?,
                         ),
                         TransactionPosting::new(
-                            SHARE_ISSUANCE_COSTS.clone().into(),
+                            destination.clone(),
                             amount.abs(),
                             commodity.currency()?,
                         ),
@@ -509,7 +522,7 @@ impl<H: Handlers> SpecProcessor<H> {
                         ),
                         TransactionPosting::linked(
                             SHARE_ISSUANCE_COSTS_PAYABLE.clone().into(),
-                            SHARE_ISSUANCE_COSTS.clone().into(),
+                            destination,
                             amount.abs(),
                             commodity.currency()?,
                         ),
@@ -518,9 +531,14 @@ impl<H: Handlers> SpecProcessor<H> {
             ]
         };
 
-        // Tag this transaction, since the accounting logic deserves a note in
-        // the financial records.
-        let note = Annotation::ShareIssuanceCostsDirectedToRetainedEarnings;
+        let note = match book_to {
+            ShareIssuanceCostBookTo::RetainedEarnings => {
+                // Tag this transaction, since the accounting logic deserves a
+                // note in the financial records.
+                Some(Annotation::ShareIssuanceCostsDirectedToRetainedEarnings)
+            }
+            _ => None,
+        };
 
         Ok(Delta {
             spec_id: id,
@@ -538,7 +556,7 @@ impl<H: Handlers> SpecProcessor<H> {
             ext_transactions,
             ext_assertions,
             ext_raw,
-            annotations: annotations.into_iter().chain(once(note)).collect(),
+            annotations: annotations.into_iter().chain(note.into_iter()).collect(),
         })
     }
 

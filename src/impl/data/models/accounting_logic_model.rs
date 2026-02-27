@@ -1,4 +1,4 @@
-use crate::entities::{AccountingLogic, CommonStockWhileUnpaid};
+use crate::entities::{AccountingLogic, CommonStockWhileUnpaid, ShareIssuanceCostBookTo};
 
 use super::iso_date_model::ISODateModel;
 
@@ -9,12 +9,20 @@ pub enum CommonStockWhileUnpaidModel {
 }
 
 #[derive(Debug, serde_derive::Deserialize)]
+pub enum ShareIssuanceCostBookToModel {
+    RetainedEarnings,
+    DiscountOnStockIssuance,
+}
+
+#[derive(Debug, serde_derive::Deserialize)]
 pub enum AccountingLogicModel<E, A, I, R, S> {
     CommonStock {
         subscriber: S,
         while_unpaid: CommonStockWhileUnpaidModel,
     },
-    ShareIssuanceCost,
+    ShareIssuanceCost {
+        book_to: ShareIssuanceCostBookToModel,
+    },
     SimpleExpense(E),
     Capitalize(A),
     Amortize(A),
@@ -51,7 +59,18 @@ impl<E, A, I, R, S> Into<AccountingLogic<E, A, I, R, S>> for AccountingLogicMode
                     }
                 },
             },
-            AccountingLogicModel::ShareIssuanceCost => AccountingLogic::ShareIssuanceCost,
+            AccountingLogicModel::ShareIssuanceCost { book_to } => {
+                AccountingLogic::ShareIssuanceCost {
+                    book_to: match book_to {
+                        ShareIssuanceCostBookToModel::RetainedEarnings => {
+                            ShareIssuanceCostBookTo::RetainedEarnings
+                        }
+                        ShareIssuanceCostBookToModel::DiscountOnStockIssuance => {
+                            ShareIssuanceCostBookTo::DiscountOnStockIssuance
+                        }
+                    },
+                }
+            }
             AccountingLogicModel::SimpleExpense(e) => AccountingLogic::SimpleExpense(e),
             AccountingLogicModel::Capitalize(a) => AccountingLogic::Capitalize(a),
             AccountingLogicModel::Amortize(a) => AccountingLogic::Amortize(a),
