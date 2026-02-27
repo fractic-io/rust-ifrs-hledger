@@ -29,9 +29,13 @@ struct PeriodReport {
     non_cash_reclassifications: Vec<String>,
 }
 
-const ONE_PERIOD_COLUMN_WIDTH: usize = 36;
-const TWO_PERIOD_COLUMN_WIDTH: usize = 16;
+const COLUMN_START_COL: usize = 64; // 0-based index (65th char)
+const COLUMN_PADDING: usize = 2;
+const COLUMN_BORDER: &str = "|";
 const COLUMN_SEPARATOR: &str = "  | ";
+const HORIZONTAL_RULE_CHAR: char = '─';
+const PERIOD_PLACEHOLDER: &str = "{{period}}";
+const LAST_VALUE_PLACEHOLDER: &str = "{{balance_closing}}";
 
 const PLACEHOLDER_KEYS: [&str; 37] = [
     "net_income",
@@ -73,6 +77,37 @@ const PLACEHOLDER_KEYS: [&str; 37] = [
     "balance_closing",
 ];
 
+struct ReportLayout {
+    period_count: usize,
+    column_width: usize,
+}
+
+impl ReportLayout {
+    fn rendered_columns_width(&self) -> usize {
+        COLUMN_BORDER.len()
+            + (self.column_width * self.period_count)
+            + (COLUMN_SEPARATOR.len() * self.period_count.saturating_sub(1))
+    }
+
+    fn separator_positions(&self) -> Vec<(usize, &'static str)> {
+        let mut separators = vec![(0, COLUMN_BORDER)];
+        for idx in 1..self.period_count {
+            let start = COLUMN_BORDER.len()
+                + (idx * self.column_width)
+                + ((idx - 1) * COLUMN_SEPARATOR.len());
+            separators.push((start, COLUMN_SEPARATOR));
+        }
+        separators
+    }
+
+    fn last_separator_end(&self) -> usize {
+        self.separator_positions()
+            .last()
+            .map(|(start, sep)| start + sep.chars().count())
+            .unwrap_or(COLUMN_BORDER.len())
+    }
+}
+
 pub trait IntoCurrency {
     fn try_into(self) -> Result<Currency, ServerError>;
 }
@@ -107,8 +142,8 @@ impl CashFlowStatementGenerator {
             .into_iter()
             .map(|p| p.as_ref().to_string())
             .collect();
-        if periods.is_empty() || periods.len() > 2 {
-            return Err(InvalidCashFlowStatementPeriods::new(periods.len()));
+        if periods.is_empty() {
+            return Err(InvalidCashFlowStatementPeriods::new());
         }
         Ok(Self {
             ledger_path: ledger_path
@@ -132,10 +167,18 @@ impl CashFlowStatementGenerator {
             .iter()
             .map(|period| self.generate_period_report(period))
             .collect::<Result<Vec<PeriodReport>, ServerError>>()?;
-        let placeholder_map = self.build_placeholder_map(&reports);
         let template_bytes = include_bytes!("../../../res/cash_flow_statement_template.txt");
         let template = String::from_utf8_lossy(template_bytes).to_string();
-        replace_all_placeholders_in_string(template, &placeholder_map, true)
+        let layout = self.build_report_layout(&reports);
+        let placeholder_map = self.build_placeholder_map(&reports, &layout);
+        let (header_line_idx, last_value_line_idx) = self.placeholder_line_range(&template);
+        let filled = replace_all_placeholders_in_string(template, &placeholder_map, true)?;
+        Ok(self.extend_column_separators_in_section(
+            filled,
+            header_line_idx,
+            last_value_line_idx,
+            &layout,
+        ))
     }
 
     fn generate_period_report(&self, period: &str) -> Result<PeriodReport, ServerError> {
@@ -332,7 +375,36 @@ impl CashFlowStatementGenerator {
         })
     }
 
-    fn build_placeholder_map(&self, reports: &[PeriodReport]) -> HashMap<String, String> {
+    fn build_report_layout(&self, reports: &[PeriodReport]) -> ReportLayout {
+        let max_amount_width = reports
+            .iter()
+            .flat_map(|report| PLACEHOLDER_KEYS.iter().map(move |key| (report, key)))
+            .map(|(report, key)| {
+                let value = report
+                    .amounts
+                    .get(key)
+                    .expect("placeholder key missing in report");
+                format_amount(*value, self.currency, false).chars().count()
+            })
+            .max()
+            .unwrap_or(0);
+        let max_period_width = reports
+            .iter()
+            .map(|report| report.period.chars().count())
+            .max()
+            .unwrap_or(0);
+
+        ReportLayout {
+            period_count: reports.len(),
+            column_width: max_amount_width.max(max_period_width) + COLUMN_PADDING,
+        }
+    }
+
+    fn build_placeholder_map(
+        &self,
+        reports: &[PeriodReport],
+        layout: &ReportLayout,
+    ) -> HashMap<String, String> {
         let mut placeholders = HashMap::new();
         let period_columns = reports
             .iter()
@@ -340,7 +412,13 @@ impl CashFlowStatementGenerator {
             .collect::<Vec<String>>();
         placeholders.insert(
             "period".to_string(),
-            self.format_period_columns(&period_columns),
+            self.format_columns(&period_columns, layout),
+        );
+        placeholders.insert(
+            "hr_ext".to_string(),
+            HORIZONTAL_RULE_CHAR
+                .to_string()
+                .repeat(layout.rendered_columns_width()),
         );
         for key in PLACEHOLDER_KEYS {
             let values = reports
@@ -352,7 +430,14 @@ impl CashFlowStatementGenerator {
                         .expect("placeholder key missing in report")
                 })
                 .collect::<Vec<f64>>();
-            placeholders.insert(key.to_string(), self.format_amount_columns(&values));
+            let rendered_values = values
+                .iter()
+                .map(|amount| format_amount(*amount, self.currency, false))
+                .collect::<Vec<String>>();
+            placeholders.insert(
+                key.to_string(),
+                self.format_columns(&rendered_values, layout),
+            );
         }
         placeholders.insert(
             "non_cash_reclassifications".to_string(),
@@ -370,36 +455,68 @@ impl CashFlowStatementGenerator {
         placeholders
     }
 
-    fn format_period_columns(&self, periods: &[String]) -> String {
-        match periods {
-            [period] => format!("{:>width$}", period, width = ONE_PERIOD_COLUMN_WIDTH),
-            [first, second] => format!(
-                "{:>width$}{}{:>width$}",
-                first,
-                COLUMN_SEPARATOR,
-                second,
-                width = TWO_PERIOD_COLUMN_WIDTH
-            ),
-            _ => unreachable!("period count validated in constructor"),
-        }
+    fn format_columns(&self, values: &[String], layout: &ReportLayout) -> String {
+        let columns = values
+            .iter()
+            .map(|value| format!("{:>width$}", value, width = layout.column_width))
+            .collect::<Vec<String>>()
+            .join(COLUMN_SEPARATOR);
+        format!("{COLUMN_BORDER}{columns}")
     }
 
-    fn format_amount_columns(&self, values: &[f64]) -> String {
-        let values = values
-            .iter()
-            .map(|amount| format_amount(*amount, self.currency, false))
-            .collect::<Vec<String>>();
-        match values.as_slice() {
-            [value] => format!("{:>width$}", value, width = ONE_PERIOD_COLUMN_WIDTH),
-            [first, second] => format!(
-                "{:>width$}{}{:>width$}",
-                first,
-                COLUMN_SEPARATOR,
-                second,
-                width = TWO_PERIOD_COLUMN_WIDTH
-            ),
-            _ => unreachable!("period count validated in constructor"),
+    fn placeholder_line_range(&self, template: &str) -> (usize, usize) {
+        let start = template
+            .lines()
+            .position(|line| line.contains(PERIOD_PLACEHOLDER))
+            .expect("period placeholder line missing from template");
+        let end = template
+            .lines()
+            .position(|line| line.contains(LAST_VALUE_PLACEHOLDER))
+            .expect("last value placeholder line missing from template");
+        (start, end)
+    }
+
+    fn separator_scaffold(&self, layout: &ReportLayout) -> Vec<char> {
+        let target_len = COLUMN_START_COL + layout.last_separator_end();
+        let mut scaffold = vec![' '; target_len];
+        for (rel_start, separator) in layout.separator_positions() {
+            let abs_start = COLUMN_START_COL + rel_start;
+            for (idx, ch) in separator.chars().enumerate() {
+                if abs_start + idx < scaffold.len() {
+                    scaffold[abs_start + idx] = ch;
+                }
+            }
         }
+        scaffold
+    }
+
+    fn extend_column_separators_in_section(
+        &self,
+        rendered: String,
+        start_line_idx: usize,
+        end_line_idx: usize,
+        layout: &ReportLayout,
+    ) -> String {
+        let mut lines = rendered
+            .split('\n')
+            .map(std::string::ToString::to_string)
+            .collect::<Vec<String>>();
+        let scaffold = self.separator_scaffold(layout);
+        let target_len = scaffold.len();
+
+        for line in lines
+            .iter_mut()
+            .skip(start_line_idx)
+            .take(end_line_idx.saturating_sub(start_line_idx) + 1)
+        {
+            let current_len = line.chars().count();
+            if current_len < target_len {
+                let tail = scaffold[current_len..target_len].iter().collect::<String>();
+                line.push_str(&tail);
+            }
+        }
+
+        lines.join("\n")
     }
 
     fn net_income(&self, period: &str) -> Result<f64, ServerError> {
