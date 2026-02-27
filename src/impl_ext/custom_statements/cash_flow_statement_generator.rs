@@ -26,7 +26,7 @@ pub struct CashFlowStatementGenerator {
 struct PeriodReport {
     period: String,
     amounts: HashMap<&'static str, f64>,
-    non_cash_reclassifications: String,
+    non_cash_reclassifications: Vec<String>,
 }
 
 const ONE_PERIOD_COLUMN_WIDTH: usize = 36;
@@ -276,12 +276,12 @@ impl CashFlowStatementGenerator {
         // ADDITIONAL DISCLOSURES
         // -------------------------------------
 
-        let non_cash_reclassifications = self
-            .non_cash_reclassifications(period)?
-            .into_iter()
-            .map(|s| format!("• {}", s))
-            .collect::<Vec<String>>()
-            .join("\n");
+        let non_cash_reclassifications = self.non_cash_reclassifications(period)?;
+
+        // -------------------------------------
+        // BUILD REPORT
+        // -------------------------------------
+
         Ok(PeriodReport {
             period: period.to_string(),
             amounts: vec![
@@ -356,9 +356,16 @@ impl CashFlowStatementGenerator {
         }
         placeholders.insert(
             "non_cash_reclassifications".to_string(),
-            reports.first().map_or("".to_string(), |report| {
-                report.non_cash_reclassifications.clone()
-            }),
+            reports
+                .iter()
+                // Only report non-cash reclassifications for the latest period
+                // (i.e. the current reporting year).
+                .max_by_key(|r| &r.period)
+                .into_iter()
+                .flat_map(|r| r.non_cash_reclassifications.iter())
+                .map(|s| format!("• {}", s))
+                .collect::<Vec<String>>()
+                .join("\n"),
         );
         placeholders
     }
