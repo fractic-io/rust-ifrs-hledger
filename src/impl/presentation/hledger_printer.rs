@@ -213,11 +213,11 @@ impl HledgerPrinter {
             .iter()
             .flat_map(|entry| extract_and_normalize_account_declarations(entry))
             .collect::<BTreeSet<_>>();
-        for account_statement in account_statements {
-            ledger_output.push_str(&account_statement);
+        for account_statement in account_statements.iter() {
+            ledger_output.push_str(account_statement);
             ledger_output.push('\n');
         }
-        if !financial_records.ledger_extensions.is_empty() {
+        if !account_statements.is_empty() {
             ledger_output.push('\n');
         }
 
@@ -230,7 +230,7 @@ impl HledgerPrinter {
                 continue;
             }
             ledger_output.push_str(&normalized);
-            ledger_output.push('\n');
+            ledger_output.push_str("\n\n");
         }
     }
 
@@ -243,11 +243,11 @@ impl HledgerPrinter {
             .iter()
             .flat_map(|e| account_declarations_from_eoy_entry(e))
             .collect::<BTreeSet<_>>();
-        for account_statement in account_statements {
-            ledger_output.push_str(&account_statement);
+        for account_statement in account_statements.iter() {
+            ledger_output.push_str(account_statement);
             ledger_output.push('\n');
         }
-        if !entries.is_empty() {
+        if !account_statements.is_empty() {
             ledger_output.push('\n');
         }
 
@@ -426,9 +426,8 @@ fn extract_and_normalize_non_account_lines(ledger_content: &str) -> String {
                 line.to_string()
             }
         })
-        .map(|line| format!("{}\n", line))
         .collect::<Vec<_>>()
-        .join("")
+        .join("\n")
         .trim()
         .to_string()
 }
