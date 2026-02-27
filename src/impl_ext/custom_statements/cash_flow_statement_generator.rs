@@ -30,9 +30,8 @@ struct PeriodReport {
 }
 
 const COLUMN_START_COL: usize = 64; // 0-based index (65th char)
-const COLUMN_PADDING: usize = 2;
-const COLUMN_BORDER: &str = "|";
-const COLUMN_SEPARATOR: &str = "  | ";
+const COLUMN_PADDING: usize = 4;
+const COLUMN_SEPARATOR: &str = "  │ ";
 const HORIZONTAL_RULE_CHAR: char = '─';
 const PERIOD_PLACEHOLDER: &str = "{{period}}";
 const LAST_VALUE_PLACEHOLDER: &str = "{{balance_closing}}";
@@ -84,17 +83,14 @@ struct ReportLayout {
 
 impl ReportLayout {
     fn rendered_columns_width(&self) -> usize {
-        COLUMN_BORDER.len()
-            + (self.column_width * self.period_count)
+        (self.column_width * self.period_count)
             + (COLUMN_SEPARATOR.len() * self.period_count.saturating_sub(1))
     }
 
     fn separator_positions(&self) -> Vec<(usize, &'static str)> {
-        let mut separators = vec![(0, COLUMN_BORDER)];
+        let mut separators = Vec::with_capacity(self.period_count.saturating_sub(1));
         for idx in 1..self.period_count {
-            let start = COLUMN_BORDER.len()
-                + (idx * self.column_width)
-                + ((idx - 1) * COLUMN_SEPARATOR.len());
+            let start = (idx * self.column_width) + ((idx - 1) * COLUMN_SEPARATOR.len());
             separators.push((start, COLUMN_SEPARATOR));
         }
         separators
@@ -104,7 +100,7 @@ impl ReportLayout {
         self.separator_positions()
             .last()
             .map(|(start, sep)| start + sep.chars().count())
-            .unwrap_or(COLUMN_BORDER.len())
+            .unwrap_or(0)
     }
 }
 
@@ -456,12 +452,11 @@ impl CashFlowStatementGenerator {
     }
 
     fn format_columns(&self, values: &[String], layout: &ReportLayout) -> String {
-        let columns = values
+        values
             .iter()
             .map(|value| format!("{:>width$}", value, width = layout.column_width))
             .collect::<Vec<String>>()
-            .join(COLUMN_SEPARATOR);
-        format!("{COLUMN_BORDER}{columns}")
+            .join(COLUMN_SEPARATOR)
     }
 
     fn placeholder_line_range(&self, template: &str) -> (usize, usize) {
