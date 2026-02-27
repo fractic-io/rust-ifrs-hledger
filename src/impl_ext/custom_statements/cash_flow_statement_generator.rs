@@ -30,11 +30,10 @@ struct PeriodReport {
 }
 
 const COLUMN_START_COL: usize = 64; // 0-based index (65th char)
-const COLUMN_BORDER_CHAR: char = '│';
-const COLUMN_START_GAP: usize = 2;
-const COLUMN_END_GAP: usize = 1;
+const COLUMN_PADDING: usize = 2;
+const COLUMN_BORDER: &str = "|";
+const COLUMN_SEPARATOR: &str = "  | ";
 const HORIZONTAL_RULE_CHAR: char = '─';
-const HORIZONTAL_RULE_INTERSECTION_CHAR: char = '┼';
 const PERIOD_PLACEHOLDER: &str = "{{period}}";
 const LAST_VALUE_PLACEHOLDER: &str = "{{balance_closing}}";
 
@@ -85,30 +84,27 @@ struct ReportLayout {
 
 impl ReportLayout {
     fn rendered_columns_width(&self) -> usize {
-        1 + (self.column_width * self.period_count)
-            + ((self.period_count.saturating_sub(1)) * (COLUMN_START_GAP + 2))
-            + COLUMN_END_GAP
-            + 1
+        COLUMN_BORDER.len()
+            + (self.column_width * self.period_count)
+            + (COLUMN_SEPARATOR.len() * self.period_count.saturating_sub(1))
     }
 
-    fn border_positions(&self) -> Vec<usize> {
-        let mut positions = vec![0];
+    fn separator_positions(&self) -> Vec<(usize, &'static str)> {
+        let mut separators = vec![(0, COLUMN_BORDER)];
         for idx in 1..self.period_count {
-            let start = 1
+            let start = COLUMN_BORDER.len()
                 + (idx * self.column_width)
-                + ((idx - 1) * (COLUMN_START_GAP + 2))
-                + COLUMN_START_GAP;
-            positions.push(start);
+                + ((idx - 1) * COLUMN_SEPARATOR.len());
+            separators.push((start, COLUMN_SEPARATOR));
         }
-        positions.push(self.rendered_columns_width() - 1);
-        positions
+        separators
     }
 
-    fn last_border_end(&self) -> usize {
-        self.border_positions()
+    fn last_separator_end(&self) -> usize {
+        self.separator_positions()
             .last()
-            .copied()
-            .map_or(1, |pos| pos + 1)
+            .map(|(start, sep)| start + sep.chars().count())
+            .unwrap_or(COLUMN_BORDER.len())
     }
 }
 
@@ -400,7 +396,7 @@ impl CashFlowStatementGenerator {
 
         ReportLayout {
             period_count: reports.len(),
-            column_width: max_amount_width.max(max_period_width) + COLUMN_START_GAP,
+            column_width: max_amount_width.max(max_period_width) + COLUMN_PADDING,
         }
     }
 
@@ -420,7 +416,9 @@ impl CashFlowStatementGenerator {
         );
         placeholders.insert(
             "hr_ext".to_string(),
-            self.build_horizontal_rule_extension(layout),
+            HORIZONTAL_RULE_CHAR
+                .to_string()
+                .repeat(layout.rendered_columns_width()),
         );
         for key in PLACEHOLDER_KEYS {
             let values = reports
@@ -458,27 +456,12 @@ impl CashFlowStatementGenerator {
     }
 
     fn format_columns(&self, values: &[String], layout: &ReportLayout) -> String {
-        let mut rendered = String::new();
-        rendered.push(COLUMN_BORDER_CHAR);
-        for (idx, value) in values.iter().enumerate() {
-            rendered.push_str(&format!("{:>width$}", value, width = layout.column_width));
-            if idx + 1 < values.len() {
-                rendered.push_str(&" ".repeat(COLUMN_START_GAP));
-                rendered.push(COLUMN_BORDER_CHAR);
-                rendered.push(' ');
-            }
-        }
-        rendered.push_str(&" ".repeat(COLUMN_END_GAP));
-        rendered.push(COLUMN_BORDER_CHAR);
-        rendered
-    }
-
-    fn build_horizontal_rule_extension(&self, layout: &ReportLayout) -> String {
-        let mut chars = vec![HORIZONTAL_RULE_CHAR; layout.rendered_columns_width()];
-        for pos in layout.border_positions() {
-            chars[pos] = HORIZONTAL_RULE_INTERSECTION_CHAR;
-        }
-        chars.into_iter().collect()
+        let columns = values
+            .iter()
+            .map(|value| format!("{:>width$}", value, width = layout.column_width))
+            .collect::<Vec<String>>()
+            .join(COLUMN_SEPARATOR);
+        format!("{COLUMN_BORDER}{columns}")
     }
 
     fn placeholder_line_range(&self, template: &str) -> (usize, usize) {
@@ -493,13 +476,15 @@ impl CashFlowStatementGenerator {
         (start, end)
     }
 
-    fn separator_scaffold(&self, layout: &ReportLayout, column_start_col: usize) -> Vec<char> {
-        let target_len = column_start_col + layout.last_border_end();
+    fn separator_scaffold(&self, layout: &ReportLayout) -> Vec<char> {
+        let target_len = COLUMN_START_COL + layout.last_separator_end();
         let mut scaffold = vec![' '; target_len];
-        for rel_pos in layout.border_positions() {
-            let abs_pos = column_start_col + rel_pos;
-            if abs_pos < scaffold.len() {
-                scaffold[abs_pos] = COLUMN_BORDER_CHAR;
+        for (rel_start, separator) in layout.separator_positions() {
+            let abs_start = COLUMN_START_COL + rel_start;
+            for (idx, ch) in separator.chars().enumerate() {
+                if abs_start + idx < scaffold.len() {
+                    scaffold[abs_start + idx] = ch;
+                }
             }
         }
         scaffold
@@ -516,7 +501,7 @@ impl CashFlowStatementGenerator {
             .split('\n')
             .map(std::string::ToString::to_string)
             .collect::<Vec<String>>();
-        let scaffold = self.separator_scaffold(layout, COLUMN_START_COL);
+        let scaffold = self.separator_scaffold(layout);
         let target_len = scaffold.len();
 
         for line in lines
