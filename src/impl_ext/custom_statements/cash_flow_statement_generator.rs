@@ -29,13 +29,17 @@ struct PeriodReport {
     non_cash_reclassifications: Vec<String>,
 }
 
-const COLUMN_START_COL: usize = 64; // 0-based index (65th char)
-const COL_PADDING_LEFT: usize = 6;
-const COL_PADDING_RIGHT: usize = 1;
+const START_INDEX: usize = 64; // (65th char)
+const COL_PADDING_LEFT: usize = 5;
+const COL_PADDING_RIGHT: usize = 2;
 const COL_SEPARATOR_CHAR: char = '│';
-const HORIZONTAL_RULE_CHAR: char = '─';
+const HR_CHAR: char = '─';
 const HR_INTERSECTION_CHAR: char = '┼';
-const TABLE_FORMAT_RANGES: &[(usize, usize)] = &[(0, 50), (53, 60)]; // 0-based inclusive
+
+/// Row-ranges of the statement that should have lines extended to include the
+/// '|' period-separating borders, even if those lines themselves don't contain
+/// any placeholders.
+const TABLE_SCAFFOLD_RANGES: &[(usize, usize)] = &[(0, 50), (53, 60)]; // 0-based inclusive
 
 const PLACEHOLDER_KEYS: [&str; 37] = [
     "net_income",
@@ -85,16 +89,12 @@ struct ReportLayout {
 }
 
 impl ReportLayout {
-    fn is_middle_column(&self, column_idx: usize) -> bool {
-        column_idx > 0 && column_idx + 1 < self.period_count
-    }
-
     fn column_left_padding(&self, _column_idx: usize) -> usize {
         COL_PADDING_LEFT
     }
 
     fn column_right_padding(&self, column_idx: usize) -> usize {
-        if self.is_middle_column(column_idx) {
+        if column_idx + 1 < self.period_count {
             COL_PADDING_RIGHT
         } else {
             0
@@ -436,9 +436,7 @@ impl CashFlowStatementGenerator {
         );
         placeholders.insert(
             "hr_ext".to_string(),
-            HORIZONTAL_RULE_CHAR
-                .to_string()
-                .repeat(layout.rendered_columns_width()),
+            HR_CHAR.to_string().repeat(layout.rendered_columns_width()),
         );
         for key in PLACEHOLDER_KEYS {
             let values = reports
@@ -489,10 +487,10 @@ impl CashFlowStatementGenerator {
     }
 
     fn column_border_scaffold(&self, layout: &ReportLayout) -> Vec<char> {
-        let target_len = COLUMN_START_COL + layout.scaffold_end();
+        let target_len = START_INDEX + layout.scaffold_end();
         let mut scaffold = vec![' '; target_len];
         for rel_pos in layout.border_positions() {
-            let border_idx = COLUMN_START_COL + rel_pos;
+            let border_idx = START_INDEX + rel_pos;
             if border_idx < scaffold.len() {
                 scaffold[border_idx] = COL_SEPARATOR_CHAR;
             }
@@ -513,11 +511,11 @@ impl CashFlowStatementGenerator {
         let abs_border_positions = layout
             .border_positions()
             .into_iter()
-            .map(|rel| COLUMN_START_COL + rel)
+            .map(|rel| START_INDEX + rel)
             .collect::<Vec<usize>>();
         let target_len = scaffold.len();
 
-        for (start_line_idx, end_line_idx) in TABLE_FORMAT_RANGES {
+        for (start_line_idx, end_line_idx) in TABLE_SCAFFOLD_RANGES {
             for line in lines
                 .iter_mut()
                 .skip(*start_line_idx)
@@ -531,7 +529,7 @@ impl CashFlowStatementGenerator {
 
                 let mut chars = line.chars().collect::<Vec<char>>();
                 for pos in &abs_border_positions {
-                    if *pos < chars.len() && chars[*pos] == HORIZONTAL_RULE_CHAR {
+                    if *pos < chars.len() && chars[*pos] == HR_CHAR {
                         chars[*pos] = HR_INTERSECTION_CHAR;
                     }
                 }
