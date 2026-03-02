@@ -37,8 +37,7 @@ const HR_CHAR: char = '─';
 const HR_INTERSECTION_CHAR: char = '┼';
 
 /// Row-ranges of the statement that should have lines extended to include the
-/// '|' period-separating borders, even if those lines themselves don't contain
-/// any placeholders.
+/// '|' period-separating borders.
 const TABLE_SCAFFOLD_RANGES: &[(usize, usize)] = &[(0, 50), (53, 60)]; // 0-based inclusive
 
 const PLACEHOLDER_KEYS: [&str; 37] = [
