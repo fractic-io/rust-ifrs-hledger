@@ -81,59 +81,6 @@ const PLACEHOLDER_KEYS: [&str; 37] = [
     "balance_closing",
 ];
 
-struct ReportLayout {
-    /// Number of columns.
-    period_count: usize,
-    /// Unpadded column width -- uniformly applied to all columns.
-    column_width: usize,
-}
-
-impl ReportLayout {
-    fn column_left_padding(&self, _column_idx: usize) -> usize {
-        COL_PADDING_LEFT
-    }
-
-    fn column_right_padding(&self, column_idx: usize) -> usize {
-        if column_idx + 1 < self.period_count {
-            COL_PADDING_RIGHT
-        } else {
-            0
-        }
-    }
-
-    fn rendered_columns_width(&self) -> usize {
-        if self.period_count == 0 {
-            return 0;
-        }
-        let mut width = 0;
-        for column_idx in 0..self.period_count {
-            width += self.column_left_padding(column_idx) + self.column_width;
-            if column_idx + 1 < self.period_count {
-                width += self.column_right_padding(column_idx) + 1; // separator char
-            }
-        }
-        width
-    }
-
-    fn border_positions(&self) -> Vec<usize> {
-        let mut positions = Vec::with_capacity(self.period_count.saturating_sub(1));
-        let mut cursor = 0;
-        for column_idx in 0..self.period_count {
-            cursor += self.column_left_padding(column_idx) + self.column_width;
-            if column_idx + 1 < self.period_count {
-                cursor += self.column_right_padding(column_idx);
-                positions.push(cursor);
-                cursor += 1; // separator char
-            }
-        }
-        positions
-    }
-
-    fn scaffold_end(&self) -> usize {
-        self.border_positions().last().map_or(0, |pos| pos + 1)
-    }
-}
-
 pub trait IntoCurrency {
     fn try_into(self) -> Result<Currency, ServerError>;
 }
@@ -198,7 +145,7 @@ impl CashFlowStatementGenerator {
         let layout = self.build_report_layout(&reports);
         let placeholder_map = self.build_placeholder_map(&reports, &layout);
         let filled = replace_all_placeholders_in_string(template, &placeholder_map, true)?;
-        Ok(self.extend_column_separators_in_section(filled, &layout))
+        Ok(extend_column_separators(filled, &layout))
     }
 
     fn generate_period_report(&self, period: &str) -> Result<PeriodReport, ServerError> {
@@ -432,7 +379,7 @@ impl CashFlowStatementGenerator {
             .collect::<Vec<String>>();
         placeholders.insert(
             "period".to_string(),
-            self.format_columns(&period_columns, layout),
+            format_columns(&period_columns, layout),
         );
         placeholders.insert(
             "hr_ext".to_string(),
@@ -452,10 +399,7 @@ impl CashFlowStatementGenerator {
                 .iter()
                 .map(|amount| format_amount(*amount, self.currency, false))
                 .collect::<Vec<String>>();
-            placeholders.insert(
-                key.to_string(),
-                self.format_columns(&rendered_values, layout),
-            );
+            placeholders.insert(key.to_string(), format_columns(&rendered_values, layout));
         }
         placeholders.insert(
             "non_cash_reclassifications".to_string(),
@@ -471,73 +415,6 @@ impl CashFlowStatementGenerator {
                 .join("\n"),
         );
         placeholders
-    }
-
-    fn format_columns(&self, values: &[String], layout: &ReportLayout) -> String {
-        let mut rendered = String::new();
-        for (idx, value) in values.iter().enumerate() {
-            rendered.push_str(&" ".repeat(layout.column_left_padding(idx)));
-            rendered.push_str(&format!("{:>width$}", value, width = layout.column_width));
-            if idx + 1 < values.len() {
-                rendered.push_str(&" ".repeat(layout.column_right_padding(idx)));
-                rendered.push(COL_SEPARATOR_CHAR);
-            }
-        }
-        rendered
-    }
-
-    fn column_border_scaffold(&self, layout: &ReportLayout) -> Vec<char> {
-        let target_len = START_INDEX + layout.scaffold_end();
-        let mut scaffold = vec![' '; target_len];
-        for rel_pos in layout.border_positions() {
-            let border_idx = START_INDEX + rel_pos;
-            if border_idx < scaffold.len() {
-                scaffold[border_idx] = COL_SEPARATOR_CHAR;
-            }
-        }
-        scaffold
-    }
-
-    fn extend_column_separators_in_section(
-        &self,
-        rendered: String,
-        layout: &ReportLayout,
-    ) -> String {
-        let mut lines = rendered
-            .split('\n')
-            .map(std::string::ToString::to_string)
-            .collect::<Vec<String>>();
-        let scaffold = self.column_border_scaffold(layout);
-        let abs_border_positions = layout
-            .border_positions()
-            .into_iter()
-            .map(|rel| START_INDEX + rel)
-            .collect::<Vec<usize>>();
-        let target_len = scaffold.len();
-
-        for (start_line_idx, end_line_idx) in TABLE_SCAFFOLD_RANGES {
-            for line in lines
-                .iter_mut()
-                .skip(*start_line_idx)
-                .take(end_line_idx.saturating_sub(*start_line_idx) + 1)
-            {
-                let current_len = line.chars().count();
-                if current_len < target_len {
-                    let tail = scaffold[current_len..target_len].iter().collect::<String>();
-                    line.push_str(&tail);
-                }
-
-                let mut chars = line.chars().collect::<Vec<char>>();
-                for pos in &abs_border_positions {
-                    if *pos < chars.len() && chars[*pos] == HR_CHAR {
-                        chars[*pos] = HR_INTERSECTION_CHAR;
-                    }
-                }
-                *line = chars.into_iter().collect();
-            }
-        }
-
-        lines.join("\n")
     }
 
     fn net_income(&self, period: &str) -> Result<f64, ServerError> {
@@ -723,4 +600,123 @@ impl CashFlowStatementGenerator {
             })
             .collect()
     }
+}
+
+// Formatting helpers.
+// ----------------------------------------------------------------------------
+
+struct ReportLayout {
+    /// Number of columns.
+    period_count: usize,
+    /// Unpadded column width -- uniformly applied to all columns.
+    column_width: usize,
+}
+
+impl ReportLayout {
+    fn column_left_padding(&self, _column_idx: usize) -> usize {
+        COL_PADDING_LEFT
+    }
+
+    fn column_right_padding(&self, column_idx: usize) -> usize {
+        if column_idx + 1 < self.period_count {
+            COL_PADDING_RIGHT
+        } else {
+            0
+        }
+    }
+
+    fn rendered_columns_width(&self) -> usize {
+        if self.period_count == 0 {
+            return 0;
+        }
+        let mut width = 0;
+        for column_idx in 0..self.period_count {
+            width += self.column_left_padding(column_idx) + self.column_width;
+            if column_idx + 1 < self.period_count {
+                width += self.column_right_padding(column_idx) + 1; // separator char
+            }
+        }
+        width
+    }
+
+    fn border_positions(&self) -> Vec<usize> {
+        let mut positions = Vec::with_capacity(self.period_count.saturating_sub(1));
+        let mut cursor = 0;
+        for column_idx in 0..self.period_count {
+            cursor += self.column_left_padding(column_idx) + self.column_width;
+            if column_idx + 1 < self.period_count {
+                cursor += self.column_right_padding(column_idx);
+                positions.push(cursor);
+                cursor += 1; // separator char
+            }
+        }
+        positions
+    }
+
+    fn scaffold_end(&self) -> usize {
+        self.border_positions().last().map_or(0, |pos| pos + 1)
+    }
+}
+
+fn format_columns(values: &[String], layout: &ReportLayout) -> String {
+    let mut rendered = String::new();
+    for (idx, value) in values.iter().enumerate() {
+        rendered.push_str(&" ".repeat(layout.column_left_padding(idx)));
+        rendered.push_str(&format!("{:>width$}", value, width = layout.column_width));
+        if idx + 1 < values.len() {
+            rendered.push_str(&" ".repeat(layout.column_right_padding(idx)));
+            rendered.push(COL_SEPARATOR_CHAR);
+        }
+    }
+    rendered
+}
+
+fn extend_column_separators(rendered: String, layout: &ReportLayout) -> String {
+    let mut lines = rendered
+        .split('\n')
+        .map(std::string::ToString::to_string)
+        .collect::<Vec<String>>();
+    let scaffold = column_border_scaffold(layout);
+    let abs_border_positions = layout
+        .border_positions()
+        .into_iter()
+        .map(|rel| START_INDEX + rel)
+        .collect::<Vec<usize>>();
+    let target_len = scaffold.len();
+
+    for (start_line_idx, end_line_idx) in TABLE_SCAFFOLD_RANGES {
+        for line in lines
+            .iter_mut()
+            .skip(*start_line_idx)
+            .take(end_line_idx.saturating_sub(*start_line_idx) + 1)
+        {
+            let current_len = line.chars().count();
+            if current_len < target_len {
+                let tail = scaffold[current_len..target_len].iter().collect::<String>();
+                line.push_str(&tail);
+            }
+
+            let mut chars = line.chars().collect::<Vec<char>>();
+            for pos in &abs_border_positions {
+                if *pos < chars.len() && chars[*pos] == HR_CHAR {
+                    chars[*pos] = HR_INTERSECTION_CHAR;
+                }
+            }
+            *line = chars.into_iter().collect();
+        }
+    }
+
+    lines.join("\n")
+}
+
+fn column_border_scaffold(layout: &ReportLayout) -> Vec<char> {
+    let target_len = START_INDEX + layout.scaffold_end();
+    let mut scaffold = vec![' '; target_len];
+    for rel_pos in layout.border_positions() {
+        let border_idx = START_INDEX + rel_pos;
+        if border_idx < scaffold.len() {
+            scaffold[border_idx] = COL_SEPARATOR_CHAR;
+        }
+    }
+    scaffold
 }
