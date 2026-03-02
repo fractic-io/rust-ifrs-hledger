@@ -30,8 +30,10 @@ struct PeriodReport {
 }
 
 const COLUMN_START_COL: usize = 64; // 0-based index (65th char)
-const COLUMN_PADDING: usize = 4;
-const COLUMN_SEPARATOR: &str = "  │ ";
+const COL_PADDING_INNER: usize = 4;
+const COL_PADDING_LEFT: usize = 2;
+const COL_PADDING_RIGHT: usize = 1;
+const COL_SEPARATOR_CHAR: char = '│';
 const HORIZONTAL_RULE_CHAR: char = '─';
 const HR_INTERSECTION_CHAR: char = '┼';
 const TABLE_FORMAT_RANGES: &[(usize, usize)] = &[(0, 50), (53, 60)]; // 0-based inclusive
@@ -77,46 +79,42 @@ const PLACEHOLDER_KEYS: [&str; 37] = [
 ];
 
 struct ReportLayout {
+    /// Number of columns.
     period_count: usize,
+    /// Unpadded column width -- uniformly applied to all columns.
     column_width: usize,
 }
 
 impl ReportLayout {
-    fn column_separator_width(&self) -> usize {
-        COLUMN_SEPARATOR.chars().count()
+    fn rendered_column_width(&self) -> usize {
+        self.column_width + COL_PADDING_INNER
+    }
+
+    fn inter_column_width(&self) -> usize {
+        COL_PADDING_LEFT + 1 + COL_PADDING_RIGHT
     }
 
     fn rendered_columns_width(&self) -> usize {
-        (self.column_width * self.period_count)
-            + (self.column_separator_width() * self.period_count.saturating_sub(1))
+        (self.rendered_column_width() * self.period_count)
+            + (self.inter_column_width() * self.period_count.saturating_sub(1))
     }
 
-    fn separator_positions(&self) -> Vec<(usize, &'static str)> {
-        let mut separators = Vec::with_capacity(self.period_count.saturating_sub(1));
-        for idx in 1..self.period_count {
-            let start = (idx * self.column_width) + ((idx - 1) * self.column_separator_width());
-            separators.push((start, COLUMN_SEPARATOR));
-        }
-        separators
+    fn column_boundary_start(&self, left_column_idx: usize) -> usize {
+        ((left_column_idx + 1) * self.rendered_column_width())
+            + (left_column_idx * self.inter_column_width())
     }
 
-    fn last_separator_end(&self) -> usize {
-        self.separator_positions()
-            .last()
-            .map(|(start, sep)| start + sep.chars().count())
-            .unwrap_or(0)
-    }
-
-    fn separator_border_positions(&self) -> Vec<usize> {
+    fn border_positions(&self) -> Vec<usize> {
         let mut positions = Vec::with_capacity(self.period_count.saturating_sub(1));
-        for (rel_start, separator) in self.separator_positions() {
-            for (idx, ch) in separator.chars().enumerate() {
-                if ch == '│' {
-                    positions.push(rel_start + idx);
-                }
-            }
+        for left_column_idx in 0..self.period_count.saturating_sub(1) {
+            let boundary_start = self.column_boundary_start(left_column_idx);
+            positions.push(boundary_start + COL_PADDING_LEFT);
         }
         positions
+    }
+
+    fn scaffold_end(&self) -> usize {
+        self.border_positions().last().map_or(0, |pos| pos + 1)
     }
 }
 
@@ -402,7 +400,7 @@ impl CashFlowStatementGenerator {
 
         ReportLayout {
             period_count: reports.len(),
-            column_width: max_amount_width.max(max_period_width) + COLUMN_PADDING,
+            column_width: max_amount_width.max(max_period_width),
         }
     }
 
@@ -462,22 +460,29 @@ impl CashFlowStatementGenerator {
     }
 
     fn format_columns(&self, values: &[String], layout: &ReportLayout) -> String {
-        values
-            .iter()
-            .map(|value| format!("{:>width$}", value, width = layout.column_width))
-            .collect::<Vec<String>>()
-            .join(COLUMN_SEPARATOR)
+        let mut rendered = String::new();
+        for (idx, value) in values.iter().enumerate() {
+            if idx > 0 {
+                rendered.push_str(&" ".repeat(COL_PADDING_LEFT));
+                rendered.push(COL_SEPARATOR_CHAR);
+                rendered.push_str(&" ".repeat(COL_PADDING_RIGHT));
+            }
+            rendered.push_str(&format!(
+                "{:>width$}",
+                value,
+                width = layout.rendered_column_width()
+            ));
+        }
+        rendered
     }
 
-    fn separator_scaffold(&self, layout: &ReportLayout) -> Vec<char> {
-        let target_len = COLUMN_START_COL + layout.last_separator_end();
+    fn column_border_scaffold(&self, layout: &ReportLayout) -> Vec<char> {
+        let target_len = COLUMN_START_COL + layout.scaffold_end();
         let mut scaffold = vec![' '; target_len];
-        for (rel_start, separator) in layout.separator_positions() {
-            let abs_start = COLUMN_START_COL + rel_start;
-            for (idx, ch) in separator.chars().enumerate() {
-                if abs_start + idx < scaffold.len() {
-                    scaffold[abs_start + idx] = ch;
-                }
+        for rel_pos in layout.border_positions() {
+            let border_idx = COLUMN_START_COL + rel_pos;
+            if border_idx < scaffold.len() {
+                scaffold[border_idx] = COL_SEPARATOR_CHAR;
             }
         }
         scaffold
@@ -492,9 +497,9 @@ impl CashFlowStatementGenerator {
             .split('\n')
             .map(std::string::ToString::to_string)
             .collect::<Vec<String>>();
-        let scaffold = self.separator_scaffold(layout);
+        let scaffold = self.column_border_scaffold(layout);
         let abs_border_positions = layout
-            .separator_border_positions()
+            .border_positions()
             .into_iter()
             .map(|rel| COLUMN_START_COL + rel)
             .collect::<Vec<usize>>();
