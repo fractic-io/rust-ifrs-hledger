@@ -109,6 +109,10 @@ define_internal_error!(
 );
 
 // Custom statement generation.
+define_client_error!(
+    InvalidCashFlowStatementPeriods,
+    "The cash flow statement requires at least 1 period."
+);
 define_internal_error!(
     UnreplacedPlaceholdersRemain,
     "Unexpected placeholders remain: {unreplaced:?}.",
