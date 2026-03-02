@@ -30,8 +30,7 @@ struct PeriodReport {
 }
 
 const COLUMN_START_COL: usize = 64; // 0-based index (65th char)
-const COL_PADDING_INNER: usize = 4;
-const COL_PADDING_LEFT: usize = 2;
+const COL_PADDING_LEFT: usize = 6;
 const COL_PADDING_RIGHT: usize = 1;
 const COL_SEPARATOR_CHAR: char = '│';
 const HORIZONTAL_RULE_CHAR: char = '─';
@@ -86,29 +85,46 @@ struct ReportLayout {
 }
 
 impl ReportLayout {
-    fn rendered_column_width(&self) -> usize {
-        self.column_width + COL_PADDING_INNER
+    fn is_middle_column(&self, column_idx: usize) -> bool {
+        column_idx > 0 && column_idx + 1 < self.period_count
     }
 
-    fn inter_column_width(&self) -> usize {
-        COL_PADDING_LEFT + 1 + COL_PADDING_RIGHT
+    fn column_left_padding(&self, _column_idx: usize) -> usize {
+        COL_PADDING_LEFT
+    }
+
+    fn column_right_padding(&self, column_idx: usize) -> usize {
+        if self.is_middle_column(column_idx) {
+            COL_PADDING_RIGHT
+        } else {
+            0
+        }
     }
 
     fn rendered_columns_width(&self) -> usize {
-        (self.rendered_column_width() * self.period_count)
-            + (self.inter_column_width() * self.period_count.saturating_sub(1))
-    }
-
-    fn column_boundary_start(&self, left_column_idx: usize) -> usize {
-        ((left_column_idx + 1) * self.rendered_column_width())
-            + (left_column_idx * self.inter_column_width())
+        if self.period_count == 0 {
+            return 0;
+        }
+        let mut width = 0;
+        for column_idx in 0..self.period_count {
+            width += self.column_left_padding(column_idx) + self.column_width;
+            if column_idx + 1 < self.period_count {
+                width += self.column_right_padding(column_idx) + 1; // separator char
+            }
+        }
+        width
     }
 
     fn border_positions(&self) -> Vec<usize> {
         let mut positions = Vec::with_capacity(self.period_count.saturating_sub(1));
-        for left_column_idx in 0..self.period_count.saturating_sub(1) {
-            let boundary_start = self.column_boundary_start(left_column_idx);
-            positions.push(boundary_start + COL_PADDING_LEFT);
+        let mut cursor = 0;
+        for column_idx in 0..self.period_count {
+            cursor += self.column_left_padding(column_idx) + self.column_width;
+            if column_idx + 1 < self.period_count {
+                cursor += self.column_right_padding(column_idx);
+                positions.push(cursor);
+                cursor += 1; // separator char
+            }
         }
         positions
     }
@@ -462,16 +478,12 @@ impl CashFlowStatementGenerator {
     fn format_columns(&self, values: &[String], layout: &ReportLayout) -> String {
         let mut rendered = String::new();
         for (idx, value) in values.iter().enumerate() {
-            if idx > 0 {
-                rendered.push_str(&" ".repeat(COL_PADDING_LEFT));
+            rendered.push_str(&" ".repeat(layout.column_left_padding(idx)));
+            rendered.push_str(&format!("{:>width$}", value, width = layout.column_width));
+            if idx + 1 < values.len() {
+                rendered.push_str(&" ".repeat(layout.column_right_padding(idx)));
                 rendered.push(COL_SEPARATOR_CHAR);
-                rendered.push_str(&" ".repeat(COL_PADDING_RIGHT));
             }
-            rendered.push_str(&format!(
-                "{:>width$}",
-                value,
-                width = layout.rendered_column_width()
-            ));
         }
         rendered
     }
