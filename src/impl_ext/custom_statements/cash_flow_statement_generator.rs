@@ -30,7 +30,7 @@ struct PeriodReport {
 }
 
 const START_INDEX: usize = 64; // (65th char)
-const COL_PADDING_LEFT: usize = 5;
+const COL_PADDING_LEFT: usize = 4;
 const COL_PADDING_RIGHT: usize = 2;
 const COL_SEPARATOR_CHAR: char = '│';
 const HR_CHAR: char = '─';
@@ -383,7 +383,7 @@ impl CashFlowStatementGenerator {
         );
         placeholders.insert(
             "hr_ext".to_string(),
-            HR_CHAR.to_string().repeat(layout.rendered_columns_width()),
+            HR_CHAR.to_string().repeat(layout.total_width()),
         );
         for key in PLACEHOLDER_KEYS {
             let values = reports
@@ -625,7 +625,7 @@ impl ReportLayout {
         }
     }
 
-    fn rendered_columns_width(&self) -> usize {
+    fn total_width(&self) -> usize {
         if self.period_count == 0 {
             return 0;
         }
