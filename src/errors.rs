@@ -15,7 +15,11 @@ define_client_error!(
     "@ Line {line_id}: Invalid CSV content: {details}.",
     { line_id: u64, details: &str }
 );
-define_client_error!(InvalidRon, "Invalid {ron_type} (invalid RON format).", { ron_type: &str });
+define_client_error!(
+    InvalidRon,
+    "@ Line {line_id}: Invalid {ron_type} (invalid RON format).",
+    { line_id: u64, ron_type: &str }
+);
 define_client_error!(InvalidIsoDate, "Invalid ISO date: {date}.", { date: &str });
 define_client_error!(InvalidIsoCurrencyCode, "Invalid ISO currency code: {code}.", { code: &str });
 define_client_error!(

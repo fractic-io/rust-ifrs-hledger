@@ -91,9 +91,8 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                         // Parse.
                         let date = ISODateModel::from_str(raw_date)
                             .map_err(|e| with_line_id(line_id, e))?;
-                        let exec: CommandLogicModel<H::F> = from_str(raw_exec).map_err(|e| {
-                            with_line_id(line_id, InvalidRon::with_debug("CommandLogic", &e))
-                        })?;
+                        let exec: CommandLogicModel<H::F> = from_str(raw_exec)
+                            .map_err(|e| InvalidRon::with_debug(line_id, "CommandLogic", &e))?;
                         let arguments: Vec<String> = if raw_arguments.trim().is_empty() {
                             vec![]
                         } else {
@@ -113,13 +112,14 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                                     .map_err(|e| with_line_id(line_id, e))?,
                             )
                         };
-                        let commodity: Option<H::M> = if raw_commodity.trim().is_empty() {
-                            None
-                        } else {
-                            Some(from_str(raw_commodity).map_err(|e| {
-                                with_line_id(line_id, InvalidRon::with_debug("Commodity", &e))
-                            })?)
-                        };
+                        let commodity: Option<H::M> =
+                            if raw_commodity.trim().is_empty() {
+                                None
+                            } else {
+                                Some(from_str(raw_commodity).map_err(|e| {
+                                    InvalidRon::with_debug(line_id, "Commodity", &e)
+                                })?)
+                            };
                         if let Some(commodity) = &commodity {
                             commodity.currency().map_err(|e| with_line_id(line_id, e))?;
                         }
@@ -173,25 +173,21 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                             .map_err(|e| with_line_id(line_id, e))?;
                         let accounting_logic: AccountingLogicModel<H::E, H::A, H::I, H::R, H::S> =
                             from_str(raw_accounting_logic).map_err(|e| {
-                                with_line_id(line_id, InvalidRon::with_debug("AccountingLogic", &e))
+                                InvalidRon::with_debug(line_id, "AccountingLogic", &e)
                             })?;
                         let decorators: Vec<H::D> = from_str(&format!("[{}]", raw_decorators))
-                            .map_err(|e| {
-                                with_line_id(line_id, InvalidRon::with_debug("Decorator", &e))
-                            })?;
-                        let payee: H::P = from_str(raw_entity).map_err(|e| {
-                            with_line_id(line_id, InvalidRon::with_debug("Payee", &e))
-                        })?;
+                            .map_err(|e| InvalidRon::with_debug(line_id, "Decorator", &e))?;
+                        let payee: H::P = from_str(raw_entity)
+                            .map_err(|e| InvalidRon::with_debug(line_id, "Payee", &e))?;
                         let description: String = raw_description.into();
                         let amount = AccountingAmountModel::from_str(raw_amount)
                             .map_err(|e| with_line_id(line_id, e))?;
-                        let commodity: H::M = from_str(raw_commodity).map_err(|e| {
-                            with_line_id(line_id, InvalidRon::with_debug("Commodity", &e))
-                        })?;
+                        let commodity: H::M = from_str(raw_commodity)
+                            .map_err(|e| InvalidRon::with_debug(line_id, "Commodity", &e))?;
                         commodity.currency().map_err(|e| with_line_id(line_id, e))?;
                         let backing_account: BackingAccountModel<H::R, H::C, H::S> =
                             from_str(raw_backing_account).map_err(|e| {
-                                with_line_id(line_id, InvalidRon::with_debug("BackingAccount", &e))
+                                InvalidRon::with_debug(line_id, "BackingAccount", &e)
                             })?;
                         let custom_notes: Vec<Annotation> = if raw_notes.trim().is_empty() {
                             vec![]

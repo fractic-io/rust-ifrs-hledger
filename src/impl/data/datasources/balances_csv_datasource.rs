@@ -54,12 +54,11 @@ impl<H: Handlers> BalancesCsvDatasource<H> for BalancesCsvDatasourceImpl<H> {
                     let date =
                         ISODateModel::from_str(raw_date).map_err(|e| with_line_id(line_id, e))?;
                     let cash_handler: H::C = from_str(raw_account)
-                        .map_err(|e| with_line_id(line_id, InvalidRon::with_debug("Cash", &e)))?;
+                        .map_err(|e| InvalidRon::with_debug(line_id, "Cash", &e))?;
                     let balance = AccountingAmountModel::from_str(raw_balance)
                         .map_err(|e| with_line_id(line_id, e))?;
-                    let commodity: H::M = from_str(raw_commodity).map_err(|e| {
-                        with_line_id(line_id, InvalidRon::with_debug("Commodity", &e))
-                    })?;
+                    let commodity: H::M = from_str(raw_commodity)
+                        .map_err(|e| InvalidRon::with_debug(line_id, "Commodity", &e))?;
                     commodity.currency().map_err(|e| with_line_id(line_id, e))?;
 
                     // Build.
