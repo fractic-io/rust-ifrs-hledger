@@ -7,9 +7,11 @@ use ron::from_str;
 use crate::{
     data::models::{accounting_amount_model::AccountingAmountModel, iso_date_model::ISODateModel},
     domain::entities::assertion_spec::AssertionSpec,
-    entities::Handlers,
+    entities::{CommodityHandler, Handlers},
     errors::{InvalidCsv, InvalidRon, ReadError},
 };
+
+use super::util::with_line_id;
 
 #[async_trait]
 pub(crate) trait BalancesCsvDatasource<H: Handlers>: Send + Sync {
@@ -37,7 +39,10 @@ impl<H: Handlers> BalancesCsvDatasource<H> for BalancesCsvDatasourceImpl<H> {
     fn from_string(&self, s: &str) -> Result<Vec<AssertionSpec<H>>, ServerError> {
         csv::Reader::from_reader(s.as_bytes())
             .records()
-            .map(|r| {
+            .enumerate()
+            .map(|(i, r)| {
+                let line_id = (i + 2) as u64;
+
                 r.map_err(|e| InvalidCsv::with_debug(&e)).and_then(|r| {
                     // Extract from CSV record.
                     let raw_account = r.get(0).unwrap_or("");
@@ -46,13 +51,16 @@ impl<H: Handlers> BalancesCsvDatasource<H> for BalancesCsvDatasourceImpl<H> {
                     let raw_commodity = r.get(3).unwrap_or("");
 
                     // Parse.
-                    let date: ISODateModel = ISODateModel::from_str(raw_date)?;
-                    let cash_handler: H::C =
-                        from_str(raw_account).map_err(|e| InvalidRon::with_debug("Cash", &e))?;
-                    let balance: AccountingAmountModel =
-                        AccountingAmountModel::from_str(raw_balance)?;
-                    let commodity: H::M = from_str(raw_commodity)
-                        .map_err(|e| InvalidRon::with_debug("Commodity", &e))?;
+                    let date =
+                        ISODateModel::from_str(raw_date).map_err(|e| with_line_id(line_id, e))?;
+                    let cash_handler: H::C = from_str(raw_account)
+                        .map_err(|e| with_line_id(line_id, InvalidRon::with_debug("Cash", &e)))?;
+                    let balance = AccountingAmountModel::from_str(raw_balance)
+                        .map_err(|e| with_line_id(line_id, e))?;
+                    let commodity: H::M = from_str(raw_commodity).map_err(|e| {
+                        with_line_id(line_id, InvalidRon::with_debug("Commodity", &e))
+                    })?;
+                    commodity.currency().map_err(|e| with_line_id(line_id, e))?;
 
                     // Build.
                     Ok(AssertionSpec {

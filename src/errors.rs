@@ -12,8 +12,8 @@ define_client_error!(ReadError, "Error reading file.");
 define_client_error!(InvalidCsv, "Invalid CSV format.");
 define_client_error!(
     InvalidCsvContent,
-    "@ Line {spec_id}; Invalid CSV content: {details}.",
-    { spec_id: &str, details: &str }
+    "@ Line {line_id}: Invalid CSV content: {details}.",
+    { line_id: u64, details: &str }
 );
 define_client_error!(InvalidRon, "Invalid {ron_type} (invalid RON format).", { ron_type: &str });
 define_client_error!(InvalidIsoDate, "Invalid ISO date: {date}.", { date: &str });
