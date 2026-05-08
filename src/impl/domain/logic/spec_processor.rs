@@ -155,7 +155,10 @@ impl FoldState {
             let expense_history = expense_history_lookup.entry(delta.account).or_default();
             if delta.is_init {
                 if expense_history.init_date.is_some() {
-                    return Err(VariableExpenseDoubleInit::new(&t.label.description));
+                    return Err(VariableExpenseDoubleInit::new(
+                        &t.spec_id,
+                        &t.label.description,
+                    ));
                 }
                 expense_history.init_date = Some(delta.price_record.start);
             }
@@ -183,7 +186,7 @@ impl FoldState {
 macro_rules! amount_should_be_negative {
     ($amount:expr, $logic:expr, $id:expr) => {
         if $amount >= 0.0 {
-            return Err(UnexpectedPositiveValue::new($amount, $logic, $id));
+            return Err(UnexpectedPositiveValue::new($id, $amount, $logic));
         }
     };
 }
@@ -191,7 +194,7 @@ macro_rules! amount_should_be_negative {
 macro_rules! amount_should_be_positive {
     ($amount:expr, $logic:expr, $id:expr) => {
         if $amount <= 0.0 {
-            return Err(UnexpectedNegativeValue::new($amount, $logic, $id));
+            return Err(UnexpectedNegativeValue::new($id, $amount, $logic));
         }
     };
 }
@@ -303,7 +306,9 @@ impl<H: Handlers> SpecProcessor<H> {
             ext_raw,
         } = spec
         else {
-            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(
+                &spec.id, &spec,
+            ));
         };
         amount_should_be_positive!(amount, "CommonStock", &id);
 
@@ -376,7 +381,7 @@ impl<H: Handlers> SpecProcessor<H> {
                 },
             ]
         } else {
-            return Err(CommonStockCannotBePrepaid::new(&description));
+            return Err(CommonStockCannotBePrepaid::new(&id, &description));
         };
 
         Ok(Delta {
@@ -419,7 +424,9 @@ impl<H: Handlers> SpecProcessor<H> {
             ext_raw,
         } = spec
         else {
-            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(
+                &spec.id, &spec,
+            ));
         };
         amount_should_be_negative!(amount, "ShareIssuanceCost", &id);
 
@@ -578,7 +585,9 @@ impl<H: Handlers> SpecProcessor<H> {
             ext_raw,
         } = spec
         else {
-            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(
+                &spec.id, &spec,
+            ));
         };
         amount_should_be_negative!(amount, "SimpleExpense", &id);
 
@@ -720,7 +729,9 @@ impl<H: Handlers> SpecProcessor<H> {
             ext_raw,
         } = spec
         else {
-            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(
+                &spec.id, &spec,
+            ));
         };
         amount_should_be_negative!(amount, "Capitalize", &id);
 
@@ -870,7 +881,9 @@ impl<H: Handlers> SpecProcessor<H> {
             ext_raw,
         } = spec
         else {
-            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(
+                &spec.id, &spec,
+            ));
         };
         amount_should_be_negative!(amount, "Amortize", &id);
 
@@ -972,7 +985,9 @@ impl<H: Handlers> SpecProcessor<H> {
             ext_raw,
         } = spec
         else {
-            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(
+                &spec.id, &spec,
+            ));
         };
         amount_should_be_negative!(amount, "FixedExpense", &id);
 
@@ -1109,7 +1124,9 @@ impl<H: Handlers> SpecProcessor<H> {
             ..
         } = spec
         else {
-            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(
+                &spec.id, &spec,
+            ));
         };
 
         let accrual_days = (accrual_end - accrual_start).num_days() + 1;
@@ -1131,13 +1148,16 @@ impl<H: Handlers> SpecProcessor<H> {
         history_lookup: &HashMap<ExpenseAccount, ExpenseHistory>,
     ) -> Result<Delta, ServerError> {
         let DecoratedTransactionSpec {
+            id,
             accrual_start,
             accounting_logic: AccountingLogic::VariableExpense(ref e_handler),
             ref description,
             ..
         } = spec
         else {
-            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(
+                &spec.id, &spec,
+            ));
         };
 
         // Use the last 90 days of history before the accrual_date.
@@ -1150,15 +1170,16 @@ impl<H: Handlers> SpecProcessor<H> {
             .get(&expense_account)
             .and_then(|v| v.init_date)
         else {
-            return Err(VariableExpenseNoInit::new(description));
+            return Err(VariableExpenseNoInit::new(&id, description));
         };
         let history_window_start =
             std::cmp::max(history_init_date, accrual_start - Duration::days(90));
         let history_window_end = accrual_start - Duration::days(1);
 
         // Compute the average daily accrual rate over the 90-day window.
-        let daily_rate = compute_daily_average(records, history_window_start, history_window_end)
-            .ok_or_else(|| VariableExpenseNotEnoughHistoricalData::new(description))?;
+        let daily_rate =
+            compute_daily_average(records, history_window_start, history_window_end)
+                .ok_or_else(|| VariableExpenseNotEnoughHistoricalData::new(&id, description))?;
 
         let e_handler = e_handler.clone();
         Self::process_variable_expense_helper(spec, e_handler, daily_rate, false)
@@ -1187,12 +1208,15 @@ impl<H: Handlers> SpecProcessor<H> {
             ext_raw,
         } = spec
         else {
-            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(
+                &spec.id, &spec,
+            ));
         };
         amount_should_be_negative!(amount, "VariableExpense", &id);
 
         if payment_date <= accrual_end {
             return Err(VariableExpenseInvalidPaymentDate::new(
+                &id,
                 &description,
                 &payment_date,
                 &accrual_end,
@@ -1322,7 +1346,9 @@ impl<H: Handlers> SpecProcessor<H> {
             ext_raw,
         } = spec
         else {
-            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(
+                &spec.id, &spec,
+            ));
         };
         amount_should_be_positive!(amount, "ImmaterialIncome", &id);
 
@@ -1382,7 +1408,9 @@ impl<H: Handlers> SpecProcessor<H> {
             ext_raw,
         } = spec
         else {
-            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(
+                &spec.id, &spec,
+            ));
         };
         amount_should_be_negative!(amount, "ImmaterialExpense", &id);
 
@@ -1434,7 +1462,9 @@ impl<H: Handlers> SpecProcessor<H> {
         reimbursement_state: &ReimbursementState,
     ) -> Result<Delta, ServerError> {
         let AccountingLogic::Reimburse(ref r_handler) = spec.accounting_logic else {
-            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(
+                &spec.id, &spec,
+            ));
         };
         let r_account = r_handler.account();
         Self::process_reimburse_helper(spec, r_account, false, reimbursement_state)
@@ -1445,7 +1475,9 @@ impl<H: Handlers> SpecProcessor<H> {
         reimbursement_state: &ReimbursementState,
     ) -> Result<Delta, ServerError> {
         let AccountingLogic::ReimbursePartial(ref r_handler) = spec.accounting_logic else {
-            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(
+                &spec.id, &spec,
+            ));
         };
         let r_account = r_handler.account();
         Self::process_reimburse_helper(spec, r_account, true, reimbursement_state)
@@ -1474,7 +1506,9 @@ impl<H: Handlers> SpecProcessor<H> {
             ext_raw,
         } = spec
         else {
-            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(
+                &spec.id, &spec,
+            ));
         };
         amount_should_be_negative!(amount, "Reimburse", &id);
 
@@ -1566,7 +1600,9 @@ impl<H: Handlers> SpecProcessor<H> {
             ext_raw,
         } = spec
         else {
-            return Err(InvalidArgumentsForAccountingLogic::with_debug(&spec));
+            return Err(InvalidArgumentsForAccountingLogic::with_debug(
+                &spec.id, &spec,
+            ));
         };
 
         let tx = if amount > 0.0 {

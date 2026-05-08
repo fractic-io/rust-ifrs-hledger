@@ -10,9 +10,14 @@ use crate::{
         accounting_logic_model::AccountingLogicModel, backing_account_model::BackingAccountModel,
         command_logic_model::CommandLogicModel, iso_date_model::ISODateModel,
     },
-    entities::{Annotation, Command, CommandSpecId, Handlers, TransactionSpec, TransactionSpecId},
+    entities::{
+        Annotation, Command, CommandSpecId, CommodityHandler, Handlers, TransactionSpec,
+        TransactionSpecId,
+    },
     errors::{InvalidCsv, InvalidCsvContent, InvalidRon, ReadError},
 };
+
+use super::utils::with_line_id;
 
 #[async_trait]
 pub(crate) trait TransactionsCsvDatasource<H: Handlers>: Send + Sync {
@@ -53,6 +58,8 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
             .try_fold(
                 (Vec::new(), Vec::new()),
                 |(mut transaction_specs, mut commands), (i, r)| {
+                    let line_id = (i + 2) as u64;
+
                     let r = r.map_err(|e| InvalidCsv::with_debug(&e))?;
                     let first_char = r
                         .get(0)
@@ -82,9 +89,10 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                         let raw_notes = r.get(10).unwrap_or("");
 
                         // Parse.
-                        let date: ISODateModel = ISODateModel::from_str(raw_date)?;
+                        let date = ISODateModel::from_str(raw_date)
+                            .map_err(|e| with_line_id(line_id, e))?;
                         let exec: CommandLogicModel<H::F> = from_str(raw_exec)
-                            .map_err(|e| InvalidRon::with_debug("CommandLogic", &e))?;
+                            .map_err(|e| InvalidRon::with_debug(line_id, "CommandLogic", &e))?;
                         let arguments: Vec<String> = if raw_arguments.trim().is_empty() {
                             vec![]
                         } else {
@@ -99,16 +107,22 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                         {
                             None
                         } else {
-                            Some(AccountingAmountModel::from_str(raw_amount)?)
-                        };
-                        let commodity: Option<H::M> = if raw_commodity.trim().is_empty() {
-                            None
-                        } else {
                             Some(
-                                from_str(raw_commodity)
-                                    .map_err(|e| InvalidRon::with_debug("Commodity", &e))?,
+                                AccountingAmountModel::from_str(raw_amount)
+                                    .map_err(|e| with_line_id(line_id, e))?,
                             )
                         };
+                        let commodity: Option<H::M> =
+                            if raw_commodity.trim().is_empty() {
+                                None
+                            } else {
+                                Some(from_str(raw_commodity).map_err(|e| {
+                                    InvalidRon::with_debug(line_id, "Commodity", &e)
+                                })?)
+                            };
+                        if let Some(commodity) = &commodity {
+                            commodity.currency().map_err(|e| with_line_id(line_id, e))?;
+                        }
                         let notes: Vec<String> = if raw_notes.trim().is_empty() {
                             vec![]
                         } else {
@@ -117,7 +131,7 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
 
                         // Build.
                         commands.push(Command {
-                            id: CommandSpecId((i + 2) as u64),
+                            id: CommandSpecId(line_id),
                             date: date.into(),
                             exec: exec.into(),
                             arguments,
@@ -147,25 +161,34 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                         let raw_notes = r.get(10).unwrap_or("");
 
                         // Parse.
-                        let accrual_start: ISODateModel = ISODateModel::from_str(raw_accrual_date)?;
-                        let accrual_end: Option<ISODateModel> =
-                            raw_until.map(ISODateModel::from_str).transpose()?;
-                        let payment_date: ISODateModel = ISODateModel::from_str(raw_payment_date)?;
+                        let accrual_start = ISODateModel::from_str(raw_accrual_date)
+                            .map_err(|e| with_line_id(line_id, e))?;
+                        let accrual_end: Option<ISODateModel> = raw_until
+                            .map(|raw_until| {
+                                ISODateModel::from_str(raw_until)
+                                    .map_err(|e| with_line_id(line_id, e))
+                            })
+                            .transpose()?;
+                        let payment_date = ISODateModel::from_str(raw_payment_date)
+                            .map_err(|e| with_line_id(line_id, e))?;
                         let accounting_logic: AccountingLogicModel<H::E, H::A, H::I, H::R, H::S> =
-                            from_str(raw_accounting_logic)
-                                .map_err(|e| InvalidRon::with_debug("AccountingLogic", &e))?;
+                            from_str(raw_accounting_logic).map_err(|e| {
+                                InvalidRon::with_debug(line_id, "AccountingLogic", &e)
+                            })?;
                         let decorators: Vec<H::D> = from_str(&format!("[{}]", raw_decorators))
-                            .map_err(|e| InvalidRon::with_debug("Decorator", &e))?;
+                            .map_err(|e| InvalidRon::with_debug(line_id, "Decorator", &e))?;
                         let payee: H::P = from_str(raw_entity)
-                            .map_err(|e| InvalidRon::with_debug("Payee", &e))?;
+                            .map_err(|e| InvalidRon::with_debug(line_id, "Payee", &e))?;
                         let description: String = raw_description.into();
-                        let amount: AccountingAmountModel =
-                            AccountingAmountModel::from_str(raw_amount)?;
+                        let amount = AccountingAmountModel::from_str(raw_amount)
+                            .map_err(|e| with_line_id(line_id, e))?;
                         let commodity: H::M = from_str(raw_commodity)
-                            .map_err(|e| InvalidRon::with_debug("Commodity", &e))?;
+                            .map_err(|e| InvalidRon::with_debug(line_id, "Commodity", &e))?;
+                        commodity.currency().map_err(|e| with_line_id(line_id, e))?;
                         let backing_account: BackingAccountModel<H::R, H::C, H::S> =
-                            from_str(raw_backing_account)
-                                .map_err(|e| InvalidRon::with_debug("BackingAccount", &e))?;
+                            from_str(raw_backing_account).map_err(|e| {
+                                InvalidRon::with_debug(line_id, "BackingAccount", &e)
+                            })?;
                         let custom_notes: Vec<Annotation> = if raw_notes.trim().is_empty() {
                             vec![]
                         } else {
@@ -177,7 +200,7 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
 
                         // Build.
                         let spec = TransactionSpec {
-                            id: TransactionSpecId((i + 2) as u64),
+                            id: TransactionSpecId(line_id),
                             accrual_start: accrual_start.into(),
                             accrual_end: accrual_end.map(Into::into),
                             payment_date: payment_date.into(),
@@ -221,6 +244,7 @@ impl<H: Handlers> TransactionsCsvDatasourceImpl<H> {
         if let Some(until) = spec.accrual_end {
             if until < spec.accrual_start {
                 return Err(InvalidCsvContent::with_debug(
+                    spec.id.0,
                     "Until date must be after start date.",
                     &spec,
                 )
