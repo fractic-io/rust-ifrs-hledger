@@ -97,38 +97,37 @@ impl<H: Handlers> CommandProcessor<H> {
 
         if date.month() != 12 || date.day() != 31 {
             return Err(InvalidCsvContent::with_debug(
-                &format!(
-                    "Close entry for {} (id {}) date must be December 31.",
-                    date.year(),
-                    id
-                ),
+                &id.to_string(),
+                &format!("Close entry for {} date must be December 31.", date.year()),
                 &date,
             ));
         }
         let Some(argument) = arguments.into_iter().next() else {
-            return Err(InvalidCsvContent::new(&format!(
-                "Close entry for {} (id {}) must have argument field set to the closing tag, as \
+            return Err(InvalidCsvContent::new(
+                &id.to_string(),
+                &format!(
+                    "Close entry for {} must have argument field set to the closing tag, as \
                  output by the CloseRecordGenerator.",
-                date.year(),
-                id
-            )));
+                    date.year()
+                ),
+            ));
         };
         let content = STANDARD.decode(argument).map_err(|e| {
             InvalidCsvContent::with_debug(
+                &id.to_string(),
                 &format!(
-                    "Close entry for {} (id {}) argument is not valid base64.",
-                    date.year(),
-                    id
+                    "Close entry for {} argument is not valid base64.",
+                    date.year()
                 ),
                 &e,
             )
         })?;
         let entries = serde_json::from_slice::<Vec<(String, f64)>>(&content).map_err(|e| {
             InvalidCsvContent::with_debug(
+                &id.to_string(),
                 &format!(
-                    "Close entry for {} (id {}) argument is not valid postings JSON.",
-                    date.year(),
-                    id
+                    "Close entry for {} argument is not valid postings JSON.",
+                    date.year()
                 ),
                 &e,
             )

@@ -221,6 +221,7 @@ impl<H: Handlers> TransactionsCsvDatasourceImpl<H> {
         if let Some(until) = spec.accrual_end {
             if until < spec.accrual_start {
                 return Err(InvalidCsvContent::with_debug(
+                    &spec.id.to_string(),
                     "Until date must be after start date.",
                     &spec,
                 )
