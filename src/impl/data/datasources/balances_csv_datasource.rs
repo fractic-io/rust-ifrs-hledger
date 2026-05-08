@@ -11,7 +11,7 @@ use crate::{
     errors::{InvalidCsv, InvalidRon, ReadError},
 };
 
-use super::util::with_line_id;
+use super::utils::with_line_id;
 
 #[async_trait]
 pub(crate) trait BalancesCsvDatasource<H: Handlers>: Send + Sync {

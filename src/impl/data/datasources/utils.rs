@@ -46,6 +46,7 @@ impl ServerErrorTrait for TaggedError {
     }
 }
 
+#[track_caller]
 pub(crate) fn with_line_id(line_id: u64, error: ServerError) -> ServerError {
     TaggedError::wrap(line_id, error)
 }
