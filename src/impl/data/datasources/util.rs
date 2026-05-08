@@ -3,7 +3,7 @@ use fractic_server_error::{
 };
 
 #[derive(Debug)]
-struct CsvLineError {
+struct TaggedError {
     context: String,
     message: String,
     debug: Option<String>,
@@ -11,7 +11,7 @@ struct CsvLineError {
     tag: ServerErrorTag,
 }
 
-impl CsvLineError {
+impl TaggedError {
     #[track_caller]
     fn wrap(line_id: u64, error: ServerError) -> ServerError {
         Box::new(Self {
@@ -24,7 +24,7 @@ impl CsvLineError {
     }
 }
 
-impl ServerErrorTrait for CsvLineError {
+impl ServerErrorTrait for TaggedError {
     fn behaviour(&self) -> ServerErrorBehaviour {
         self.behaviour.clone()
     }
@@ -47,5 +47,5 @@ impl ServerErrorTrait for CsvLineError {
 }
 
 pub(crate) fn with_line_id(line_id: u64, error: ServerError) -> ServerError {
-    CsvLineError::wrap(line_id, error)
+    TaggedError::wrap(line_id, error)
 }

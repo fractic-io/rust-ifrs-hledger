@@ -5,7 +5,7 @@ pub(crate) mod data {
     pub(crate) mod datasources {
         pub(crate) mod balances_csv_datasource;
         pub(crate) mod transactions_csv_datasource;
-        pub(crate) mod util;
+        mod util;
     }
     pub(crate) mod models {
         pub(crate) mod accounting_amount_model;
