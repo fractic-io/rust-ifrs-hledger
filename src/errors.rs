@@ -12,12 +12,12 @@ define_client_error!(ReadError, "Error reading file.");
 define_client_error!(InvalidCsv, "Invalid CSV format.");
 define_client_error!(
     InvalidCsvContent,
-    "@ Line {line_id}: Invalid CSV content: {details}.",
+    "@ Line {line_id}; Invalid CSV content: {details}.",
     { line_id: u64, details: &str }
 );
 define_client_error!(
     InvalidRon,
-    "@ Line {line_id}: Invalid {ron_type} (invalid RON format).",
+    "@ Line {line_id}; Invalid {ron_type} (invalid RON format).",
     { line_id: u64, ron_type: &str }
 );
 define_client_error!(InvalidIsoDate, "Invalid ISO date: {date}.", { date: &str });
@@ -31,7 +31,7 @@ define_client_error!(
 // Accounting-related.
 define_client_error!(
     CommonStockCannotBePrepaid,
-    "@ Line {spec_id}; CommonStock: '{description}' cannot have a payment date before accrual, since this would indicate prepayment for stock.",
+    "@ Line {spec_id}; CommonStock '{description}' cannot have a payment date before accrual, since this would indicate prepayment for stock.",
     { spec_id: &TransactionSpecId, description: &str }
 );
 define_client_error!(
@@ -41,22 +41,22 @@ define_client_error!(
 );
 define_client_error!(
     VariableExpenseInvalidPaymentDate,
-    "@ Line {spec_id}; Invalid VariableExpense: '{description}'. Payment date ({payment_date}) must be after accrual period (accrual end: {until_date}), otherwise it would indicate we're prepaying for an unknown expense.",
+    "@ Line {spec_id}; Invalid VariableExpense '{description}'. Payment date ({payment_date}) must be after accrual period (accrual end: {until_date}), otherwise it would indicate we're prepaying for an unknown expense.",
     { spec_id: &TransactionSpecId, description: &str, payment_date: &NaiveDate, until_date: &NaiveDate }
 );
 define_client_error!(
     VariableExpenseNotEnoughHistoricalData,
-    "@ Line {spec_id}; No historical data for VariableExpense: '{description}' in the previous 90 days.",
+    "@ Line {spec_id}; No historical data for VariableExpense '{description}' in the previous 90 days.",
     { spec_id: &TransactionSpecId, description: &str }
 );
 define_client_error!(
     VariableExpenseNoInit,
-    "@ Line {spec_id}; VariableExpense: '{description}' not initialized. Must initiate with a VariableExpenseInit entry.",
+    "@ Line {spec_id}; VariableExpense '{description}' not initialized. Must initiate with a VariableExpenseInit entry.",
     { spec_id: &TransactionSpecId, description: &str }
 );
 define_client_error!(
     VariableExpenseDoubleInit,
-    "@ Line {spec_id}; VariableExpense: '{description}' already initialized. Cannot initialize twice.",
+    "@ Line {spec_id}; VariableExpense '{description}' already initialized. Cannot initialize twice.",
     { spec_id: &TransactionSpecId, description: &str }
 );
 define_client_error!(
