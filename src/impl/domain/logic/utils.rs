@@ -207,7 +207,8 @@ pub(crate) fn track_unreimbursed_entries<
                     .collect::<Vec<_>>();
                 if credit_postings.iter().map(|p| p.amount).sum::<f64>() != reimbursable_debits {
                     return Err(ReimbursementTracingError::with_debug(
-                        "some transactions included a combination of reimbursable and non-reimbursable debits, which is not yet supported",
+                        "some transactions included a combination of reimbursable and \
+                         non-reimbursable debits, which is not yet supported",
                         &backing_account,
                     ));
                 }
@@ -271,12 +272,13 @@ impl PopByAmount for VecDeque<UnreimbursedEntry> {
                 // tolerance), we cannot satisfy the exact amount.
                 if entry.total_amount > remaining + EPSILON {
                     return Err(ReimbursementTracingError::with_debug(
-                    &format!(
-                        "amount cannot be satisfied with a whole number of entries; remaining: {:.10}, next entry: {:.10}",
-                        remaining, entry.total_amount
-                    ),
-                    &self,
-                ));
+                        &format!(
+                            "amount cannot be satisfied with a whole number of entries; \
+                             remaining: {:.10}, next entry: {:.10}",
+                            remaining, entry.total_amount
+                        ),
+                        &self,
+                    ));
                 }
 
                 entries.push(entry);

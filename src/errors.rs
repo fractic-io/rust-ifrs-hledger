@@ -72,12 +72,12 @@ define_client_error!(
 define_client_error!(
     UnexpectedNegativeValue,
     "@ Line {spec_id}; Unexpected negative amount ({amount}) for '{accounting_logic}' accounting logic.",
-    { amount: f64, accounting_logic: &str, spec_id: &TransactionSpecId }
+    { spec_id: &TransactionSpecId, amount: f64, accounting_logic: &str }
 );
 define_client_error!(
     UnexpectedPositiveValue,
     "@ Line {spec_id}; Unexpected positive amount ({amount}) for '{accounting_logic}' accounting logic.",
-    { amount: f64, accounting_logic: &str, spec_id: &TransactionSpecId }
+    { spec_id: &TransactionSpecId, amount: f64, accounting_logic: &str }
 );
 define_internal_error!(
     ReimbursementTracingError,

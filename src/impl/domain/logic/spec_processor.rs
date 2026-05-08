@@ -186,7 +186,7 @@ impl FoldState {
 macro_rules! amount_should_be_negative {
     ($amount:expr, $logic:expr, $id:expr) => {
         if $amount >= 0.0 {
-            return Err(UnexpectedPositiveValue::new($amount, $logic, $id));
+            return Err(UnexpectedPositiveValue::new($id, $amount, $logic));
         }
     };
 }
@@ -194,7 +194,7 @@ macro_rules! amount_should_be_negative {
 macro_rules! amount_should_be_positive {
     ($amount:expr, $logic:expr, $id:expr) => {
         if $amount <= 0.0 {
-            return Err(UnexpectedNegativeValue::new($amount, $logic, $id));
+            return Err(UnexpectedNegativeValue::new($id, $amount, $logic));
         }
     };
 }
