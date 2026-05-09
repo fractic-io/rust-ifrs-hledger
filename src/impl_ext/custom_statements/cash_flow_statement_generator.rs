@@ -404,9 +404,9 @@ impl CashFlowStatementGenerator {
             "non_cash_reclassifications".to_string(),
             reports
                 .iter()
-                // Only report non-cash reclassifications for the latest period
-                // (i.e. the current reporting year).
-                .max_by_key(|r| &r.period)
+                // Only report non-cash reclassifications for the final period
+                // requested by the caller (usually the current reporting year).
+                .last()
                 .into_iter()
                 .flat_map(|r| r.non_cash_reclassifications.iter())
                 .map(|s| format!("• {}", s))
@@ -718,4 +718,48 @@ fn column_border_scaffold(layout: &ReportLayout) -> Vec<char> {
         }
     }
     scaffold
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn report(period: &str, non_cash_reclassifications: Vec<&str>) -> PeriodReport {
+        PeriodReport {
+            period: period.to_string(),
+            amounts: PLACEHOLDER_KEYS.into_iter().map(|key| (key, 0.0)).collect(),
+            non_cash_reclassifications: non_cash_reclassifications
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn new_rejects_empty_period_expressions() {
+        let result = CashFlowStatementGenerator::new("Cargo.toml", Vec::<String>::new(), "EUR");
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn non_cash_reclassifications_come_from_last_requested_period() {
+        let generator = CashFlowStatementGenerator::new(
+            "Cargo.toml",
+            ["2025..2026", "2023-08-15..2025"],
+            "EUR",
+        )
+        .unwrap();
+        let reports = vec![
+            report("2025..2026", vec!["latest lexicographically"]),
+            report("2023-08-15..2025", vec!["last requested"]),
+        ];
+        let layout = generator.build_report_layout(&reports);
+        let placeholders = generator.build_placeholder_map(&reports, &layout);
+
+        assert_eq!(
+            placeholders.get("non_cash_reclassifications"),
+            Some(&"• last requested".to_string())
+        );
+    }
 }
