@@ -14,4 +14,3 @@ formatting), `impl/exports` (entities and `format_amount`), `impl_ext/` →
 - Accounting rules live in `domain/logic/*_processor.rs`, input parsing in
   `data/`, output formatting in `presentation/`; keep that separation for a
   new rule, CSV column or output section.
-- Commit / PR titles: imperative, trailing period.
