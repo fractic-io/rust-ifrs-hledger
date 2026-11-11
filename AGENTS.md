@@ -4,7 +4,7 @@ Generates IFRS-style hledger journals from company transaction CSVs: CSV
 datasources → domain `FinancialRecords` (accounts, transactions, assertions,
 end-of-year entries, cash-flow tracing tags) → a `ProcessUsecase` → the
 hledger printer. The expected CSV format is documented only by the code.
-Library layout per `/efs/fractic/_/rust.md` §2: `src/impl/mod.rs` gates
+Library layout: `src/impl/mod.rs` gates
 `impl/domain/{entities,logic,repositories,usecases}`,
 `impl/data/{datasources,models,repositories}`, `impl/presentation/` (hledger
 formatting), `impl/exports` (entities and `format_amount`), `impl_ext/` →
