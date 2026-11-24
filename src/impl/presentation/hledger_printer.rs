@@ -153,7 +153,7 @@ impl HledgerPrinter {
                     .collect::<Vec<String>>();
                 let tag_str = match cashflow_tag
                     .into_iter()
-                    .chain(custom_tags.into_iter())
+                    .chain(custom_tags)
                     .collect::<Vec<String>>()
                 {
                     tags if tags.is_empty() => "".to_string(),
@@ -490,7 +490,7 @@ fn attach_transaction_notes(ledger_content: String, notes: &[String]) -> String 
 // EOY-entry helpers.
 // ----------------------------------------------------------------------------
 
-fn eoy_entries_by_year(entries: &Vec<EndOfYearEntry>) -> BTreeMap<i32, Vec<&EndOfYearEntry>> {
+fn eoy_entries_by_year(entries: &[EndOfYearEntry]) -> BTreeMap<i32, Vec<&EndOfYearEntry>> {
     entries.iter().fold(
         BTreeMap::<i32, Vec<&EndOfYearEntry>>::new(),
         |mut acc: BTreeMap<i32, Vec<&EndOfYearEntry>>, entry: &EndOfYearEntry| {

@@ -57,13 +57,22 @@ pub enum BackingAccount<R, C, S> {
     ContributedSurplus(S),
 }
 
+/// The accounting logic over the handler types of `H`.
+pub(crate) type AccountingLogicOf<H> = AccountingLogic<
+    <H as Handlers>::E,
+    <H as Handlers>::A,
+    <H as Handlers>::I,
+    <H as Handlers>::R,
+    <H as Handlers>::S,
+>;
+
 #[derive(Debug)]
 pub(crate) struct TransactionSpec<H: Handlers> {
     pub id: TransactionSpecId,
     pub accrual_start: NaiveDate,
     pub accrual_end: Option<NaiveDate>,
     pub payment_date: NaiveDate,
-    pub accounting_logic: AccountingLogic<H::E, H::A, H::I, H::R, H::S>,
+    pub accounting_logic: AccountingLogicOf<H>,
     pub decorators: Vec<H::D>,
     pub payee: H::P,
     pub description: String,
@@ -79,7 +88,7 @@ pub struct DecoratedTransactionSpec<H: Handlers> {
     pub accrual_start: NaiveDate,
     pub accrual_end: Option<NaiveDate>,
     pub payment_date: NaiveDate,
-    pub accounting_logic: AccountingLogic<H::E, H::A, H::I, H::R, H::S>,
+    pub accounting_logic: AccountingLogicOf<H>,
     pub payee: H::P,
     pub description: String,
     pub amount: f64,

@@ -153,8 +153,8 @@ impl Account {
                     on_inflow,
                     on_outflow,
                 } => match direction.into() {
-                    Direction::Inflow => on_inflow.clone(),
-                    Direction::Outflow => on_outflow.clone(),
+                    Direction::Inflow => *on_inflow,
+                    Direction::Outflow => *on_outflow,
                 },
             },
         }

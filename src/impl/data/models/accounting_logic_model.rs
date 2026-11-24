@@ -1,21 +1,30 @@
-use crate::entities::{AccountingLogic, CommonStockWhileUnpaid, ShareIssuanceCostBookTo};
+use crate::entities::{AccountingLogic, CommonStockWhileUnpaid, Handlers, ShareIssuanceCostBookTo};
 
 use super::iso_date_model::ISODateModel;
 
 #[derive(Debug, serde_derive::Deserialize)]
-pub enum CommonStockWhileUnpaidModel {
+pub(crate) enum CommonStockWhileUnpaidModel {
     ReceivableAsset,
     NegativeEquity,
 }
 
 #[derive(Debug, serde_derive::Deserialize)]
-pub enum ShareIssuanceCostBookToModel {
+pub(crate) enum ShareIssuanceCostBookToModel {
     RetainedEarnings,
     DiscountOnStockIssuance,
 }
 
+/// The accounting logic model over the handler types of `H`.
+pub(crate) type AccountingLogicModelOf<H> = AccountingLogicModel<
+    <H as Handlers>::E,
+    <H as Handlers>::A,
+    <H as Handlers>::I,
+    <H as Handlers>::R,
+    <H as Handlers>::S,
+>;
+
 #[derive(Debug, serde_derive::Deserialize)]
-pub enum AccountingLogicModel<E, A, I, R, S> {
+pub(crate) enum AccountingLogicModel<E, A, I, R, S> {
     CommonStock {
         subscriber: S,
         while_unpaid: CommonStockWhileUnpaidModel,
@@ -42,9 +51,9 @@ pub enum AccountingLogicModel<E, A, I, R, S> {
     },
 }
 
-impl<E, A, I, R, S> Into<AccountingLogic<E, A, I, R, S>> for AccountingLogicModel<E, A, I, R, S> {
-    fn into(self) -> AccountingLogic<E, A, I, R, S> {
-        match self {
+impl<E, A, I, R, S> From<AccountingLogicModel<E, A, I, R, S>> for AccountingLogic<E, A, I, R, S> {
+    fn from(val: AccountingLogicModel<E, A, I, R, S>) -> Self {
+        match val {
             AccountingLogicModel::CommonStock {
                 subscriber,
                 while_unpaid,

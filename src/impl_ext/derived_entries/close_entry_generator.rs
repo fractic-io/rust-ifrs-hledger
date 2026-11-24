@@ -26,7 +26,7 @@ impl CloseEntryGenerator {
                 .canonicalize()
                 .map_err(|e| {
                     HledgerInvalidPath::with_debug(
-                        &ledger_path.as_ref().to_string_lossy().to_string(),
+                        ledger_path.as_ref().to_string_lossy().as_ref(),
                         &e,
                     )
                 })?
@@ -166,11 +166,10 @@ fn parse_close_posting(raw_line: &str) -> Result<Option<(String, f64)>, ServerEr
     Ok(Some((account.to_string(), amount)))
 }
 
-/// Parse a formatted number like:
+/// Parse a formatted number into an `f64`. Accepts forms like:
 /// - `-4,000.`
 /// - `9,993.`
 /// - `-535`
-/// into a floating point number.
 fn parse_formatted_number(value: &str) -> Result<f64, ServerError> {
     let normalized = value.replace(",", "");
     let without_trailing_dot = normalized.strip_suffix('.').unwrap_or(&normalized);
@@ -179,11 +178,10 @@ fn parse_formatted_number(value: &str) -> Result<f64, ServerError> {
     })
 }
 
-/// Parse an amount expression like:
+/// Parse an amount expression into an `f64`. Accepts forms like:
 /// - `-4,000. ₩`
 /// - `USD -4,000.45`
 /// - `$4,000.45`
-/// into a floating point number.
 fn parse_amount_expr(expr: &str) -> Result<f64, ServerError> {
     for token in expr.split_whitespace() {
         if let Ok(amount) = parse_formatted_number(token) {

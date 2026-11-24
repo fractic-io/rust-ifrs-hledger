@@ -58,7 +58,7 @@ impl StandardDecoratorCardFx {
     /// immaterial and fold them into the FX gain / loss experienced on the
     /// settlement date, which is generally fine under IFRS.
     pub fn delayed_settle_unknown_fee(
-        settle_date: &String,
+        settle_date: &str,
         settle_amount: f64,
         currency_conversion_cache_dir: impl Into<PathBuf>,
         currency_conversion_api_key: impl Into<String>,
@@ -149,11 +149,11 @@ impl StandardDecoratorCardFx {
         };
         let vat_transactions = if fx_discrepancy.abs() >= main_commodity.precision_cutoff()? {
             vec![Transaction {
-                spec_id: id.clone(),
+                spec_id: id,
                 date: settle_date,
                 postings: vec![
                     TransactionPosting::new(
-                        backing_account.account().into(),
+                        backing_account.account(),
                         fx_discrepancy,
                         main_commodity.currency()?,
                     ),
@@ -243,11 +243,11 @@ impl StandardDecoratorCardFx {
 
         let fee_transaction = if fee.abs() >= main_commodity.precision_cutoff()? {
             Some(Transaction {
-                spec_id: id.clone(),
+                spec_id: id,
                 date: payment_date,
                 postings: vec![
                     TransactionPosting::new(
-                        backing_account.account().into(),
+                        backing_account.account(),
                         -fee,
                         main_commodity.currency()?,
                     ),
@@ -276,11 +276,11 @@ impl StandardDecoratorCardFx {
         let fx_discrepency_transaction =
             if fx_discrepency.abs() >= main_commodity.precision_cutoff()? {
                 Some(Transaction {
-                    spec_id: id.clone(),
+                    spec_id: id,
                     date: payment_date,
                     postings: vec![
                         TransactionPosting::new(
-                            backing_account.account().into(),
+                            backing_account.account(),
                             fx_discrepency,
                             main_commodity.currency()?,
                         ),

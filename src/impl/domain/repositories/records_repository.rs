@@ -5,13 +5,13 @@ use crate::entities::{FinancialRecordSpecs, Handlers};
 
 #[async_trait]
 pub trait RecordsRepository<H: Handlers>: Send + Sync {
-    fn from_string(
+    fn read_string(
         &self,
         transactions_csv: &str,
         balances_csv: &str,
     ) -> Result<FinancialRecordSpecs<H>, ServerError>;
 
-    async fn from_file<P>(
+    async fn read_file<P>(
         &self,
         transactions_csv: P,
         balances_csv: P,

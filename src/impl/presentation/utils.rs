@@ -19,12 +19,12 @@ pub fn format_amount(amount: f64, currency: Currency, trailing_decimal: bool) ->
     let decimal_places = decimal_places(currency);
     if decimal_places == 0 {
         let amount_rounded = (amount.round() as i64).to_formatted_string(&Locale::en);
-        return format!(
+        format!(
             "{}{} {}",
             amount_rounded,
             if trailing_decimal { "." } else { "" },
             currency.symbol()
-        );
+        )
     } else {
         let amount_integer_part = (amount.trunc() as i64).to_formatted_string(&Locale::en);
         let amount_fractional_part = format!("{:.decimal_places$}", amount.fract())

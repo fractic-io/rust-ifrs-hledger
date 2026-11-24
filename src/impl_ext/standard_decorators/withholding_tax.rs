@@ -62,11 +62,11 @@ impl StandardDecoratorWithholdingTax {
         let withholding_amount = amount_pre_withholding - amount_post_withholding;
 
         let withholding_transaction = Transaction {
-            spec_id: id.clone(),
+            spec_id: id,
             date: payment_date,
             postings: vec![
                 TransactionPosting::new(
-                    backing_account.account().into(),
+                    backing_account.account(),
                     -withholding_amount,
                     commodity.currency()?,
                 ),

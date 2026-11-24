@@ -23,8 +23,8 @@ impl FromStr for AccountingAmountModel {
     }
 }
 
-impl Into<f64> for AccountingAmountModel {
-    fn into(self) -> f64 {
-        self.0
+impl From<AccountingAmountModel> for f64 {
+    fn from(val: AccountingAmountModel) -> Self {
+        val.0
     }
 }

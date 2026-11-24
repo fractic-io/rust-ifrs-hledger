@@ -27,11 +27,11 @@ impl<H: Handlers> DecoratorLogic<H> for StandardDecoratorPaymentFee {
         mut tx: DecoratedTransactionSpec<H>,
     ) -> Result<DecoratedTransactionSpec<H>, ServerError> {
         tx.ext_transactions.push(Transaction {
-            spec_id: tx.id.clone(),
+            spec_id: tx.id,
             date: tx.payment_date,
             postings: vec![
                 TransactionPosting::new(
-                    tx.backing_account.account().into(),
+                    tx.backing_account.account(),
                     -self.fee,
                     tx.commodity.currency()?,
                 ),

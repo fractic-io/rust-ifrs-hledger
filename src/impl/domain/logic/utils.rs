@@ -181,8 +181,8 @@ pub(crate) fn track_unreimbursed_entries<
     S: ShareholderHandler,
 >(
     backing_account: &BackingAccount<R, C, S>,
-    transactions: &Vec<Transaction>,
-    ext_transactions: &Vec<Transaction>,
+    transactions: &[Transaction],
+    ext_transactions: &[Transaction],
 ) -> Result<Option<ReimbursementStateDelta>, ServerError> {
     if let BackingAccount::Reimburse(r_handler) = backing_account {
         let mut reimbursable_entries = Vec::new();
