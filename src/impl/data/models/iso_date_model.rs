@@ -26,8 +26,8 @@ impl<'de> Deserialize<'de> for ISODateModel {
     }
 }
 
-impl Into<NaiveDate> for ISODateModel {
-    fn into(self) -> NaiveDate {
-        self.0
+impl From<ISODateModel> for NaiveDate {
+    fn from(val: ISODateModel) -> Self {
+        val.0
     }
 }

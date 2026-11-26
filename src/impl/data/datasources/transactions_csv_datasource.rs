@@ -7,7 +7,7 @@ use ron::from_str;
 use crate::{
     data::models::{
         accounting_amount_model::AccountingAmountModel,
-        accounting_logic_model::AccountingLogicModel, backing_account_model::BackingAccountModel,
+        accounting_logic_model::AccountingLogicModelOf, backing_account_model::BackingAccountModel,
         command_logic_model::CommandLogicModel, iso_date_model::ISODateModel,
     },
     entities::{
@@ -19,17 +19,14 @@ use crate::{
 
 use super::utils::with_line_id;
 
+/// The transaction specs and the commands read from one CSV.
+type ParsedTransactions<H> = (Vec<TransactionSpec<H>>, Vec<Command<H>>);
+
 #[async_trait]
 pub(crate) trait TransactionsCsvDatasource<H: Handlers>: Send + Sync {
-    fn from_string(
-        &self,
-        s: &str,
-    ) -> Result<(Vec<TransactionSpec<H>>, Vec<Command<H>>), ServerError>;
+    fn read_string(&self, s: &str) -> Result<ParsedTransactions<H>, ServerError>;
 
-    async fn from_file<P>(
-        &self,
-        path: P,
-    ) -> Result<(Vec<TransactionSpec<H>>, Vec<Command<H>>), ServerError>
+    async fn read_file<P>(&self, path: P) -> Result<ParsedTransactions<H>, ServerError>
     where
         P: AsRef<std::path::Path> + Send;
 }
@@ -48,10 +45,7 @@ impl<H: Handlers> TransactionsCsvDatasourceImpl<H> {
 
 #[async_trait]
 impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl<H> {
-    fn from_string(
-        &self,
-        s: &str,
-    ) -> Result<(Vec<TransactionSpec<H>>, Vec<Command<H>>), ServerError> {
+    fn read_string(&self, s: &str) -> Result<ParsedTransactions<H>, ServerError> {
         csv::Reader::from_reader(s.as_bytes())
             .records()
             .enumerate()
@@ -171,7 +165,7 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
                             .transpose()?;
                         let payment_date = ISODateModel::from_str(raw_payment_date)
                             .map_err(|e| with_line_id(line_id, e))?;
-                        let accounting_logic: AccountingLogicModel<H::E, H::A, H::I, H::R, H::S> =
+                        let accounting_logic: AccountingLogicModelOf<H> =
                             from_str(raw_accounting_logic).map_err(|e| {
                                 InvalidRon::with_debug(line_id, "AccountingLogic", &e)
                             })?;
@@ -224,14 +218,11 @@ impl<H: Handlers> TransactionsCsvDatasource<H> for TransactionsCsvDatasourceImpl
             )
     }
 
-    async fn from_file<P>(
-        &self,
-        path: P,
-    ) -> Result<(Vec<TransactionSpec<H>>, Vec<Command<H>>), ServerError>
+    async fn read_file<P>(&self, path: P) -> Result<ParsedTransactions<H>, ServerError>
     where
         P: AsRef<std::path::Path> + Send,
     {
-        self.from_string(
+        self.read_string(
             &tokio::fs::read_to_string(path)
                 .await
                 .map_err(|e| ReadError::with_debug(&e))?,
@@ -247,8 +238,7 @@ impl<H: Handlers> TransactionsCsvDatasourceImpl<H> {
                     spec.id.0,
                     "Until date must be after start date.",
                     &spec,
-                )
-                .into());
+                ));
             }
         }
         Ok(())

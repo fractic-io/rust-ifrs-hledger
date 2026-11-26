@@ -123,7 +123,7 @@ impl CashFlowStatementGenerator {
                 .canonicalize()
                 .map_err(|e| {
                     HledgerInvalidPath::with_debug(
-                        &ledger_path.as_ref().to_string_lossy().to_string(),
+                        ledger_path.as_ref().to_string_lossy().as_ref(),
                         &e,
                     )
                 })?
@@ -584,13 +584,13 @@ impl CashFlowStatementGenerator {
             None,
             RegisterOutput::Raw { width: 200 },
         )?;
-        zip(source.into_iter(), dest.into_iter())
+        zip(source, dest)
             .map(|(s, d)| {
                 let s_sec = split_sections(&s);
                 let d_sec = split_sections(&d);
                 Ok(format!(
                     "{}\n    {:57} {:>17}\n    {:57} {:>17}",
-                    s_sec.get(0).map_or("", |s| s),
+                    s_sec.first().map_or("", |s| s),
                     s_sec.get(1).map_or("", |s| s),
                     s_sec.get(2).map_or("", |s| s),
                     d_sec.get(1).map_or("", |s| s),

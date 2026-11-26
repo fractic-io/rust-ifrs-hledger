@@ -7,9 +7,9 @@ pub enum BackingAccountModel<R, C, S> {
     ContributedSurplus(S),
 }
 
-impl<R, C, S> Into<BackingAccount<R, C, S>> for BackingAccountModel<R, C, S> {
-    fn into(self) -> BackingAccount<R, C, S> {
-        match self {
+impl<R, C, S> From<BackingAccountModel<R, C, S>> for BackingAccount<R, C, S> {
+    fn from(val: BackingAccountModel<R, C, S>) -> Self {
+        match val {
             BackingAccountModel::Reimburse(r) => BackingAccount::Reimburse(r),
             BackingAccountModel::Cash(c) => BackingAccount::Cash(c),
             BackingAccountModel::ContributedSurplus(s) => BackingAccount::ContributedSurplus(s),

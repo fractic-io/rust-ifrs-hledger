@@ -262,7 +262,7 @@ impl<H: Handlers> SpecProcessor<H> {
             })
             .collect::<Result<Vec<Assertion>, ServerError>>()?
             .into_iter()
-            .chain(transactions_fold_result.assertions.into_iter())
+            .chain(transactions_fold_result.assertions)
             .collect();
 
         Ok(FinancialRecords_Intermediate2 {
@@ -563,7 +563,7 @@ impl<H: Handlers> SpecProcessor<H> {
             ext_transactions,
             ext_assertions,
             ext_raw,
-            annotations: annotations.into_iter().chain(note.into_iter()).collect(),
+            annotations: annotations.into_iter().chain(note).collect(),
         })
     }
 

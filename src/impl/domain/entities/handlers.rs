@@ -186,9 +186,12 @@ pub trait Handlers: std::fmt::Debug + Send + Sync + 'static {
     type F: MacroHandler;
 }
 
+type HandlersMarker<A, I, E, R, C, S, D, M, P, F> =
+    std::marker::PhantomData<(A, I, E, R, C, S, D, M, P, F)>;
+
 #[derive(Debug)]
 pub(crate) struct HandlersImpl<A, I, E, R, C, S, D, M, P, F> {
-    pub _phantom: std::marker::PhantomData<(A, I, E, R, C, S, D, M, P, F)>,
+    pub _phantom: HandlersMarker<A, I, E, R, C, S, D, M, P, F>,
 }
 
 impl<A, I, E, R, C, S, D, M, P, F> Handlers for HandlersImpl<A, I, E, R, C, S, D, M, P, F>
@@ -266,9 +269,7 @@ impl CommodityHandler for () {
     fn iso_symbol(&self) -> String {
         "USD".into()
     }
-    fn default() -> Self {
-        ()
-    }
+    fn default() -> Self {}
 }
 
 impl PayeeHandler for () {

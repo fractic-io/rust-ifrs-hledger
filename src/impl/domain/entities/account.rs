@@ -260,18 +260,18 @@ pub fn equity_tl(classification: EquityClassification) -> EquityAccount {
 
 // Easy conversion.
 
-macro_rules! impl_into_account {
+macro_rules! impl_account_from {
     ($typ:ty, $variant:ident) => {
-        impl Into<Account> for $typ {
-            fn into(self) -> Account {
-                Account::$variant(self)
+        impl From<$typ> for Account {
+            fn from(account: $typ) -> Self {
+                Account::$variant(account)
             }
         }
     };
 }
 
-impl_into_account!(AssetAccount, Asset);
-impl_into_account!(LiabilityAccount, Liability);
-impl_into_account!(IncomeAccount, Income);
-impl_into_account!(ExpenseAccount, Expense);
-impl_into_account!(EquityAccount, Equity);
+impl_account_from!(AssetAccount, Asset);
+impl_account_from!(LiabilityAccount, Liability);
+impl_account_from!(IncomeAccount, Income);
+impl_account_from!(ExpenseAccount, Expense);
+impl_account_from!(EquityAccount, Equity);

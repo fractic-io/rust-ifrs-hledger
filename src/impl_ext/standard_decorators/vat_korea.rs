@@ -36,7 +36,7 @@ impl StandardDecoratorVatKorea {
         })
     }
 
-    pub fn recoverable(invoice_date: &String) -> Result<Self, ServerError> {
+    pub fn recoverable(invoice_date: &str) -> Result<Self, ServerError> {
         Ok(Self {
             logic: LogicType::Recoverable {
                 invoice_date: ISODateModel::from_str(invoice_date)?.into(),
@@ -97,11 +97,11 @@ impl StandardDecoratorVatKorea {
         let amount_vat = amount_total - amount_core;
 
         let vat_transactions = vec![Transaction {
-            spec_id: id.clone(),
+            spec_id: id,
             date: payment_date,
             postings: vec![
                 TransactionPosting::new(
-                    backing_account.account().into(),
+                    backing_account.account(),
                     amount_vat,
                     commodity.currency()?,
                 ),
@@ -169,11 +169,11 @@ impl StandardDecoratorVatKorea {
 
         let vat_transactions = vec![
             Transaction {
-                spec_id: id.clone(),
+                spec_id: id,
                 date: payment_date,
                 postings: vec![
                     TransactionPosting::new(
-                        backing_account.account().into(),
+                        backing_account.account(),
                         amount_vat,
                         commodity.currency()?,
                     ),
@@ -186,7 +186,7 @@ impl StandardDecoratorVatKorea {
                 comment: Some("VAT awaiting invoice".to_string()),
             },
             Transaction {
-                spec_id: id.clone(),
+                spec_id: id,
                 date: invoice_date,
                 postings: vec![
                     TransactionPosting::new(
@@ -287,7 +287,7 @@ impl StandardDecoratorVatKorea {
         let discrepancy = cleared_amount - core_amount;
         let vat_transactions = if discrepancy.abs() >= commodity.precision_cutoff()? {
             vec![Transaction {
-                spec_id: id.clone(),
+                spec_id: id,
                 date: payment_date,
                 postings: vec![
                     TransactionPosting::new(
@@ -300,7 +300,7 @@ impl StandardDecoratorVatKorea {
                         commodity.currency()?,
                     ),
                     TransactionPosting::new(
-                        backing_account.account().into(),
+                        backing_account.account(),
                         discrepancy,
                         commodity.currency()?,
                     ),

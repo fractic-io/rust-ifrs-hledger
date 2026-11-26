@@ -15,13 +15,13 @@ use crate::{
 
 #[async_trait]
 pub trait ProcessUsecase: Send + Sync {
-    async fn from_string(
+    async fn process_string(
         &self,
         balances_csv: &str,
         transactions_csv: &str,
     ) -> Result<(FinancialRecords, NotesToFinancialRecords), ServerError>;
 
-    async fn from_file<P>(
+    async fn process_file<P>(
         &self,
         balances_csv: P,
         transactions_csv: P,
@@ -47,14 +47,14 @@ where
     H: Handlers,
     R1: RecordsRepository<H>,
 {
-    async fn from_string(
+    async fn process_string(
         &self,
         transactions_csv: &str,
         balances_csv: &str,
     ) -> Result<(FinancialRecords, NotesToFinancialRecords), ServerError> {
         let input = self
             .records_repository
-            .from_string(transactions_csv, balances_csv)?;
+            .read_string(transactions_csv, balances_csv)?;
         let intermediate_1 = DecoratorProcessor::new(input).process().await?;
         let intermediate_2 = SpecProcessor::new(intermediate_1).process()?;
         let output = CommandProcessor::new(intermediate_2).process()?;
@@ -62,7 +62,7 @@ where
         Ok((output, output_notes))
     }
 
-    async fn from_file<P>(
+    async fn process_file<P>(
         &self,
         transactions_csv: P,
         balances_csv: P,
@@ -72,7 +72,7 @@ where
     {
         let input = self
             .records_repository
-            .from_file(transactions_csv, balances_csv)
+            .read_file(transactions_csv, balances_csv)
             .await?;
         let intermediate_1 = DecoratorProcessor::new(input).process().await?;
         let intermediate_2 = SpecProcessor::new(intermediate_1).process()?;

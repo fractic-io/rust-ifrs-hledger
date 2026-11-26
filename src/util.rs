@@ -12,6 +12,9 @@ use crate::{
 
 pub type Ledger = String;
 
+type UtilUsecase<A, I, E, R, C, S, D, M, P, F> =
+    ProcessUsecaseImpl<HandlersImpl<A, I, E, R, C, S, D, M, P, F>>;
+
 pub struct IfrsHledgerUtil<
     // `()` provides default (placeholder) implementations for all handlers.
     A = (),
@@ -36,8 +39,26 @@ pub struct IfrsHledgerUtil<
     P: PayeeHandler,
     F: MacroHandler,
 {
-    process_usecase: ProcessUsecaseImpl<HandlersImpl<A, I, E, R, C, S, D, M, P, F>>,
+    process_usecase: UtilUsecase<A, I, E, R, C, S, D, M, P, F>,
     printer: HledgerPrinter,
+}
+
+impl<A, I, E, C, S, R, D, M, P, F> Default for IfrsHledgerUtil<A, I, E, C, S, R, D, M, P, F>
+where
+    A: AssetHandler,
+    I: IncomeHandler,
+    E: ExpenseHandler,
+    C: CashHandler,
+    S: ShareholderHandler,
+    R: ReimbursableEntityHandler,
+    D: DecoratorHandler,
+    M: CommodityHandler,
+    P: PayeeHandler,
+    F: MacroHandler,
+{
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<A, I, E, C, S, R, D, M, P, F> IfrsHledgerUtil<A, I, E, C, S, R, D, M, P, F>
@@ -67,7 +88,7 @@ where
     ) -> Result<(FinancialRecords, NotesToFinancialRecords, Ledger), ServerError> {
         let (financial_records, notes_to_financial_records) = self
             .process_usecase
-            .from_string(transactions_csv, balances_csv)
+            .process_string(transactions_csv, balances_csv)
             .await?;
         let ledger = self.printer.print_ledger(&financial_records);
         Ok((financial_records, notes_to_financial_records, ledger))
@@ -83,7 +104,7 @@ where
     {
         let (financial_records, notes_to_financial_records) = self
             .process_usecase
-            .from_file(transactions_csv, balances_csv)
+            .process_file(transactions_csv, balances_csv)
             .await?;
         let ledger = self.printer.print_ledger(&financial_records);
         Ok((financial_records, notes_to_financial_records, ledger))

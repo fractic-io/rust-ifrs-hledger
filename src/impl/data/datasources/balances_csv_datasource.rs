@@ -15,9 +15,9 @@ use super::utils::with_line_id;
 
 #[async_trait]
 pub(crate) trait BalancesCsvDatasource<H: Handlers>: Send + Sync {
-    fn from_string(&self, s: &str) -> Result<Vec<AssertionSpec<H>>, ServerError>;
+    fn read_string(&self, s: &str) -> Result<Vec<AssertionSpec<H>>, ServerError>;
 
-    async fn from_file<P>(&self, path: P) -> Result<Vec<AssertionSpec<H>>, ServerError>
+    async fn read_file<P>(&self, path: P) -> Result<Vec<AssertionSpec<H>>, ServerError>
     where
         P: AsRef<std::path::Path> + Send;
 }
@@ -36,7 +36,7 @@ impl<H: Handlers> BalancesCsvDatasourceImpl<H> {
 
 #[async_trait]
 impl<H: Handlers> BalancesCsvDatasource<H> for BalancesCsvDatasourceImpl<H> {
-    fn from_string(&self, s: &str) -> Result<Vec<AssertionSpec<H>>, ServerError> {
+    fn read_string(&self, s: &str) -> Result<Vec<AssertionSpec<H>>, ServerError> {
         csv::Reader::from_reader(s.as_bytes())
             .records()
             .enumerate()
@@ -73,11 +73,11 @@ impl<H: Handlers> BalancesCsvDatasource<H> for BalancesCsvDatasourceImpl<H> {
             .collect()
     }
 
-    async fn from_file<P>(&self, path: P) -> Result<Vec<AssertionSpec<H>>, ServerError>
+    async fn read_file<P>(&self, path: P) -> Result<Vec<AssertionSpec<H>>, ServerError>
     where
         P: AsRef<std::path::Path> + Send,
     {
-        self.from_string(
+        self.read_string(
             &tokio::fs::read_to_string(path)
                 .await
                 .map_err(|e| ReadError::with_debug(&e))?,

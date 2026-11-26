@@ -133,7 +133,7 @@ pub(crate) fn hledger(
                 .records()
                 .last()
                 .and_then(|r| r.ok())
-                .and_then(|r| r.iter().last().map(|s| s.to_owned()))
+                .and_then(|r| r.iter().next_back().map(|s| s.to_owned()))
                 .ok_or_else(|| {
                     HledgerQueryInvalidResponse::with_debug(
                         &cmd,
@@ -149,9 +149,9 @@ pub(crate) fn hledger(
         Return::SearchRowOrZero(search) => {
             let amount_str = csv::Reader::from_reader(out_csv.as_bytes())
                 .records()
-                .find(|r| r.as_ref().map_or(false, |r| r[0] == *search))
+                .find(|r| r.as_ref().is_ok_and(|r| r[0] == *search))
                 .and_then(|r| r.ok())
-                .and_then(|r| r.iter().last().map(|s| s.to_owned()))
+                .and_then(|r| r.iter().next_back().map(|s| s.to_owned()))
                 .unwrap_or("0".to_string());
             amount_str.parse::<f64>().map_err(|e| {
                 HledgerQueryInvalidResponse::with_debug(&cmd, query.dbg(), fetch.dbg(), &e)

@@ -138,7 +138,7 @@ impl<H: Handlers> CommandProcessor<H> {
             postings: entries,
             logic,
             total: amount,
-            currency: commodity.unwrap_or_else(|| H::M::default()).currency()?,
+            currency: commodity.unwrap_or_else(H::M::default).currency()?,
         };
 
         Ok(Delta {

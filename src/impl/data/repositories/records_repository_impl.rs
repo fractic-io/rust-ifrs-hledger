@@ -31,14 +31,14 @@ where
     DS1: BalancesCsvDatasource<H>,
     DS2: TransactionsCsvDatasource<H>,
 {
-    fn from_string(
+    fn read_string(
         &self,
         transactions_csv: &str,
         balances_csv: &str,
     ) -> Result<FinancialRecordSpecs<H>, ServerError> {
         let ((transaction_specs, commands), assertion_specs) = (
-            self.transactions_datasource.from_string(transactions_csv)?,
-            self.balances_datasource.from_string(balances_csv)?,
+            self.transactions_datasource.read_string(transactions_csv)?,
+            self.balances_datasource.read_string(balances_csv)?,
         );
         Ok(FinancialRecordSpecs {
             transaction_specs,
@@ -47,7 +47,7 @@ where
         })
     }
 
-    async fn from_file<P>(
+    async fn read_file<P>(
         &self,
         transactions_csv: P,
         balances_csv: P,
@@ -57,9 +57,9 @@ where
     {
         let ((transaction_specs, commands), assertion_specs) = (
             self.transactions_datasource
-                .from_file(transactions_csv)
+                .read_file(transactions_csv)
                 .await?,
-            self.balances_datasource.from_file(balances_csv).await?,
+            self.balances_datasource.read_file(balances_csv).await?,
         );
         Ok(FinancialRecordSpecs {
             transaction_specs,
